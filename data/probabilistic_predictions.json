@@ -1,0 +1,20 @@
+[
+  {
+    "game_id": "20250606_Ind_Okl",
+    "game_date": "2025-06-06",
+    "home_team": "Oklahoma City Thunder",
+    "away_team": "Indiana Pacers",
+    "prediction_timestamp": "2025-06-06T01:06:32.872697",
+    "system_type": "probabilistic",
+    "bet_placed": true,
+    "predicted_mu": 234.76788330078125,
+    "predicted_sigma": 15.308488845825195,
+    "confidence_score": 100,
+    "rec_bet_type": "over",
+    "rec_line": 230.5,
+    "rec_odds": 1.95,
+    "rec_edge": 0.18852500000000005,
+    "rec_stake": 0.4881805263157896,
+    "rec_expected_profit": 0.09203423372368426
+  }
+]
