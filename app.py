@@ -756,7 +756,7 @@ def show_game_analysis_combined_tab(system):
             
             # Stile diverso per partite con scommesse pendenti
             if has_pending_bet:
-                card_style = """
+                card_style = f"""
                 <div style="background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%); 
                             color: white; border-radius: 12px; padding: 1rem; margin: 0.5rem 0;
                             border: 3px solid #f57c00; box-shadow: 0 4px 20px rgba(255,152,0,0.3);">
