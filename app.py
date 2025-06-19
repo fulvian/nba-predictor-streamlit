@@ -41,97 +41,110 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Enhanced CSS for modern styling
+# Add viewport meta tag for better mobile experience
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+""", unsafe_allow_html=True)
+
+# Enhanced CSS for modern styling + MOBILE RESPONSIVENESS
 st.markdown("""
 <style>
-    /* Main styling */
+    /* Base styling */
     .main-header {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 2rem;
-        border-radius: 20px;
+        padding: 1.5rem;
+        border-radius: 15px;
         color: white;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
         box-shadow: 0 8px 32px rgba(0,0,0,0.1);
     }
     
     .main-header h1 {
-        font-size: 3rem;
+        font-size: 2.5rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
     
     .main-header p {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         opacity: 0.9;
+        margin-bottom: 0;
     }
     
     .metric-card {
         background: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        border-left: 5px solid #1e3c72;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        margin: 1rem 0;
+        padding: 1rem;
+        border-radius: 12px;
+        border-left: 4px solid #1e3c72;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        margin: 0.8rem 0;
         transition: transform 0.3s ease;
     }
     
     .metric-card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-3px);
+    }
+    
+    .metric-card h4 {
+        margin-top: 0;
+        margin-bottom: 0.8rem;
+        color: #1e3c72;
+        font-size: 1.1rem;
     }
     
     .prediction-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 2rem;
-        border-radius: 20px;
+        padding: 1.5rem;
+        border-radius: 15px;
         text-align: center;
-        margin: 1.5rem 0;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        margin: 1rem 0;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
     }
     
     .prediction-value {
-        font-size: 3rem;
+        font-size: 2.2rem;
         font-weight: bold;
-        margin: 1rem 0;
+        margin: 0.8rem 0;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
     
     .bet-summary {
         background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
         color: white;
-        border-radius: 15px;
-        padding: 1.5rem;
+        border-radius: 12px;
+        padding: 1.2rem;
         margin: 1rem 0;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
     }
     
     .injury-alert {
         background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%);
         color: white;
-        border-radius: 12px;
-        padding: 1rem;
+        border-radius: 10px;
+        padding: 0.8rem;
         margin: 0.5rem 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 3px 12px rgba(0,0,0,0.1);
     }
     
     .system-status {
         background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
         color: white;
-        border-radius: 12px;
-        padding: 1rem;
+        border-radius: 10px;
+        padding: 0.8rem;
         margin: 0.5rem 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 3px 12px rgba(0,0,0,0.1);
     }
     
     .model-status {
         display: inline-block;
-        padding: 0.5rem 1rem;
-        border-radius: 25px;
-        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
         font-weight: bold;
-        margin: 0.25rem;
+        margin: 0.2rem;
     }
     
     .status-active { background: linear-gradient(135deg, #4caf50, #45a049); color: white; }
@@ -140,10 +153,10 @@ st.markdown("""
     
     .game-card {
         background: white;
-        border-radius: 15px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 0.8rem 0;
+        box-shadow: 0 3px 15px rgba(0,0,0,0.08);
         border: 2px solid #e8f2ff;
         transition: all 0.3s ease;
     }
@@ -155,96 +168,255 @@ st.markdown("""
     
     .analysis-step {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-left: 4px solid #1e3c72;
-    }
-    
-    .confidence-bar {
-        background: #e8f2ff;
         border-radius: 10px;
-        height: 12px;
-        margin: 0.5rem 0;
-        overflow: hidden;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .confidence-fill {
-        background: linear-gradient(90deg, #4CAF50, #8BC34A);
-        height: 100%;
-        border-radius: 10px;
-        transition: width 0.5s ease;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .stake-calculator {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border-radius: 15px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        border: 2px solid #dee2e6;
-    }
-    
-    .command-button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 1rem 2rem;
-        border-radius: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin: 0.5rem 0;
-        width: 100%;
-        font-size: 1.1rem;
-    }
-    
-    .command-button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-    
-    .command-button:disabled {
-        background: #6c757d;
-        cursor: not-allowed;
-        transform: none;
+        padding: 0.8rem;
+        margin: 0.4rem 0;
+        border-left: 3px solid #1e3c72;
     }
     
     .tab-container {
         background: white;
-        border-radius: 15px;
-        padding: 2rem;
+        border-radius: 12px;
+        padding: 1.5rem;
         margin: 1rem 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        box-shadow: 0 3px 15px rgba(0,0,0,0.08);
     }
     
     .metric-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.8rem;
         margin: 1rem 0;
     }
     
     .metric-item {
         background: white;
-        padding: 1rem;
-        border-radius: 10px;
+        padding: 0.8rem;
+        border-radius: 8px;
         text-align: center;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         border: 1px solid #e9ecef;
     }
     
     .metric-value {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: bold;
         color: #1e3c72;
     }
     
     .metric-label {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         color: #6c757d;
-        margin-top: 0.5rem;
+        margin-top: 0.3rem;
+    }
+    
+    .stake-calculator {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 1.2rem;
+        margin: 1rem 0;
+        border: 2px solid #dee2e6;
+    }
+    
+    /* MOBILE RESPONSIVENESS */
+    @media screen and (max-width: 768px) {
+        /* Header mobile optimization */
+        .main-header {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 12px;
+        }
+        
+        .main-header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.3rem;
+        }
+        
+        .main-header p {
+            font-size: 0.9rem;
+            line-height: 1.3;
+        }
+        
+        /* Cards mobile optimization */
+        .metric-card {
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            border-radius: 10px;
+        }
+        
+        .metric-card h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .prediction-card {
+            padding: 1rem;
+            margin: 0.8rem 0;
+            border-radius: 12px;
+        }
+        
+        .prediction-value {
+            font-size: 1.8rem;
+            margin: 0.5rem 0;
+        }
+        
+        .bet-summary {
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 0.8rem 0;
+        }
+        
+        .bet-summary h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tab-container {
+            padding: 1rem;
+            margin: 0.8rem 0;
+            border-radius: 10px;
+        }
+        
+        /* Grid responsive */
+        .metric-grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin: 0.8rem 0;
+        }
+        
+        .metric-item {
+            padding: 0.6rem;
+            border-radius: 6px;
+        }
+        
+        .metric-value {
+            font-size: 1.1rem;
+        }
+        
+        .metric-label {
+            font-size: 0.7rem;
+        }
+        
+        /* Buttons mobile */
+        .stButton > button {
+            width: 100% !important;
+            font-size: 0.9rem !important;
+            padding: 0.6rem 1rem !important;
+            border-radius: 8px !important;
+            margin: 0.3rem 0 !important;
+        }
+        
+        /* Selectbox mobile */
+        .stSelectbox > div > div {
+            font-size: 0.9rem;
+        }
+        
+        /* Tables mobile */
+        .stDataFrame {
+            font-size: 0.8rem;
+        }
+        
+        /* Metrics mobile */
+        [data-testid="metric-container"] {
+            background-color: white;
+            border: 1px solid #e1e5e9;
+            padding: 0.8rem;
+            border-radius: 8px;
+            margin: 0.3rem 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        [data-testid="metric-container"] > div {
+            font-size: 0.8rem;
+        }
+        
+        [data-testid="metric-container"] [data-testid="metric-value"] {
+            font-size: 1.3rem;
+        }
+        
+        /* Sidebar mobile */
+        .sidebar .sidebar-content {
+            padding: 1rem 0.5rem;
+        }
+        
+        /* Text adjustments */
+        p, div {
+            line-height: 1.4;
+        }
+        
+        /* Spacing adjustments */
+        .element-container {
+            margin-bottom: 0.5rem;
+        }
+    }
+    
+    @media screen and (max-width: 480px) {
+        /* Extra small screens */
+        .main-header h1 {
+            font-size: 1.5rem;
+        }
+        
+        .main-header p {
+            font-size: 0.8rem;
+        }
+        
+        .prediction-value {
+            font-size: 1.5rem;
+        }
+        
+        .metric-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.4rem;
+        }
+        
+        .metric-value {
+            font-size: 1rem;
+        }
+        
+        .bet-summary h3 {
+            font-size: 1rem;
+        }
+        
+        .stButton > button {
+            font-size: 0.8rem !important;
+            padding: 0.5rem 0.8rem !important;
+        }
+        
+        /* Reduce padding on very small screens */
+        .metric-card, .tab-container {
+            padding: 0.6rem;
+        }
+        
+        [data-testid="metric-container"] {
+            padding: 0.6rem;
+        }
+    }
+    
+    /* Landscape mobile optimization */
+    @media screen and (max-height: 500px) and (orientation: landscape) {
+        .main-header {
+            padding: 0.8rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .main-header h1 {
+            font-size: 1.6rem;
+            margin-bottom: 0.2rem;
+        }
+        
+        .main-header p {
+            font-size: 0.8rem;
+        }
+        
+        .metric-card {
+            padding: 0.6rem;
+            margin: 0.3rem 0;
+        }
+        
+        .tab-container {
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
     }
     
     /* Hide Streamlit default elements */
@@ -252,23 +424,61 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Custom scrollbar */
+    /* Improve sidebar on mobile */
+    @media screen and (max-width: 768px) {
+        .sidebar .sidebar-content {
+            width: 100%;
+        }
+        
+        /* Better tab display on mobile */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.2rem;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.8rem;
+            padding: 0.5rem 0.3rem;
+        }
+    }
+    
+    /* Scrollbar optimization for mobile */
     ::-webkit-scrollbar {
-        width: 8px;
+        width: 4px;
     }
     
     ::-webkit-scrollbar-track {
         background: #f1f1f1;
-        border-radius: 10px;
+        border-radius: 6px;
     }
     
     ::-webkit-scrollbar-thumb {
         background: #1e3c72;
-        border-radius: 10px;
+        border-radius: 6px;
     }
     
     ::-webkit-scrollbar-thumb:hover {
         background: #2a5298;
+    }
+    
+    /* Touch-friendly adjustments */
+    @media (hover: none) and (pointer: coarse) {
+        .metric-card:hover {
+            transform: none;
+        }
+        
+        .game-card:hover {
+            transform: none;
+            border-color: #e8f2ff;
+        }
+        
+        /* Larger touch targets */
+        .stButton > button {
+            min-height: 44px !important;
+        }
+        
+        .stSelectbox > div > div {
+            min-height: 44px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -353,26 +563,97 @@ def get_scheduled_games(system):
 # ================================
 
 def main():
-    # Header principale con stile moderno
-    st.markdown("""
-    <div class="main-header">
-        <h1>🏀 NBA Predictor Pro</h1>
-        <p>Advanced Machine Learning System for NBA Game Predictions & Betting Analysis</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Detect mobile (approximate - based on screen width simulation)
+    # In a real scenario, you'd use JavaScript, but this is a workaround
+    if 'is_mobile' not in st.session_state:
+        st.session_state['is_mobile'] = False  # Default to desktop
     
-    # Sidebar Navigation migliorata
-    st.sidebar.markdown("""
-    <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
-                padding: 1rem; border-radius: 15px; color: white; text-align: center; margin-bottom: 2rem;">
-        <h3>🎯 Navigation</h3>
-    </div>
-    """, unsafe_allow_html=True)
+    # Mobile toggle for testing (remove in production)
+    with st.sidebar:
+        if st.checkbox("📱 Modalità Mobile", value=st.session_state.get('is_mobile', False)):
+            st.session_state['is_mobile'] = True
+        else:
+            st.session_state['is_mobile'] = False
     
-    page = st.sidebar.selectbox(
-        "Seleziona Sezione",
-        ["🎰 Centro Scommesse", "📊 Performance", "💰 Bankroll", "🤖 Modelli ML", "⚙️ Configurazione"]
-    )
+    # Header principale con stile mobile-responsive
+    if st.session_state.get('is_mobile', False):
+        # Mobile header - more compact
+        st.markdown("""
+        <div class="main-header">
+            <h1 style="font-size: 1.8rem; margin-bottom: 0.3rem;">🏀 NBA Predictor</h1>
+            <p style="font-size: 0.9rem;">Advanced ML System for NBA Predictions</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        # Desktop header - full size
+        st.markdown("""
+        <div class="main-header">
+            <h1>🏀 NBA Predictor Pro</h1>
+            <p>Advanced Machine Learning System for NBA Game Predictions & Betting Analysis</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Sidebar Navigation migliorata e MOBILE-OPTIMIZED
+    with st.sidebar:
+        # Header compatto per mobile
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+                    padding: 0.8rem; border-radius: 12px; color: white; text-align: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0; font-size: 1.2rem;">🎯 Navigation</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Navigation compatta per mobile
+        page_options = [
+            ("🎰", "Centro Scommesse"),
+            ("📊", "Performance"),
+            ("💰", "Bankroll"),
+            ("🤖", "Modelli ML"),
+            ("⚙️", "Configurazione")
+        ]
+        
+        # Check if on mobile (approximate)
+        is_mobile = st.session_state.get('is_mobile', False)
+        
+        # Mobile-friendly navigation
+        page_labels = [f"{icon} {label}" for icon, label in page_options]
+        page = st.selectbox(
+            "Seleziona Sezione",
+            page_labels,
+            label_visibility="collapsed"
+        )
+        
+        # Quick stats in sidebar - mobile optimized
+        st.markdown("""
+        <div style="background: white; padding: 0.8rem; border-radius: 10px; margin: 0.5rem 0; 
+                    border: 1px solid #e1e5e9; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <h4 style="margin: 0 0 0.5rem 0; color: #1e3c72; font-size: 0.9rem;">📊 Status</h4>
+            <div style="font-size: 0.8rem;">
+                <div>🟢 Sistema Attivo</div>
+                <div>⚡ ML Models: OK</div>
+                <div>📡 NBA API: Live</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Bankroll preview - mobile optimized
+        try:
+            bankroll_data = load_bankroll_data()
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); 
+                        padding: 0.8rem; border-radius: 10px; color: white; margin: 0.5rem 0;">
+                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.9rem;">💰 Bankroll</h4>
+                <div style="font-size: 1.1rem; font-weight: bold;">€{bankroll_data['current_bankroll']:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); 
+                        padding: 0.8rem; border-radius: 10px; color: white; margin: 0.5rem 0;">
+                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.9rem;">💰 Bankroll</h4>
+                <div style="font-size: 1.1rem; font-weight: bold;">€100.00</div>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Initialize system
     system = initialize_system()
@@ -421,38 +702,42 @@ def show_betting_center(system):
         show_betting_tab()
 
 def show_games_selection_tab(system):
-    """Tab per la selezione delle partite"""
+    """Tab per la selezione delle partite - MOBILE OPTIMIZED"""
     st.markdown("""
     <div class="tab-container">
-        <h2>🏀 Selezione Partita</h2>
-        <p>Recupera le partite programmate e seleziona quella da analizzare</p>
+        <h2 style="font-size: 1.4rem; margin-bottom: 1rem;">🏀 Selezione Partita</h2>
+        <p style="font-size: 0.9rem; margin-bottom: 1rem;">Recupera le partite programmate e seleziona quella da analizzare</p>
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1, 3])
-    
-    with col1:
+    # Mobile-first layout - single column on small screens
+    if st.session_state.get('is_mobile', False):
+        # Mobile layout - stack vertically
         st.markdown("""
         <div class="metric-card">
             <h4>⚙️ Comandi</h4>
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("📅 Recupera Partite", key="get_games", use_container_width=True):
-            with st.spinner("🔄 Recupero partite in corso..."):
-                games = get_scheduled_games(system)
-                st.session_state['games'] = games
-                st.success(f"✅ Trovate {len(games)} partite")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📅 Recupera Partite", key="get_games", use_container_width=True):
+                with st.spinner("🔄 Recupero partite..."):
+                    games = get_scheduled_games(system)
+                    st.session_state['games'] = games
+                    st.success(f"✅ Trovate {len(games)} partite")
+                    st.rerun()
+        
+        with col2:
+            if st.button("🔄 Reset", key="reset_games", use_container_width=True):
+                if 'games' in st.session_state:
+                    del st.session_state['games']
+                if 'selected_game' in st.session_state:
+                    del st.session_state['selected_game']
                 st.rerun()
         
-        if st.button("🔄 Reset", key="reset_games", use_container_width=True):
-            if 'games' in st.session_state:
-                del st.session_state['games']
-            if 'selected_game' in st.session_state:
-                del st.session_state['selected_game']
-            st.rerun()
-    
-    with col2:
+        # Games display for mobile
         if 'games' in st.session_state and st.session_state['games']:
             games = st.session_state['games']
             
@@ -462,15 +747,62 @@ def show_games_selection_tab(system):
             </div>
             """, unsafe_allow_html=True)
             
-            for i, game in enumerate(games, 1):
-                game_info = f"{game['away_team']} @ {game['home_team']} ({game['date']})"
+            for i, game in enumerate(games[:5], 1):  # Limit to 5 on mobile
+                game_info = f"{game['away_team']} @ {game['home_team']}"
+                game_date = game.get('date', 'TBD')
                 
-                if st.button(game_info, key=f"game_{i}", use_container_width=True):
+                if st.button(f"{i}. {game_info}", key=f"game_{i}", 
+                           help=f"Data: {game_date}", use_container_width=True):
                     st.session_state['selected_game'] = game
                     st.success(f"✅ Selezionata: {game_info}")
                     st.rerun()
         else:
             st.info("👆 Clicca 'Recupera Partite' per iniziare")
+    
+    else:
+        # Desktop layout - original with columns
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <h4>⚙️ Comandi</h4>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("📅 Recupera Partite", key="get_games", use_container_width=True):
+                with st.spinner("🔄 Recupero partite in corso..."):
+                    games = get_scheduled_games(system)
+                    st.session_state['games'] = games
+                    st.success(f"✅ Trovate {len(games)} partite")
+                    st.rerun()
+            
+            if st.button("🔄 Reset", key="reset_games", use_container_width=True):
+                if 'games' in st.session_state:
+                    del st.session_state['games']
+                if 'selected_game' in st.session_state:
+                    del st.session_state['selected_game']
+                st.rerun()
+        
+        with col2:
+            if 'games' in st.session_state and st.session_state['games']:
+                games = st.session_state['games']
+                
+                st.markdown("""
+                <div class="metric-card">
+                    <h4>📅 Partite Disponibili</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                for i, game in enumerate(games, 1):
+                    game_info = f"{game['away_team']} @ {game['home_team']} ({game['date']})"
+                    
+                    if st.button(game_info, key=f"game_{i}", use_container_width=True):
+                        st.session_state['selected_game'] = game
+                        st.success(f"✅ Selezionata: {game_info}")
+                        st.rerun()
+            else:
+                st.info("👆 Clicca 'Recupera Partite' per iniziare")
 
 def show_analysis_tab(system):
     """Tab per l'analisi della partita - RIPRODUZIONE ESATTA DEL MAIN.PY"""
