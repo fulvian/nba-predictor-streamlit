@@ -20,11 +20,16 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -79,8 +84,19 @@ ipython_config.py
 # pyenv
 .python-version
 
-# celery beat schedule file
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
 celerybeat-schedule
+celerybeat.pid
 
 # SageMath parsed files
 *.sage.py
@@ -112,116 +128,31 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# IDE
-.idea/
+# NBA Predictor specific
+data/cache/
+data/momentum_v2/
+data/update_cache.json
+data/probabilistic_predictions.json
+data/system_settings.json
+
+# Model files (keep metadata, exclude large files)
+models/*/model.pkl
+models/*/scaler.pkl
+models/*/feature_names.pkl
+
+# Backup files
+backup/
+*.backup
+*.bak
+
+# IDE files
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
 
-# Data files
-*.csv
-*.xlsx
-*.db
-*.sqlite
-*.pkl
-*.joblib
-*.h5
-*.model
-*.pth
-
-# Logs
-logs/
-*.log
-
-# Local development
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Streamlit
-.streamlit/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# VS Code
-.vscode/
-
-# MacOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
-# Linux
-*~
-
-# Project specific
-/data/cache/
-/data/predictions/
-!data/.gitkeep
-
-# Model files (large binary files, consider using Git LFS)
-/models/*.pkl
-/models/*.joblib
-/models/*.h5
-!models/.gitkeep
-
-# Notebooks with output cells
-*-checkpoint.ipynb
-
-# Local development
-.env
-
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-ENV/
-
-# Environment variables
-.env
-.venv
-env/
-
-# IDE
-.vscode/
-.idea/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Logs
-logs/
-*.log
-
-# OS generated files
+# OS files
 .DS_Store
 .DS_Store?
 ._*
@@ -229,3 +160,27 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Streamlit specific
+.streamlit/secrets.toml
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Log files
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files with sensitive data
+config.ini
+secrets.json
+.env.local
+.env.production

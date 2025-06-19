@@ -1,0 +1,46 @@
+{
+  "training_date": "2025-06-18T10:20:00.032370",
+  "features_used": [
+    "HOME_eFG_PCT_sAvg",
+    "HOME_TOV_PCT_sAvg",
+    "HOME_OREB_PCT_sAvg",
+    "HOME_FT_RATE_sAvg",
+    "AWAY_eFG_PCT_sAvg",
+    "AWAY_TOV_PCT_sAvg",
+    "AWAY_OREB_PCT_sAvg",
+    "AWAY_FT_RATE_sAvg",
+    "HOME_ORtg_sAvg",
+    "HOME_DRtg_sAvg",
+    "AWAY_ORtg_sAvg",
+    "AWAY_DRtg_sAvg",
+    "HOME_PACE",
+    "AWAY_PACE",
+    "GAME_PACE",
+    "PACE_DIFFERENTIAL",
+    "HOME_OFF_vs_AWAY_DEF",
+    "AWAY_OFF_vs_HOME_DEF",
+    "TOTAL_EXPECTED_SCORING",
+    "LgAvg_ORtg_season",
+    "AVG_PACE"
+  ],
+  "dataset_size": 5829,
+  "test_size": 1166,
+  "results": {
+    "mu": {
+      "model_name": "Ridge",
+      "train_mae": 5.4087518337033025,
+      "test_mae": 5.602290626629699,
+      "train_r2": 0.6898603286201657,
+      "test_r2": 0.6827152247250081,
+      "overfitting_percent": -3.5782524115898147
+    },
+    "sigma": {
+      "model_name": "ElasticNet",
+      "train_mae": 1.1913231734422502,
+      "test_mae": 1.1589508202905223,
+      "train_r2": 1.0643389476427956e-06,
+      "test_r2": -0.0011306786158129523,
+      "overfitting_percent": 2.717344367455737
+    }
+  }
+}

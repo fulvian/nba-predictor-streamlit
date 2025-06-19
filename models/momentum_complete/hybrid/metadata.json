@@ -1,0 +1,27 @@
+{
+  "model_name": "Ridge Regression",
+  "feature_names": [
+    "home_momentum_score",
+    "home_hot_hand_players",
+    "home_avg_player_momentum",
+    "home_avg_player_weighted_contribution",
+    "home_team_offensive_potential",
+    "home_team_defensive_potential",
+    "away_momentum_score",
+    "away_hot_hand_players",
+    "away_avg_player_momentum",
+    "away_avg_player_weighted_contribution",
+    "away_team_offensive_potential",
+    "away_team_defensive_potential",
+    "momentum_diff",
+    "is_playoff",
+    "pressure_index",
+    "rest_advantage"
+  ],
+  "test_mae": 15.07595306557862,
+  "test_r2": 0.09058436310244211,
+  "regular_mae": NaN,
+  "playoff_mae": NaN,
+  "model_type": "hybrid",
+  "training_date": "2025-06-18T18:09:09.582211"
+}
