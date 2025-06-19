@@ -917,12 +917,15 @@ def show_game_analysis_combined_tab(system):
             # Calcola status dettagliati basati sui dati reali
             momentum_conf = momentum_impact.get('confidence_factor', 1.0) * 100 if isinstance(momentum_impact, dict) else 85.0
             
+            # Estrai dati di supporto dall'analisi
+            opportunities = result.get('opportunities', [])
+            
             # Valuta la qualità dei dati e completezza dell'analisi
             team_stats = result.get('team_stats', {})
             stats_quality = "complete" if team_stats and 'home' in team_stats and 'away' in team_stats else "limited"
             
-            # Valuta il sistema injury
-            injury_quality = "active" if abs(injury_impact) > 0.1 or home_impact_result.get('injured_players_details') else "no_impact"
+            # Valuta il sistema injury - semplificato per evitare variabili non definite
+            injury_quality = "active" if abs(injury_impact) > 0.1 else "no_impact"
             
             # Valuta il sistema momentum
             momentum_quality = "high" if momentum_conf > 80 else "medium" if momentum_conf > 60 else "basic"
