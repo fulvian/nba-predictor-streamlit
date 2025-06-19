@@ -157,7 +157,8 @@ def main():
             with st.spinner("Running comprehensive analysis..."):
                 try:
                     # Import and run analysis
-                    from main import NBACompleteSystem, NBADataProvider
+                    from main import NBACompleteSystem
+                    from data_provider import NBADataProvider
                     
                     # Create mock args
                     class MockArgs:
