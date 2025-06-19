@@ -4648,18 +4648,18 @@ def show_performance_dashboard():
         st.subheader("💾 Download ed Esportazione")
         
         csv_data = df_filtered.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                label="📥 Scarica Dati Performance (.csv)",
-                data=csv_data,
-                file_name=f'nba_predictor_performance_{pd.Timestamp.now().strftime("%Y%m%d")}.csv',
-                mime='text/csv'
-            )
-            
-            # Pulsante per esportare dati completi
-            if st.button("📊 Esporta Dati Completi JSON+CSV"):
-                exported_df = export_complete_betting_data()
-                if not exported_df.empty:
-                    st.dataframe(exported_df.head(10))
+        st.download_button(
+            label="📥 Scarica Dati Performance (.csv)",
+            data=csv_data,
+            file_name=f'nba_predictor_performance_{pd.Timestamp.now().strftime("%Y%m%d")}.csv',
+            mime='text/csv'
+        )
+        
+        # Pulsante per esportare dati completi
+        if st.button("📊 Esporta Dati Completi JSON+CSV"):
+            exported_df = export_complete_betting_data()
+            if not exported_df.empty:
+                st.dataframe(exported_df.head(10))
         
     except Exception as e:
         st.error(f"Errore nel caricamento della dashboard performance: {e}")
