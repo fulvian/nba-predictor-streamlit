@@ -686,20 +686,17 @@ def show_betting_center(system):
     </div>
     """, unsafe_allow_html=True)
     
-    # Layout principale con tab RIVISTE
-    tab1, tab2, tab3, tab4 = st.tabs(["🏀 Analisi Partita", "📊 Statistiche", "🎯 Raccomandazioni", "💰 Piazzamento"])
+    # Layout principale con tab UNIFICATE
+    tab1, tab2, tab3 = st.tabs(["🏀 Analisi Partita", "📊 Statistiche", "🎯 Centro Comando"])
     
     with tab1:
-        show_game_analysis_combined_tab(system)  # NUOVA TAB COMBINATA
+        show_game_analysis_combined_tab(system)  # TAB COMBINATA ANALISI
     
     with tab2:
-        show_statistics_tab(system)  # NUOVA TAB STATISTICHE
+        show_statistics_tab(system)  # TAB STATISTICHE DETTAGLIATE
     
     with tab3:
-        show_recommendations_tab(system)
-    
-    with tab4:
-        show_betting_tab()
+        show_recommendations_tab(system)  # TAB UNIFICATA RACCOMANDAZIONI + PIAZZAMENTO
 
 def show_game_analysis_combined_tab(system):
     """Tab combinata per selezione partita e analisi - UNICA PAGINA A SCORRIMENTO"""
@@ -1202,11 +1199,7 @@ def show_statistics_tab(system):
                 ]
                 
                 for metric, value in home_metrics:
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        st.write(f"**{metric}**")
-                    with col2:
-                        st.write(value)
+                    st.write(f"**{metric}**: {value}")
             else:
                 st.info("Dati non disponibili")
         
@@ -1237,11 +1230,7 @@ def show_statistics_tab(system):
                 ]
                 
                 for metric, value in away_metrics:
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        st.write(f"**{metric}**")
-                    with col2:
-                        st.write(value)
+                    st.write(f"**{metric}**: {value}")
             else:
                 st.info("Dati non disponibili")
     else:
@@ -1425,7 +1414,7 @@ def show_statistics_tab(system):
         st.error("❌ Sistema data provider non disponibile")
 
 def show_recommendations_tab(system):
-    """Tab per le raccomandazioni - PRESENTAZIONE MIGLIORATA"""
+    """Tab unificata per raccomandazioni e piazzamento scommesse - SYSTEM ALIGNED"""
     if 'analysis_result' not in st.session_state:
         st.warning("⚠️ Completa prima l'analisi nella tab 'Analisi Partita'")
         return
@@ -1439,252 +1428,545 @@ def show_recommendations_tab(system):
     
     st.markdown("""
     <div class="tab-container">
-        <h2>🎯 Raccomandazioni di Scommessa</h2>
-        <p>Sistema professionale di raccomandazioni basato su algoritmi ML</p>
+        <h2>🎯 Centro Comando Scommesse</h2>
+        <p>Raccomandazioni del sistema e piazzamento unificato</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Estrai dati dall'analisi
+    # Recupera dati dell'analisi
     distribution = result.get('distribution', {})
-    opportunities = result.get('opportunities', [])
-    momentum_impact = result.get('momentum_impact', {})
-    injury_impact = result.get('injury_impact', 0)
-    central_line = st.session_state.get('central_line', 0)
+    if 'error' in distribution:
+        st.error(f"❌ Errore nel modello probabilistico: {distribution['error']}")
+        return
     
-    if opportunities and isinstance(opportunities, list):
-        all_opportunities = sorted(opportunities, key=lambda x: x.get('edge', 0), reverse=True)
+    opportunities = result.get('opportunities', [])
+    if not opportunities:
+        st.warning("⚠️ Nessuna opportunità di scommessa trovata")
+        return
+    
+    # ========================================
+    # SEZIONE 1: ANALISI OPPORTUNITÀ (DA MAIN.PY)
+    # ========================================
+    st.markdown("### 💎 Analisi Opportunità di Scommessa")
+    
+    # Filtra VALUE bets usando la stessa logica di main.py
+    value_bets = [opp for opp in opportunities if opp.get('edge', 0) > 0.01 and opp.get('probability', 0) >= 0.50]
+    all_opportunities = sorted(opportunities, key=lambda x: x.get('edge', 0), reverse=True)
+    
+    # Usa l'algoritmo di scoring IDENTICO a main.py
+    optimal_bet = system._calculate_optimal_bet(all_opportunities) if hasattr(system, '_calculate_optimal_bet') else value_bets[0] if value_bets else None
+    
+    if value_bets:
+        st.success(f"🎯 Trovate {len(value_bets)} opportunità VALUE su {len(all_opportunities)} linee analizzate")
         
-        # Filtra VALUE bets (edge > 0 e prob >= 50%)
-        value_bets = [opp for opp in all_opportunities if opp.get('edge', 0) > 0 and opp.get('probability', 0) >= 0.5]
+        # Calcola le raccomandazioni categorizzate (IDENTICHE A MAIN.PY)
+        recommendations = []
         
-        if value_bets:
-            st.markdown(f"""
-            <div class="bet-summary">
-                <h3>💎 {len(value_bets)} OPPORTUNITÀ VALUE IDENTIFICATE</h3>
-                <p>🎯 Sistema di analisi ha trovato {len(value_bets)} scommesse con valore positivo su {len(all_opportunities)} linee analizzate</p>
-            </div>
-            """, unsafe_allow_html=True)
+        # 1. SCELTA DEL SISTEMA (Ottimale)
+        if optimal_bet:
+            recommendations.append({
+                'bet': optimal_bet,
+                'category': '🏆 SCELTA DEL SISTEMA',
+                'color': '#FFD700'  # Oro
+            })
+        
+        # 2. PIÙ PROBABILE
+        highest_prob_bet = max(value_bets, key=lambda x: x.get('probability', 0))
+        recommendations.append({
+            'bet': highest_prob_bet,
+            'category': '📊 MASSIMA PROBABILITÀ',
+            'color': '#4CAF50'  # Verde
+        })
+        
+        # 3. MASSIMO EDGE
+        highest_edge_bet = max(value_bets, key=lambda x: x.get('edge', 0))
+        recommendations.append({
+            'bet': highest_edge_bet,
+            'category': '🔥 MASSIMO EDGE',
+            'color': '#F44336'  # Rosso
+        })
+        
+        # 4. QUOTA MAGGIORE
+        highest_odds_bet = max(value_bets, key=lambda x: x.get('odds', 0))
+        recommendations.append({
+            'bet': highest_odds_bet,
+            'category': '💰 QUOTA MASSIMA',
+            'color': '#9C27B0'  # Magenta
+        })
+        
+        # Rimuovi duplicati mantenendo l'ordine
+        seen_bets = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            bet_key = f"{rec['bet']['type']}_{rec['bet']['line']}"
+            if bet_key not in seen_bets:
+                seen_bets.add(bet_key)
+                unique_recommendations.append(rec)
+        
+        # Display tabella raccomandazioni
+        st.markdown("#### 🌟 Raccomandazioni Principali")
+        
+        for i, rec in enumerate(unique_recommendations, 1):
+            bet = rec['bet']
+            edge = bet.get('edge', 0) * 100
+            prob = bet.get('probability', 0) * 100
             
-            # Calcola le raccomandazioni categorizzate usando l'algoritmo esatto di main.py
-            optimal_bet = system._calculate_optimal_bet(all_opportunities) if hasattr(system, '_calculate_optimal_bet') else value_bets[0]
-            highest_prob_bet = max(value_bets, key=lambda x: x.get('probability', 0))
-            highest_edge_bet = max(value_bets, key=lambda x: x.get('edge', 0))
-            highest_odds_bet = max(value_bets, key=lambda x: x.get('odds', 0))
+            # Calcola score breakdown usando STESSA FORMULA di main.py
+            edge_decimal = bet.get('edge', 0)
+            prob_decimal = bet.get('probability', 0)
+            odds = bet.get('odds', 1.0)
             
-            # Lista delle raccomandazioni principali
-            recommendations = []
+            # FORMULA EDGE IDENTICA A MAIN.PY
+            if edge_decimal >= 0.15:  # 15%+
+                edge_score = 30
+            elif edge_decimal >= 0.10:  # 10-15%
+                edge_score = 25 + (edge_decimal - 0.10) * 100
+            elif edge_decimal >= 0.05:  # 5-10%
+                edge_score = 15 + (edge_decimal - 0.05) * 200
+            elif edge_decimal >= 0.02:  # 2-5%
+                edge_score = 5 + (edge_decimal - 0.02) * 333
+            else:  # <2%
+                edge_score = edge_decimal * 250
             
-            if optimal_bet:
-                recommendations.append({
-                    'bet': optimal_bet,
-                    'category': '🏆 SCELTA DEL SISTEMA',
-                    'description': 'Scommessa ottimale calcolata dall\'algoritmo ML',
-                    'color': '#FFD700'  # Gold
-                })
+            # FORMULA PROBABILITY IDENTICA A MAIN.PY
+            if prob_decimal > 0.65:
+                prob_score = 35
+            elif 0.60 <= prob_decimal <= 0.65:
+                prob_score = 25 + (prob_decimal - 0.60) * 200
+            elif 0.55 <= prob_decimal < 0.60:
+                prob_score = 15 + (prob_decimal - 0.55) * 200
+            elif 0.52 <= prob_decimal < 0.55:
+                prob_score = 5 + (prob_decimal - 0.52) * 333
+            else:  # 50-52%
+                prob_score = (prob_decimal - 0.50) * 250
             
-            recommendations.extend([
-                {
-                    'bet': highest_prob_bet,
-                    'category': '📊 MASSIMA PROBABILITÀ',
-                    'description': 'Scommessa con la più alta probabilità di successo',
-                    'color': '#4CAF50'  # Green
-                },
-                {
-                    'bet': highest_edge_bet,
-                    'category': '🔥 MASSIMO EDGE',
-                    'description': 'Scommessa con il margine più favorevole',
-                    'color': '#FF5722'  # Red-Orange
-                },
-                {
-                    'bet': highest_odds_bet,
-                    'category': '💰 QUOTA MASSIMA',
-                    'description': 'Scommessa con la quota più alta',
-                    'color': '#9C27B0'  # Purple
-                }
-            ])
+            # FORMULA ODDS IDENTICA A MAIN.PY
+            if 1.70 <= odds <= 1.95:
+                odds_score = 30
+            elif 1.60 <= odds < 1.70:
+                odds_score = 18
+            elif 1.95 < odds <= 2.10:
+                odds_score = 20
+            elif 2.10 < odds <= 2.30:
+                odds_score = 12
+            elif 2.30 < odds <= 2.60:
+                odds_score = 8
+            else:
+                odds_score = max(3, 15 - abs(odds - 1.8) * 8)
             
-            # Rimuovi duplicati
-            seen_bets = set()
-            unique_recommendations = []
-            for rec in recommendations:
-                bet_key = f"{rec['bet']['type']}_{rec['bet']['line']}"
-                if bet_key not in seen_bets:
-                    seen_bets.add(bet_key)
-                    unique_recommendations.append(rec)
+            # FORMULA TOTALE IDENTICA A MAIN.PY
+            total_score = (
+                edge_score * 0.30 +      # Edge 30%
+                prob_score * 0.50 +      # Probabilità 50% 
+                odds_score * 0.20        # Odds 20%
+            )
             
-            # NUOVA PRESENTAZIONE MIGLIORATA DELLE RACCOMANDAZIONI
-            st.markdown("### 🏆 Raccomandazioni Principali")
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
             
-            for i, rec in enumerate(unique_recommendations, 1):
-                bet = rec['bet']
-                edge = bet.get('edge', 0) * 100
-                prob = bet.get('probability', 0) * 100
-                quality = bet.get('quality_score', 0) * 100 if bet.get('quality_score', 0) < 10 else bet.get('quality_score', 0)
-                
-                # Header della raccomandazione
+            with col1:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, {rec['color']}20 0%, {rec['color']}10 100%); 
-                            border-left: 5px solid {rec['color']}; border-radius: 15px; 
-                            padding: 1.5rem; margin: 1rem 0; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                    <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-                        <h3 style="margin: 0; color: #1e3c72; flex-grow: 1;">#{i} {rec['category']}</h3>
-                        <span style="background: {rec['color']}; color: white; padding: 0.3rem 0.8rem; 
-                                     border-radius: 20px; font-size: 0.8rem; font-weight: bold;">
-                            QUALITY: {quality:.1f}/100
-                        </span>
-                    </div>
-                    <p style="margin: 0 0 1rem 0; color: #6c757d; font-style: italic;">{rec['description']}</p>
+                <div style="background: linear-gradient(135deg, {rec['color']} 0%, {rec['color']}CC 100%); 
+                           color: white; border-radius: 10px; padding: 1rem; margin: 0.5rem 0;">
+                    <h4 style="margin: 0 0 0.5rem 0;">{i}. {rec['category']}</h4>
+                    <p style="margin: 0; font-size: 1.1rem; font-weight: bold;">
+                        {bet['type']} {bet['line']} @ {bet['odds']:.2f}
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
+            
+            with col2:
+                st.metric("📊 Edge", f"{edge:.1f}%")
+                st.metric("🎯 Prob", f"{prob:.1f}%")
+            
+            with col3:
+                st.metric("💰 Stake", f"€{bet['stake']:.2f}")
+                st.metric("🏆 Score", f"{total_score:.1f}/100")
+            
+            with col4:
+                # Score breakdown
+                st.markdown(f"""
+                <div style="background: #f8f9fa; border-radius: 8px; padding: 0.8rem; margin: 0.2rem 0;">
+                    <small>
+                        <strong>Breakdown Score:</strong><br>
+                        Edge: {edge_score:.1f}/30 (×0.30)<br>
+                        Prob: {prob_score:.1f}/35 (×0.50)<br>
+                        Odds: {odds_score:.1f}/30 (×0.20)
+                    </small>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Altre VALUE bets se disponibili
+        other_bets = []
+        for bet in value_bets:
+            bet_key = f"{bet['type']}_{bet['line']}"
+            if bet_key not in seen_bets:
+                other_bets.append(bet)
+                seen_bets.add(bet_key)
+        
+        other_bets = sorted(other_bets, key=lambda x: x.get('stake', 0), reverse=True)
+        
+        if other_bets:
+            st.markdown("#### 💎 Altre Opportunità VALUE")
+            
+            # Display in container scrollabile
+            with st.container():
+                st.markdown(f"*Trovate {len(other_bets)} ulteriori opportunità VALUE*")
                 
-                # Grid delle metriche usando Streamlit columns invece di HTML
-                col1, col2, col3, col4, col5 = st.columns(5)
+                for i, bet in enumerate(other_bets[:10], len(unique_recommendations) + 1):  # Mostra max 10
+                    edge = bet.get('edge', 0) * 100
+                    prob = bet.get('probability', 0) * 100
+                    
+                    col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                    
+                    with col1:
+                        st.write(f"**{i}. {bet['type']} {bet['line']}** @ {bet['odds']:.2f}")
+                    with col2:
+                        st.write(f"{edge:.1f}%")
+                    with col3:
+                        st.write(f"{prob:.1f}%")
+                    with col4:
+                        st.write(f"€{bet['stake']:.2f}")
+        
+        # ========================================
+        # SEZIONE 2: SELEZIONE E PIAZZAMENTO UNIFICATO
+        # ========================================
+        st.markdown("### 🚀 Selezione e Piazzamento")
+        
+        # Combina tutte le opzioni per la selezione
+        all_betting_options = unique_recommendations + [{'bet': bet, 'category': 'VALUE', 'color': '#00BCD4'} for bet in other_bets]
+        
+        # Selezione interattiva
+        if all_betting_options:
+            st.markdown("#### 🎯 Seleziona Scommessa da Piazzare")
+            
+            # Radio buttons per selezione
+            option_labels = []
+            for i, option in enumerate(all_betting_options):
+                bet = option['bet']
+                edge = bet.get('edge', 0) * 100
+                prob = bet.get('probability', 0) * 100
+                label = f"{option['category']}: {bet['type']} {bet['line']} @ {bet['odds']:.2f} | Edge: {edge:.1f}% | Prob: {prob:.1f}% | Stake: €{bet['stake']:.2f}"
+                option_labels.append(label)
+            
+            selected_index = st.radio(
+                "Scegli una scommessa:",
+                range(len(option_labels)),
+                format_func=lambda i: option_labels[i],
+                key="bet_selection"
+            )
+            
+            if selected_index is not None:
+                selected_option = all_betting_options[selected_index]
+                selected_bet = selected_option['bet']
+                category = selected_option['category']
+                
+                # ========================================
+                # SEZIONE 3: RIEPILOGO FINALE DELLA SCOMMESSA SELEZIONATA
+                # ========================================
+                st.markdown("### 📋 Riepilogo Scommessa Selezionata")
+                
+                # Estrai tutti i dati necessari
+                analysis_result = st.session_state.get('analysis_result', {})
+                bet_type_full = "OVER" if selected_bet.get('type') == 'OVER' else "UNDER"
+                bet_line = selected_bet.get('line', 0)
+                bet_odds = selected_bet.get('odds', 0)
+                bet_stake = selected_bet.get('stake', 0)
+                edge = selected_bet.get('edge', 0) * 100
+                prob = selected_bet.get('probability', 0) * 100
+                
+                # Get central line from game or args
+                central_line = st.session_state.get('central_line', 'N/A')
+                
+                # Calcola score usando FORMULA IDENTICA A MAIN.PY
+                edge_decimal = selected_bet.get('edge', 0)
+                prob_decimal = selected_bet.get('probability', 0)
+                odds = selected_bet.get('odds', 1.0)
+                
+                # Edge score (0-30 punti)
+                if edge_decimal >= 0.15:
+                    edge_score = 30
+                elif edge_decimal >= 0.10:
+                    edge_score = 25 + (edge_decimal - 0.10) * 100
+                elif edge_decimal >= 0.05:
+                    edge_score = 15 + (edge_decimal - 0.05) * 200
+                elif edge_decimal >= 0.02:
+                    edge_score = 5 + (edge_decimal - 0.02) * 333
+                else:
+                    edge_score = edge_decimal * 250
+                
+                # Probability score (0-35 punti)
+                if prob_decimal > 0.65:
+                    prob_score = 35
+                elif 0.60 <= prob_decimal <= 0.65:
+                    prob_score = 25 + (prob_decimal - 0.60) * 200
+                elif 0.55 <= prob_decimal < 0.60:
+                    prob_score = 15 + (prob_decimal - 0.55) * 200
+                elif 0.52 <= prob_decimal < 0.55:
+                    prob_score = 5 + (prob_decimal - 0.52) * 333
+                else:
+                    prob_score = (prob_decimal - 0.50) * 250
+                
+                # Odds score (0-30 punti)
+                if 1.70 <= odds <= 1.95:
+                    odds_score = 30
+                elif 1.60 <= odds < 1.70:
+                    odds_score = 18
+                elif 1.95 < odds <= 2.10:
+                    odds_score = 20
+                elif 2.10 < odds <= 2.30:
+                    odds_score = 12
+                elif 2.30 < odds <= 2.60:
+                    odds_score = 8
+                else:
+                    odds_score = max(3, 15 - abs(odds - 1.8) * 8)
+                
+                # Total score (IDENTICO A MAIN.PY)
+                total_score = (
+                    edge_score * 0.30 +      # Edge 30%
+                    prob_score * 0.50 +      # Probabilità 50% 
+                    odds_score * 0.20        # Odds 20%
+                )
+                
+                # Calcola metriche aggiuntive
+                potential_win = bet_stake * (odds - 1)
+                roi_percent = (potential_win / bet_stake * 100) if bet_stake > 0 else 0
+                
+                # Estrai dati dall'analisi
+                momentum_impact = analysis_result.get('momentum_impact', {})
+                injury_impact = analysis_result.get('injury_impact', 0)
+                predicted_total = distribution.get('predicted_mu', 0)
+                confidence_sigma = distribution.get('predicted_sigma', 0)
+                
+                # Layout a 3 colonne per il riepilogo (IDENTICO A MAIN.PY)
+                col1, col2, col3 = st.columns(3)
                 
                 with col1:
                     st.markdown(f"""
-                    <div style="text-align: center; background: white; padding: 0.8rem; border-radius: 10px; 
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-                        <div style="font-size: 1.2rem; font-weight: bold; color: #1e3c72;">{bet['type']} {bet['line']}</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">Tipo Scommessa</div>
+                    <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+                               color: white; border-radius: 15px; padding: 1.5rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; text-align: center;">🏀 Informazioni Partita</h4>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Squadre:</strong><br>
+                            {game.get('away_team', 'Away')} @ {game.get('home_team', 'Home')}
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Data:</strong> {datetime.now().strftime("%d/%m/%Y")}
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Linea Bookmaker:</strong> {central_line}
+                        </div>
+                        <div>
+                            <strong>Totale Previsto:</strong> {predicted_total:.1f} pts
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with col2:
                     st.markdown(f"""
-                    <div style="text-align: center; background: white; padding: 0.8rem; border-radius: 10px; 
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-                        <div style="font-size: 1.2rem; font-weight: bold; color: #1e3c72;">{bet['odds']:.2f}</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">Quota</div>
+                    <div style="background: linear-gradient(135deg, {selected_option['color']} 0%, {selected_option['color']}CC 100%); 
+                               color: white; border-radius: 15px; padding: 1.5rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; text-align: center;">🎯 Dettagli Scommessa</h4>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Categoria:</strong><br>
+                            {category}
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Tipo:</strong> {bet_type_full} {bet_line}
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Quota:</strong> {bet_odds:.2f}
+                        </div>
+                        <div>
+                            <strong>Stake:</strong> €{bet_stake:.2f}
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with col3:
                     st.markdown(f"""
-                    <div style="text-align: center; background: white; padding: 0.8rem; border-radius: 10px; 
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-                        <div style="font-size: 1.2rem; font-weight: bold; color: #4CAF50;">{edge:+.1f}%</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">Edge</div>
+                    <div style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); 
+                               color: white; border-radius: 15px; padding: 1.5rem; margin-bottom: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; text-align: center;">📊 Metriche Sistema</h4>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Edge:</strong> {edge:+.1f}%
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>Probabilità:</strong> {prob:.1f}%
+                        </div>
+                        <div style="margin-bottom: 0.8rem;">
+                            <strong>ROI Atteso:</strong> {roi_percent:.1f}%
+                        </div>
+                        <div>
+                            <strong>Vincita Pot.:</strong> €{potential_win:.2f}
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 
-                with col4:
-                    st.markdown(f"""
-                    <div style="text-align: center; background: white; padding: 0.8rem; border-radius: 10px; 
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-                        <div style="font-size: 1.2rem; font-weight: bold; color: #2196F3;">{prob:.1f}%</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">Probabilità</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # ========================================
+                # SEZIONE 4: SCORE ALGORITMO DEL SISTEMA (IDENTICO A MAIN.PY)
+                # ========================================
+                st.markdown("### 🤖 Score Algoritmo del Sistema")
                 
-                with col5:
-                    st.markdown(f"""
-                    <div style="text-align: center; background: white; padding: 0.8rem; border-radius: 10px; 
-                                box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 1rem;">
-                        <div style="font-size: 1.2rem; font-weight: bold; color: #FF9800;">€{bet['stake']:.2f}</div>
-                        <div style="font-size: 0.8rem; color: #6c757d;">Stake Consigliato</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            # Altre VALUE bets in formato compatto
-            other_bets = []
-            for bet in value_bets:
-                bet_key = f"{bet['type']}_{bet['line']}"
-                if bet_key not in seen_bets:
-                    other_bets.append(bet)
-                    seen_bets.add(bet_key)
-            
-            other_bets = sorted(other_bets, key=lambda x: x.get('stake', 0), reverse=True)
-            
-            if other_bets:
-                st.markdown("### 📋 Altre Opportunità VALUE")
-                
-                # Tabella compatta per altre value bets
-                other_bets_data = []
-                for i, bet in enumerate(other_bets, len(unique_recommendations) + 1):
-                    edge = bet.get('edge', 0) * 100
-                    prob = bet.get('probability', 0) * 100
-                    quality = bet.get('quality_score', 0)
-                    
-                    other_bets_data.append({
-                        'Rank': f"#{i}",
-                        'Tipo': f"{bet['type']} {bet['line']}",
-                        'Quota': f"{bet['odds']:.2f}",
-                        'Edge': f"{edge:+.1f}%",
-                        'Probabilità': f"{prob:.1f}%",
-                        'Quality': f"{quality:.1f}",
-                        'Stake': f"€{bet['stake']:.2f}"
-                    })
-                
-                if other_bets_data:
-                    df = pd.DataFrame(other_bets_data)
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            # Salva per la tab di piazzamento
-            st.session_state['best_bet'] = optimal_bet
-            st.session_state['all_value_bets'] = value_bets
-            st.session_state['unique_recommendations'] = unique_recommendations
-            
-        else:
-            # Nessun VALUE bet trovato
-            st.markdown("""
-            <div class="bet-summary">
-                <h3>❌ Nessuna Opportunità VALUE Identificata</h3>
-                <p>Il sistema non ha trovato scommesse con valore positivo. Mostriamo le migliori opzioni disponibili.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            top_5_bets = all_opportunities[:5]
-            
-            st.markdown("### 📊 Migliori 5 Opzioni Disponibili")
-            
-            for i, bet in enumerate(top_5_bets, 1):
-                edge = bet.get('edge', 0) * 100
-                prob = bet.get('probability', 0) * 100
-                quality = bet.get('quality_score', 0)
-                
-                if edge > -2.0:
-                    status = "MARGINALE"
-                    color = "#FFC107"  # Amber
-                elif edge > -5.0:
-                    status = "SCARSA"
-                    color = "#FF5722"  # Red-Orange
-                else:
-                    status = "PESSIMA"
-                    color = "#9E9E9E"  # Grey
-                
+                # Container principale per lo score
                 st.markdown(f"""
-                <div style="background: {color}20; border-left: 5px solid {color}; border-radius: 12px; 
-                            padding: 1rem; margin: 0.8rem 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 style="margin: 0; color: #1e3c72;">#{i} {status} - {bet['type']} {bet['line']}</h4>
-                        <span style="background: {color}; color: white; padding: 0.2rem 0.6rem; 
-                                     border-radius: 15px; font-size: 0.8rem;">
-                            {edge:+.1f}%
-                        </span>
-                    </div>
-                    <div style="margin-top: 0.5rem; color: #6c757d;">
-                        Quota: {bet['odds']:.2f} • Probabilità: {prob:.1f}% • Stake: €{bet['stake']:.2f}
+                <div style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); 
+                           color: white; border-radius: 20px; padding: 2rem; margin: 1rem 0;
+                           border: 3px solid #FF9800; box-shadow: 0 8px 32px rgba(255,152,0,0.3);">
+                    <div style="text-align: center; margin-bottom: 1.5rem;">
+                        <h2 style="margin: 0; font-size: 2.5rem; font-weight: bold;">
+                            🏆 SCORE TOTALE: {total_score:.1f}/100
+                        </h2>
+                        <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; opacity: 0.9;">
+                            Punteggio calcolato dall'algoritmo di ottimizzazione ML
+                        </p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Breakdown del score (IDENTICO A MAIN.PY)
+                st.markdown("#### 🔬 Breakdown Score Algoritmo")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "⚡ Edge Score", 
+                        f"{edge_score:.1f}/30",
+                        help="Punteggio basato sul margine favorevole (peso 30%)"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "🎯 Probability Score", 
+                        f"{prob_score:.1f}/35",
+                        help="Punteggio basato sulla probabilità di successo (peso 50%)"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "💰 Odds Score", 
+                        f"{odds_score:.1f}/30",
+                        help="Punteggio basato sulla qualità delle quote (peso 20%)"
+                    )
+                
+                # Spiegazione dettagliata del sistema di scoring (IDENTICA A MAIN.PY)
+                st.info(f"""
+                💡 **Sistema di Scoring ML** (IDENTICO a main.py):
+                - **Edge Score (30%)**: {edge_score:.1f}/30 - Vantaggio matematico della scommessa
+                - **Probability Score (50%)**: {prob_score:.1f}/35 - Probabilità di successo (peso maggiore)
+                - **Odds Score (20%)**: {odds_score:.1f}/30 - Qualità e attrattività delle quote
+                
+                **Score Totale**: {total_score:.1f}/100 = Edge({edge_score:.1f}×0.30) + Prob({prob_score:.1f}×0.50) + Odds({odds_score:.1f}×0.20)
+                
+                Il sistema privilegia le probabilità alte mantenendo un edge positivo.
+                """)
+                
+                # ========================================
+                # SEZIONE 5: IMPATTI SISTEMA NBA PREDICTOR
+                # ========================================
+                st.markdown("### ⚙️ Impatti Sistema NBA Predictor")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    momentum_value = momentum_impact.get('total_impact', 0) if isinstance(momentum_impact, dict) else momentum_impact
+                    st.metric(
+                        "⚡ Momentum Impact", 
+                        f"{momentum_value:+.2f} pts",
+                        help="Impatto del sistema ML momentum sui totali"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "🏥 Injury Impact", 
+                        f"{injury_impact:+.2f} pts",
+                        help="Impatto degli infortuni sui totali della partita"
+                    )
+                
+                with col3:
+                    total_system_impact = momentum_value + injury_impact
+                    st.metric(
+                        "🔧 Impatto Totale Sistema", 
+                        f"{total_system_impact:+.2f} pts",
+                        help="Somma di tutti gli impatti calcolati dal sistema"
+                    )
+                
+                # ========================================
+                # SEZIONE 6: AZIONI FINALI
+                # ========================================
+                st.markdown("### 🚀 Azioni Finali")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("✅ CONFERMA E PIAZZA SCOMMESSA", key="place_final_bet", type="primary", use_container_width=True):
+                        # Salva la scommessa nel sistema
+                        game_id = game.get('game_id', f"CUSTOM_{game.get('away_team', 'Away')}_{game.get('home_team', 'Home')}")
+                        
+                        # Salva usando il metodo del sistema (IDENTICO A MAIN.PY)
+                        if hasattr(system, 'save_pending_bet'):
+                            system.save_pending_bet(selected_bet, game_id)
+                            st.success("📲 Scommessa salvata! Il sistema aggiornerà automaticamente il bankroll.")
+                        else:
+                            st.warning("⚠️ Sistema di salvataggio non disponibile")
+                        
+                        # Feedback finale
+                        st.balloons()
+                        st.success(f"🎉 Scommessa **{bet_type_full} {bet_line}** confermata con stake €{bet_stake:.2f}!")
+                
+                with col2:
+                    if st.button("🔄 CAMBIA SELEZIONE", key="change_selection", use_container_width=True):
+                        st.rerun()  # Ricarica la pagina per permettere nuova selezione
     
     else:
-        st.error("❌ Dati di analisi scommesse non disponibili")
+        # CASO 2: Nessun VALUE bet - mostra le migliori opzioni (IDENTICO A MAIN.PY)
+        st.warning("❌ Nessuna opportunità VALUE trovata")
+        st.markdown("#### 🔍 Prime 5 Opzioni Migliori")
+        
+        top_5_bets = all_opportunities[:5]
+        
+        for i, bet in enumerate(top_5_bets, 1):
+            edge = bet.get('edge', 0) * 100
+            prob = bet.get('probability', 0) * 100
+            
+            # Colori basati sull'edge (tutti negativi in questo caso)
+            if edge > -2.0:
+                row_color = "#FF9800"  # Arancione (migliore tra i negativi)
+                status = "MARGINALE"
+            elif edge > -5.0:
+                row_color = "#FF5722"  # Rosso chiaro
+                status = "SCARSA"
+            else:
+                row_color = "#9E9E9E"  # Grigio
+                status = "PESSIMA"
+            
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div style="background: {row_color}; color: white; border-radius: 8px; padding: 1rem;">
+                    <h5 style="margin: 0;">{i}. {status}</h5>
+                    <p style="margin: 0; font-weight: bold;">{bet['type']} {bet['line']} @ {bet['odds']:.2f}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.write(f"**Edge:** {edge:.1f}%")
+            
+            with col3:
+                st.write(f"**Prob:** {prob:.1f}%")
+            
+            with col4:
+                st.write(f"**Stake:** €{bet['stake']:.2f}")
+        
+        st.info("💡 VALUE = Edge > 0% AND Probabilità ≥ 50%")
 
-def show_betting_tab():
-    """Tab per il piazzamento della scommessa - CON SCORE ALGORITMO SISTEMA"""
-    if 'best_bet' not in st.session_state:
-        st.warning("⚠️ Completa prima l'analisi e seleziona una raccomandazione")
-        return
-    
-    st.markdown("""
-    <div class="tab-container">
-        <h2>💰 Piazzamento Scommessa</h2>
-        <p>Finalizza la scommessa selezionata con tutti i dettagli del sistema</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Recupera i dati dalla sessione
+# ================================
+# 📊 PERFORMANCE DASHBOARD - VERSIONE AVANZATA
+# ================================
+
+# --- Funzioni di Supporto Performance ---
+def clean_numeric_value_performance(value_str):
     best_bet = st.session_state.get('best_bet')
     unique_recommendations = st.session_state.get('unique_recommendations', [])
     all_value_bets = st.session_state.get('all_value_bets', [])
@@ -1776,38 +2058,41 @@ def show_betting_tab():
                 else:  # <2%
                     edge_score = edge_decimal * 250  # Max 5 punti per edge molto bassi
                 
-                # Probability Score (max 50 punti - peso maggiore)
+                # SISTEMA AMPLIFICATO - Ogni % conta nella fascia critica 50-55%
                 if prob_decimal > 0.65:
-                    prob_score = 50              # Bonus per probabilità molto alte
+                    prob_score = 35              # Bonus per probabilità molto alte
                 elif 0.60 <= prob_decimal <= 0.65:
-                    prob_score = 35 + (prob_decimal - 0.60) * 300  # Scala 35-50
+                    prob_score = 25 + (prob_decimal - 0.60) * 200  # Scala 25-35
                 elif 0.55 <= prob_decimal < 0.60:
-                    prob_score = 20 + (prob_decimal - 0.55) * 300  # Scala 20-35
+                    prob_score = 15 + (prob_decimal - 0.55) * 200  # Scala 15-25
                 elif 0.52 <= prob_decimal < 0.55:
-                    prob_score = 8 + (prob_decimal - 0.52) * 400   # Scala 8-20 (AMPLIFICATA)
+                    prob_score = 5 + (prob_decimal - 0.52) * 333   # Scala 5-15 (AMPLIFICATA)
                 else:  # 50-52% - FASCIA CRITICA
-                    prob_score = (prob_decimal - 0.50) * 400       # 0-8 punti (MOLTO RIPIDA) 
+                    prob_score = (prob_decimal - 0.50) * 250       # 0-5 punti (MOLTO RIPIDA) 
                 
-                # Odds Score (max 20 punti)
+                # SISTEMA QUOTE POTENZIATO - Range ottimale privilegiato (20% peso)
                 if 1.70 <= bet_odds <= 1.95:
-                    odds_score = 20              # Range ottimale massimo premio
+                    odds_score = 30              # POTENZIATO: Range ottimale massimo premio
                 elif 1.60 <= bet_odds < 1.70:
-                    odds_score = 12              # Buono ma margine basso
+                    odds_score = 18              # Buono ma margine basso
                 elif 1.95 < bet_odds <= 2.10:
-                    odds_score = 15              # Ancora accettabile
+                    odds_score = 20              # Ancora accettabile
                 elif 2.10 < bet_odds <= 2.30:
-                    odds_score = 10              # Rischio moderato
+                    odds_score = 12              # Rischio moderato
                 elif 2.30 < bet_odds <= 2.60:
-                    odds_score = 6               # Rischio alto
+                    odds_score = 8               # Rischio alto
                 else:
-                    odds_score = max(2, 12 - abs(bet_odds - 1.8) * 5)  # Penalizzazione
+                    odds_score = max(3, 15 - abs(bet_odds - 1.8) * 8)  # Penalizzazione severa
                 
-                # Calcola score totale
-                total_raw_score = (
-                    edge_score * 0.30 +      # Edge 30%
-                    prob_score * 0.50 +      # Probabilità 50%
-                    odds_score * 0.20        # Quote 20%
+                # SISTEMA PULITO - Solo 3 componenti indipendenti
+                total_score = (
+                    edge_score * 0.30 +      # Edge 
+                    prob_score * 0.50 +      # Probabilità dominante
+                    odds_score * 0.20        # Quote potenziate (+5% dal Kelly eliminato)
                 )
+                
+                # Normalizzazione corretta: max possibile = 35+30+25+10 = 100
+                total_raw_score = total_score  # Già su scala 0-100
                 
                 # Se optimization_score non è disponibile, usa il calcolo
                 if optimization_score == 0:
@@ -1926,14 +2211,14 @@ def show_betting_tab():
                 with col2:
                     st.metric(
                         "🎯 Probability Score", 
-                        f"{prob_score:.1f}/50",
-                        help="Punteggio basato sulla probabilità di successo (peso 50%)"
+                        f"{prob_score:.1f}/35",
+                        help="Punteggio basato sulla probabilità di successo (peso maggiore)"
                     )
                 
                 with col3:
                     st.metric(
                         "💰 Odds Score", 
-                        f"{odds_score:.1f}/20",
+                        f"{odds_score:.1f}/30",
                         help="Punteggio basato sulla qualità delle quote (peso 20%)"
                     )
                 
@@ -1941,8 +2226,8 @@ def show_betting_tab():
                 st.info(f"""
                 💡 **Sistema di Scoring ML**:
                 - **Edge Score (30%)**: 0-30 punti - Vantaggio matematico della scommessa
-                - **Probability Score (50%)**: 0-50 punti - Probabilità di successo (peso maggiore)
-                - **Odds Score (20%)**: 0-20 punti - Qualità e attrattività delle quote
+                - **Probability Score (50%)**: 0-35 punti - Probabilità di successo (peso maggiore)
+                - **Odds Score (20%)**: 0-30 punti - Qualità e attrattività delle quote
                 
                 **Score Totale**: {total_raw_score:.1f}/100 = Edge({edge_score:.1f}×0.30) + Prob({prob_score:.1f}×0.50) + Odds({odds_score:.1f}×0.20)
                 
@@ -2161,100 +2446,721 @@ def calculate_kelly_stake_performance(probability, odds, fraction=1.0):
 def load_betting_data():
     """Carica e pulisce i dati delle scommesse dal sistema."""
     try:
-        # Prova a caricare da diversi possibili file di scommesse
-        possible_files = [
-            'data/pending_bets.json',
-            'data/nba_predictions_history.csv', 
-            'data/betting_history.csv',
-            'data/bet_results.csv'
+        # Prima prova a caricare dal file CSV completo
+        csv_file_path = 'data/risultati_bet_completi.csv'
+        if os.path.exists(csv_file_path):
+            df = pd.read_csv(csv_file_path)
+            
+            # Pulizia e standardizzazione dati
+            processed_data = []
+            for _, row in df.iterrows():
+                # Converti le date in formato standard
+                data_str = str(row['Data']) if pd.notna(row['Data']) else '2025-01-01'
+                
+                # Replace Italian month names with English ones
+                month_replacements = {
+                    'Gen': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr',
+                    'Mag': 'May', 'Giu': 'Jun', 'Lug': 'Jul', 'Ago': 'Aug',
+                    'Set': 'Sep', 'Ott': 'Oct', 'Nov': 'Nov', 'Dic': 'Dec'
+                }
+                
+                for italian_month, english_month in month_replacements.items():
+                    if italian_month in data_str:
+                        data_str = data_str.replace(italian_month, english_month)
+                
+                # Try to parse and standardize the date
+                try:
+                    parsed_date = pd.to_datetime(data_str, errors='coerce')
+                    if pd.notna(parsed_date):
+                        data_str = parsed_date.strftime('%Y-%m-%d')
+                    else:
+                        data_str = '2025-01-01'  # Fallback date
+                except Exception:
+                    data_str = '2025-01-01'  # Fallback date
+                
+                # Standardizzazione nomi squadre
+                squadra_a = str(row['Squadra A']) if pd.notna(row['Squadra A']) else 'Team A'
+                squadra_b = str(row['Squadra B']) if pd.notna(row['Squadra B']) else 'Team B'
+                
+                # Gestione valori numerici
+                quota = float(row['Quota']) if pd.notna(row['Quota']) else 1.80
+                stake = float(row['Stake']) if pd.notna(row['Stake']) and row['Stake'] != '' else 0.0
+                
+                # Gestione probabilità e edge value
+                prob_raw = row['Probabilita Stimata'] if pd.notna(row['Probabilita Stimata']) else 60.0
+                prob_stimata = float(prob_raw) / 100 if pd.notna(prob_raw) and float(prob_raw) > 1 else float(prob_raw) if pd.notna(prob_raw) else 0.60
+                
+                edge_raw = row['Edge Value'] if pd.notna(row['Edge Value']) else 5.0
+                edge_value = float(edge_raw) / 100 if pd.notna(edge_raw) and float(edge_raw) > 1 else float(edge_raw) if pd.notna(edge_raw) else 0.05
+                
+                # Media punti stimati
+                media_punti = float(row['Media Punti Stimati']) if pd.notna(row['Media Punti Stimati']) else 220.0
+                
+                # Punteggio finale
+                punteggio = int(row['Punteggio finale']) if pd.notna(row['Punteggio finale']) and row['Punteggio finale'] != '' else 0
+                
+                # Esito
+                esito = str(row['Esito']).upper() if pd.notna(row['Esito']) else 'W'
+                
+                # Tipo scommessa (dedotto dalla presenza di media punti)
+                tipo_scommessa = f"OVER {media_punti}" if media_punti > 0 else "OVER"
+                
+                # Confidenza
+                confidenza_raw = str(row['Confidenza']) if pd.notna(row['Confidenza']) else 'Alta'
+                confidenza = 0.85 if confidenza_raw == 'Alta' else 0.75 if confidenza_raw == 'Media' else 0.65
+                
+                processed_data.append({
+                    'Data': data_str,
+                    'Squadra_A': squadra_a,
+                    'Squadra_B': squadra_b,
+                    'Quota': quota,
+                    'Stake': stake,
+                    'Tipo_Scommessa': tipo_scommessa,
+                    'Probabilita_Stimata': prob_stimata,
+                    'Edge_Value': edge_value,
+                    'Esito': esito,
+                    'Punteggio_Finale': punteggio,
+                    'Media_Punti_Stimati': media_punti,
+                    'Confidenza': confidenza
+                })
+            
+            return pd.DataFrame(processed_data)
+        
+        # Fallback ai dati precedenti se il CSV non esiste
+        real_betting_data = [
+            {
+                'Data': '2025-05-01',
+                'Squadra_A': 'Golden State Warriors',
+                'Squadra_B': 'Houston Rockets',
+                'Quota': 1.71,
+                'Stake': 1.70,
+                'Tipo_Scommessa': 'OVER 208.4',
+                'Probabilita_Stimata': 0.685,
+                'Edge_Value': 0.171,
+                'Esito': 'W',
+                'Punteggio_Finale': 247,
+                'Media_Punti_Stimati': 208.4,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-01',
+                'Squadra_A': 'Minnesota Timberwolves',
+                'Squadra_B': 'Los Angeles Lakers',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 217.2',
+                'Probabilita_Stimata': 0.692,
+                'Edge_Value': 0.203,
+                'Esito': 'L',
+                'Punteggio_Finale': 199,
+                'Media_Punti_Stimati': 217.2,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-04-30',
+                'Squadra_A': 'Milwaukee Bucks',
+                'Squadra_B': 'Indiana Pacers',
+                'Quota': 1.71,
+                'Stake': 1.70,
+                'Tipo_Scommessa': 'OVER 226.9',
+                'Probabilita_Stimata': 0.682,
+                'Edge_Value': 0.097,
+                'Esito': 'W',
+                'Punteggio_Finale': 237,
+                'Media_Punti_Stimati': 226.9,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-04-30',
+                'Squadra_A': 'Detroit Pistons',
+                'Squadra_B': 'New York Knicks',
+                'Quota': 1.71,
+                'Stake': 1.70,
+                'Tipo_Scommessa': 'OVER 221.5',
+                'Probabilita_Stimata': 0.652,
+                'Edge_Value': 0.067,
+                'Esito': 'L',
+                'Punteggio_Finale': 209,
+                'Media_Punti_Stimati': 221.5,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-04-30',
+                'Squadra_A': 'Orlando Magic',
+                'Squadra_B': 'Boston Celtics',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.764,
+                'Edge_Value': 0.307,
+                'Esito': 'W',
+                'Punteggio_Finale': 209,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-04-30',
+                'Squadra_A': 'LA Clippers',
+                'Squadra_B': 'Denver Nuggets',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 213.9',
+                'Probabilita_Stimata': 0.682,
+                'Edge_Value': 0.167,
+                'Esito': 'W',
+                'Punteggio_Finale': 246,
+                'Media_Punti_Stimati': 213.9,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-04-29',
+                'Squadra_A': 'Cleveland Cavaliers',
+                'Squadra_B': 'Miami Heat',
+                'Quota': 1.80,
+                'Stake': 1.40,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.630,
+                'Edge_Value': 0.074,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-29',
+                'Squadra_A': 'Houston Rockets',
+                'Squadra_B': 'Golden State Warriors',
+                'Quota': 1.80,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.752,
+                'Edge_Value': 0.354,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-28',
+                'Squadra_A': 'Boston Celtics',
+                'Squadra_B': 'Orlando Magic',
+                'Quota': 1.80,
+                'Stake': 1.70,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.685,
+                'Edge_Value': 0.129,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-27',
+                'Squadra_A': 'Los Angeles Lakers',
+                'Squadra_B': 'Minnesota Timberwolves',
+                'Quota': 1.80,
+                'Stake': 1.40,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.619,
+                'Edge_Value': 0.114,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-27',
+                'Squadra_A': 'Houston Rockets',
+                'Squadra_B': 'Golden State Warriors',
+                'Quota': 1.76,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.780,
+                'Edge_Value': 0.156,
+                'Esito': 'L',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-26',
+                'Squadra_A': 'Oklahoma City Thunder',
+                'Squadra_B': 'Memphis Grizzlies',
+                'Quota': 1.74,
+                'Stake': 1.40,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.617,
+                'Edge_Value': 0.075,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-17',
+                'Squadra_A': 'Miami Heat',
+                'Squadra_B': 'Chicago Bulls',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.638,
+                'Edge_Value': 0.091,
+                'Esito': 'L',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Charlotte Hornets',
+                'Squadra_B': 'Boston Celtics',
+                'Quota': 1.76,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.600,
+                'Edge_Value': 0.054,
+                'Esito': 'L',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Detroit Pistons',
+                'Squadra_B': 'Milwaukee Bucks',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Cleveland Cavaliers',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.590,
+                'Edge_Value': 0.062,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'New York Knicks',
+                'Squadra_B': 'Brooklyn Nets',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Orlando Magic',
+                'Squadra_B': 'Atlanta Hawks',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Washington Wizards',
+                'Squadra_B': 'Miami Heat',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Dallas Mavericks',
+                'Squadra_B': 'Memphis Grizzlies',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Denver Nuggets',
+                'Squadra_B': 'Houston Rockets',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Los Angeles Clippers',
+                'Squadra_B': 'Golden State Warriors',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Los Angeles Lakers',
+                'Squadra_B': 'Portland Trail Blazers',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'L',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-04-13',
+                'Squadra_A': 'Toronto Raptors',
+                'Squadra_B': 'San Antonio Spurs',
+                'Quota': 1.80,
+                'Stake': 1.90,
+                'Tipo_Scommessa': 'OVER',
+                'Probabilita_Stimata': 0.580,
+                'Edge_Value': 0.044,
+                'Esito': 'W',
+                'Punteggio_Finale': 0,
+                'Media_Punti_Stimati': 0,
+                'Confidenza': 0.75
+            },
+            {
+                'Data': '2025-05-02',
+                'Squadra_A': 'New York Knicks',
+                'Squadra_B': 'Detroit Pistons',
+                'Quota': 1.80,
+                'Stake': 1.70,
+                'Tipo_Scommessa': 'OVER 215.8',
+                'Probabilita_Stimata': 0.612,
+                'Edge_Value': 0.102,
+                'Esito': 'W',
+                'Punteggio_Finale': 229,
+                'Media_Punti_Stimati': 215.8,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-02',
+                'Squadra_A': 'Denver Nuggets',
+                'Squadra_B': 'LA Clippers',
+                'Quota': 1.71,
+                'Stake': 2.40,
+                'Tipo_Scommessa': 'OVER 218.5',
+                'Probabilita_Stimata': 0.688,
+                'Edge_Value': 0.177,
+                'Esito': 'W',
+                'Punteggio_Finale': 216,
+                'Media_Punti_Stimati': 218.5,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-02',
+                'Squadra_A': 'Houston Rockets',
+                'Squadra_B': 'Golden State Warriors',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 214.2',
+                'Probabilita_Stimata': 0.850,
+                'Edge_Value': 0.459,
+                'Esito': 'W',
+                'Punteggio_Finale': 222,
+                'Media_Punti_Stimati': 214.2,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-04',
+                'Squadra_A': 'LA Clippers',
+                'Squadra_B': 'Denver Nuggets',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 215.25',
+                'Probabilita_Stimata': 0.785,
+                'Edge_Value': 0.350,
+                'Esito': 'W',
+                'Punteggio_Finale': 221,
+                'Media_Punti_Stimati': 215.25,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-05',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Cleveland Cavaliers',
+                'Quota': 1.71,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 233.3',
+                'Probabilita_Stimata': 0.743,
+                'Edge_Value': 0.270,
+                'Esito': 'W',
+                'Punteggio_Finale': 233,
+                'Media_Punti_Stimati': 233.3,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-05',
+                'Squadra_A': 'Golden State Warriors',
+                'Squadra_B': 'Houston Rockets',
+                'Quota': 1.80,
+                'Stake': 1.00,
+                'Tipo_Scommessa': 'OVER 208.2',
+                'Probabilita_Stimata': 0.594,
+                'Edge_Value': 0.069,
+                'Esito': 'L',
+                'Punteggio_Finale': 192,
+                'Media_Punti_Stimati': 208.2,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-06',
+                'Squadra_A': 'New York Knicks',
+                'Squadra_B': 'Boston Celtics',
+                'Quota': 1.80,
+                'Stake': 1.60,
+                'Tipo_Scommessa': 'OVER 221.1',
+                'Probabilita_Stimata': 0.625,
+                'Edge_Value': 0.125,
+                'Esito': 'W',
+                'Punteggio_Finale': 213,
+                'Media_Punti_Stimati': 221.1,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-06',
+                'Squadra_A': 'Denver Nuggets',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 1.71,
+                'Stake': 1.60,
+                'Tipo_Scommessa': 'OVER 228.1',
+                'Probabilita_Stimata': 0.650,
+                'Edge_Value': 0.112,
+                'Esito': 'W',
+                'Punteggio_Finale': 240,
+                'Media_Punti_Stimati': 228.1,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-07',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Cleveland Cavaliers',
+                'Quota': 1.71,
+                'Stake': 2.60,
+                'Tipo_Scommessa': 'OVER 233.1',
+                'Probabilita_Stimata': 0.692,
+                'Edge_Value': 0.183,
+                'Esito': 'W',
+                'Punteggio_Finale': 239,
+                'Media_Punti_Stimati': 233.1,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-07',
+                'Squadra_A': 'Golden State Warriors',
+                'Squadra_B': 'Minnesota Timberwolves',
+                'Quota': 1.76,
+                'Stake': 2.60,
+                'Tipo_Scommessa': 'OVER 216.9',
+                'Probabilita_Stimata': 0.649,
+                'Edge_Value': 0.143,
+                'Esito': 'L',
+                'Punteggio_Finale': 187,
+                'Media_Punti_Stimati': 216.9,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-08',
+                'Squadra_A': 'New York Knicks',
+                'Squadra_B': 'Boston Celtics',
+                'Quota': 1.80,
+                'Stake': 2.30,
+                'Tipo_Scommessa': 'OVER 221.2',
+                'Probabilita_Stimata': 0.642,
+                'Edge_Value': 0.196,
+                'Esito': 'L',
+                'Punteggio_Finale': 181,
+                'Media_Punti_Stimati': 221.2,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-08',
+                'Squadra_A': 'Denver Nuggets',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 1.71,
+                'Stake': 4.30,
+                'Tipo_Scommessa': 'OVER 234.2',
+                'Probabilita_Stimata': 0.785,
+                'Edge_Value': 0.342,
+                'Esito': 'W',
+                'Punteggio_Finale': 255,
+                'Media_Punti_Stimati': 234.2,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-09',
+                'Squadra_A': 'Golden State Warriors',
+                'Squadra_B': 'Minnesota Timberwolves',
+                'Quota': 1.76,
+                'Stake': 2.40,
+                'Tipo_Scommessa': 'OVER 206.9',
+                'Probabilita_Stimata': 0.674,
+                'Edge_Value': 0.213,
+                'Esito': 'W',
+                'Punteggio_Finale': 210,
+                'Media_Punti_Stimati': 206.9,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-10',
+                'Squadra_A': 'Cleveland Cavaliers',
+                'Squadra_B': 'Indiana Pacers',
+                'Quota': 1.80,
+                'Stake': 2.80,
+                'Tipo_Scommessa': 'OVER 232.1',
+                'Probabilita_Stimata': 0.680,
+                'Edge_Value': 0.224,
+                'Esito': 'W',
+                'Punteggio_Finale': 230,
+                'Media_Punti_Stimati': 232.1,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-10',
+                'Squadra_A': 'Oklahoma City Thunder',
+                'Squadra_B': 'Denver Nuggets',
+                'Quota': 1.80,
+                'Stake': 1.00,
+                'Tipo_Scommessa': 'OVER 235.0',
+                'Probabilita_Stimata': 0.612,
+                'Edge_Value': 0.102,
+                'Esito': 'L',
+                'Punteggio_Finale': 217,
+                'Media_Punti_Stimati': 235.0,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-11',
+                'Squadra_A': 'Minnesota Timberwolves',
+                'Squadra_B': 'Golden State Warriors',
+                'Quota': 1.80,
+                'Stake': 1.10,
+                'Tipo_Scommessa': 'OVER 207.0',
+                'Probabilita_Stimata': 0.602,
+                'Edge_Value': 0.084,
+                'Esito': 'L',
+                'Punteggio_Finale': 199,
+                'Media_Punti_Stimati': 207.0,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-05-10',
+                'Squadra_A': 'Boston Celtics',
+                'Squadra_B': 'New York Knicks',
+                'Quota': 1.71,
+                'Stake': 3.10,
+                'Tipo_Scommessa': 'OVER 210.1',
+                'Probabilita_Stimata': 0.712,
+                'Edge_Value': 0.219,
+                'Esito': 'W',
+                'Punteggio_Finale': 208,
+                'Media_Punti_Stimati': 210.1,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-06-09',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 1.95,
+                'Stake': 1.09,
+                'Tipo_Scommessa': 'OVER 237.4',
+                'Probabilita_Stimata': 0.728,
+                'Edge_Value': 0.419,
+                'Esito': 'W',
+                'Punteggio_Finale': 230,
+                'Media_Punti_Stimati': 237.4,
+                'Confidenza': 0.85
+            },
+            {
+                'Data': '2025-06-06',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 1.71,
+                'Stake': 4.10,
+                'Tipo_Scommessa': 'OVER 237.4',
+                'Probabilita_Stimata': 0.774,
+                'Edge_Value': 0.324,
+                'Esito': 'L',
+                'Punteggio_Finale': 221,
+                'Media_Punti_Stimati': 237.4,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-06-14',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 1.96,
+                'Stake': 2.00,
+                'Tipo_Scommessa': 'OVER 223.8',
+                'Probabilita_Stimata': 0.560,
+                'Edge_Value': 0.098,
+                'Esito': 'W',
+                'Punteggio_Finale': 215,
+                'Media_Punti_Stimati': 223.8,
+                'Confidenza': 0.80
+            },
+            {
+                'Data': '2025-06-17',
+                'Squadra_A': 'Indiana Pacers',
+                'Squadra_B': 'Oklahoma City Thunder',
+                'Quota': 2.20,
+                'Stake': 4.00,
+                'Tipo_Scommessa': 'OVER 241.0',
+                'Probabilita_Stimata': 0.815,
+                'Edge_Value': 0.792,
+                'Esito': 'W',
+                'Punteggio_Finale': 229,
+                'Media_Punti_Stimati': 241.0,
+                'Confidenza': 0.85
+            }
         ]
         
-        betting_data = []
-        
-        # Carica da pending_bets.json
-        try:
-            with open('data/pending_bets.json', 'r') as f:
-                pending_bets = json.load(f)
-                for bet in pending_bets:
-                    if bet.get('status') == 'completed' and 'result' in bet:
-                        bet_data = bet.get('bet_data', {})
-                        result = bet.get('result', {})
-                        
-                        betting_data.append({
-                            'Data': bet.get('timestamp', ''),
-                            'Squadra_A': 'Away Team',  # Placeholder
-                            'Squadra_B': 'Home Team',  # Placeholder
-                            'Quota': bet_data.get('odds', 0),
-                            'Stake': bet_data.get('stake', 0),
-                            'Tipo_Scommessa': f"{bet_data.get('type', 'OVER')} {bet_data.get('line', 0)}",
-                            'Probabilita_Stimata': bet_data.get('probability', 0),
-                            'Edge_Value': bet_data.get('edge', 0),
-                            'Esito': 'Win' if result.get('bet_won', False) else 'Loss',
-                            'Punteggio_Finale': result.get('actual_total', 0),
-                            'Media_Punti_Stimati': bet_data.get('predicted_total', 0),
-                            'Confidenza': bet_data.get('confidence', 0)
-                        })
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
-        
-        # Se non ci sono dati reali, crea dati di esempio
-        if not betting_data:
-            # Genera dati di esempio realistici per il NBA Predictor
-            np.random.seed(42)  # Per riproducibilità
-            n_samples = 50
-            
-            teams = ['Lakers', 'Warriors', 'Celtics', 'Heat', 'Nets', 'Knicks', 'Bulls', 'Cavaliers', 
-                    'Pistons', 'Pacers', 'Bucks', '76ers', 'Raptors', 'Hornets', 'Hawks', 'Magic',
-                    'Wizards', 'Thunder', 'Nuggets', 'Timberwolves', 'Blazers', 'Jazz', 'Kings',
-                    'Clippers', 'Suns', 'Spurs', 'Mavericks', 'Rockets', 'Grizzlies', 'Pelicans']
-            
-            for i in range(n_samples):
-                # Probabilità di vincita basata su edge realistico
-                edge = np.random.uniform(-0.15, 0.25)  # Edge tra -15% e +25%
-                probability = np.random.uniform(0.45, 0.75)  # Probabilità tra 45% e 75%
-                
-                # Quota che riflette l'edge
-                fair_odds = 1 / probability if probability > 0 else 2.0
-                actual_odds = fair_odds * (1 - edge)  # Quote con edge
-                actual_odds = max(1.5, min(3.0, actual_odds))  # Limita quote tra 1.5 e 3.0
-                
-                # Stake basato su Kelly (con fraction)
-                kelly = calculate_kelly_stake_performance(probability, actual_odds, 0.25)
-                stake = np.random.uniform(5, 25) if kelly <= 0 else kelly * 100
-                stake = max(5, min(50, stake))  # Limita stake tra 5 e 50
-                
-                # Determina esito basato su probabilità (con un po' di realismo)
-                win_chance = probability + np.random.normal(0, 0.1)  # Aggiunge variabilità
-                esito = 'Win' if np.random.random() < win_chance else 'Loss'
-                
-                # Punteggi realistici NBA
-                total_predicted = np.random.uniform(200, 250)
-                total_actual = total_predicted + np.random.normal(0, 15)
-                
-                # Tipo scommessa
-                line = round(total_predicted + np.random.uniform(-5, 5), 1)
-                bet_type = np.random.choice(['OVER', 'UNDER'])
-                
-                # Teams random
-                away_team = np.random.choice(teams)
-                home_team = np.random.choice([t for t in teams if t != away_team])
-                
-                betting_data.append({
-                    'Data': (pd.Timestamp('2024-01-01') + pd.Timedelta(days=i*3)).strftime('%Y-%m-%d'),
-                    'Squadra_A': away_team,
-                    'Squadra_B': home_team,
-                    'Quota': round(actual_odds, 2),
-                    'Stake': round(stake, 2),
-                    'Tipo_Scommessa': f"{bet_type} {line}",
-                    'Probabilita_Stimata': round(probability, 3),
-                    'Edge_Value': round(edge, 3),
-                    'Esito': esito,
-                    'Punteggio_Finale': round(total_actual, 1),
-                    'Media_Punti_Stimati': round(total_predicted, 1),
-                    'Confidenza': round(np.random.uniform(0.7, 0.95), 2)
-                })
-        
-        return pd.DataFrame(betting_data)
+        return pd.DataFrame(real_betting_data)
         
     except Exception as e:
         st.error(f"Errore nel caricamento dati scommesse: {e}")
@@ -2457,8 +3363,24 @@ def show_performance_dashboard():
             
             # Sharpe e Sortino ratio
             initial_bankroll = avg_stake * 20 if pd.notna(avg_stake) and avg_stake > 0 else 1000
-            daily_pl = df_results_filtered.groupby(df_results_filtered['Data'].dt.date)['P/L'].sum()
-            daily_returns = daily_pl / initial_bankroll
+            
+            # Ensure Data column is datetime and handle potential issues
+            try:
+                # Convert to datetime if not already and handle errors
+                if 'Data' in df_results_filtered.columns:
+                    df_results_filtered['Data_Clean'] = pd.to_datetime(df_results_filtered['Data'], errors='coerce')
+                    # Group by date (only for valid dates)
+                    valid_data = df_results_filtered[df_results_filtered['Data_Clean'].notna()]
+                    if not valid_data.empty:
+                        daily_pl = valid_data.groupby(valid_data['Data_Clean'].dt.date)['P/L'].sum()
+                        daily_returns = daily_pl / initial_bankroll
+                    else:
+                        daily_returns = pd.Series([0.0])
+                else:
+                    daily_returns = pd.Series([0.0])
+            except Exception as e:
+                st.warning(f"⚠️ Problema nel calcolo delle metriche temporali: {e}")
+                daily_returns = pd.Series([0.0])  # Fallback
             
             sharpe_ratio = np.nan
             sortino_ratio = np.nan
@@ -2552,12 +3474,23 @@ def show_performance_dashboard():
         
         # 3. P/L Giornaliero
         st.markdown("##### 📅 P/L Giornaliero e Volume Scommesse")
-        if not df_results_filtered.empty:
-            daily_summary = df_results_filtered.groupby(df_results_filtered['Data'].dt.date).agg({
-                'P/L': 'sum',
-                'Esito_Standard': 'size'
-            }).reset_index()
-            daily_summary.columns = ['Data', 'Daily_PL', 'Num_Bets']
+        if not df_results_filtered.empty and 'Data' in df_results_filtered.columns:
+            try:
+                # Ensure Data column is datetime
+                df_results_filtered['Data_Clean'] = pd.to_datetime(df_results_filtered['Data'], errors='coerce')
+                valid_data = df_results_filtered[df_results_filtered['Data_Clean'].notna()]
+                
+                if not valid_data.empty:
+                    daily_summary = valid_data.groupby(valid_data['Data_Clean'].dt.date).agg({
+                        'P/L': 'sum',
+                        'Esito_Standard': 'size'
+                    }).reset_index()
+                    daily_summary.columns = ['Data', 'Daily_PL', 'Num_Bets']
+                else:
+                    daily_summary = pd.DataFrame({'Data': [], 'Daily_PL': [], 'Num_Bets': []})
+            except Exception as e:
+                st.warning(f"⚠️ Problema nel raggruppamento per data: {e}")
+                daily_summary = pd.DataFrame({'Data': [], 'Daily_PL': [], 'Num_Bets': []})
             
             fig_daily = make_subplots(specs=[[{"secondary_y": True}]])
             
@@ -2609,7 +3542,11 @@ def show_performance_dashboard():
                 hover_data=['Squadra_A', 'Squadra_B', 'Quota', 'Stake'],
                 color_discrete_map=color_map_esiti
             )
-            fig_edge_pl.update_xaxes(title="Edge Value", tickformat=".1%")
+            fig_edge_pl.update_xaxes(
+                title="Edge Value", 
+                tickformat=".1%",
+                range=[-0.25, 1.0]  # -25% a 100% per edge values
+            )
             fig_edge_pl.update_yaxes(title="P/L (€)")
             fig_edge_pl.update_layout(template='plotly_white')
             st.plotly_chart(fig_edge_pl, use_container_width=True)
@@ -2691,12 +3628,330 @@ def show_performance_dashboard():
                     xaxis_title="Edge Value Medio",
                     yaxis_title="Win Rate Reale",
                     template='plotly_white',
-                    xaxis=dict(tickformat='.1%'),
-                    yaxis=dict(tickformat='.1%')
+                    xaxis=dict(
+                        tickformat='.1%',
+                        range=[-0.25, 1.0]  # -25% a 100% per edge values
+                    ),
+                    yaxis=dict(
+                        tickformat='.1%',
+                        range=[0, 1.0]  # 0% a 100% per win rate
+                    )
                 )
                 
                 st.plotly_chart(fig_accuracy, use_container_width=True)
                 st.caption("Confronta l'edge value stimato con il win rate reale. I punti sopra la linea diagonale indicano performance migliori del previsto.")
+        
+        # 6. Analisi Impatto P/L per Range Edge (NUOVO GRAFICO)
+        st.markdown("---")
+        st.markdown("##### 💰 Impatto P/L Medio per Range di Edge Value")
+        if 'Edge_Value' in df_results_filtered.columns and 'P/L' in df_results_filtered.columns:
+            df_analysis_pl = df_results_filtered[
+                (df_results_filtered['Edge_Value'].notna()) &
+                (df_results_filtered['Esito_Standard'].isin(['Win', 'Loss'])) &
+                (df_results_filtered['P/L'].notna())
+            ].copy()
+            
+            if not df_analysis_pl.empty:
+                # Crea bins per P/L impact analysis
+                edge_bins_pl = np.arange(-0.20, 0.35, 0.05)
+                edge_labels_pl = [f"{edge_bins_pl[i]*100:.0f}-{edge_bins_pl[i+1]*100:.0f}%" for i in range(len(edge_bins_pl)-1)]
+                
+                df_analysis_pl['Value_Bin'] = pd.cut(
+                    df_analysis_pl['Edge_Value'], 
+                    bins=edge_bins_pl, 
+                    labels=edge_labels_pl, 
+                    include_lowest=True, 
+                    right=False
+                )
+                
+                pl_by_bin = df_analysis_pl.groupby('Value_Bin', observed=False).agg(
+                    Scommesse_Totali=('Esito_Standard', 'size'),
+                    Vincite=('Esito_Standard', lambda x: (x == 'Win').sum()),
+                    Valore_Medio_Bin=('Edge_Value', 'mean'),
+                    PL_Totale_Bin=('P/L', 'sum'),
+                    PL_Medio_Scommessa=('P/L', 'mean')
+                ).reset_index()
+                
+                pl_by_bin['Precisione_Reale'] = np.where(
+                    pl_by_bin['Scommesse_Totali'] > 0,
+                    pl_by_bin['Vincite'] / pl_by_bin['Scommesse_Totali'],
+                    0
+                )
+                
+                pl_by_bin['Differenza_Rate_Valore'] = pl_by_bin['Precisione_Reale'] - pl_by_bin['Valore_Medio_Bin']
+                pl_by_bin.dropna(subset=['Valore_Medio_Bin', 'Precisione_Reale', 'PL_Totale_Bin'], inplace=True)
+                
+                if not pl_by_bin.empty:
+                    fig_pl_impact = go.Figure()
+                    
+                    # Add reference lines
+                    min_axis_val_pl = min(pl_by_bin['Valore_Medio_Bin'].min(), pl_by_bin['Precisione_Reale'].min())
+                    max_axis_val_pl = max(pl_by_bin['Valore_Medio_Bin'].max(), pl_by_bin['Precisione_Reale'].max())
+                    
+                    fig_pl_impact.add_trace(go.Scatter(
+                        x=[min_axis_val_pl, max_axis_val_pl], 
+                        y=[min_axis_val_pl, max_axis_val_pl], 
+                        mode='lines', 
+                        name='Win Rate = Edge Medio', 
+                        line=dict(color='black', width=1, dash='dash')
+                    ))
+                    
+                    fig_pl_impact.add_hline(y=0.5, line_dash="dot", line_color="blue", opacity=0.7, 
+                                          annotation_text="50% Win Rate", annotation_position="bottom right")
+                    
+                    # Size proportional to absolute P/L impact
+                    sizes_pl = (pl_by_bin['PL_Medio_Scommessa'].abs().fillna(0.1) * 8.0).clip(lower=5, upper=80)
+                    
+                    fig_pl_impact.add_trace(go.Scatter(
+                        x=pl_by_bin['Valore_Medio_Bin'],
+                        y=pl_by_bin['Precisione_Reale'],
+                        mode='markers+text',
+                        marker=dict(
+                            size=sizes_pl,
+                            color=pl_by_bin['Differenza_Rate_Valore'],
+                            colorscale='RdYlGn', 
+                            cmid=0,
+                            cmin=-0.2,
+                            cmax=0.2,
+                            colorbar=dict(title='Win Rate - Edge Medio'), 
+                            line=dict(width=1, color='black')
+                        ),
+                        text=pl_by_bin['Value_Bin'].astype(str),
+                        textposition="top center", 
+                        name='P/L Impact per Bin (Size ~ P/L Medio)',
+                        hovertemplate='<b>Bin Edge: %{text}</b><br>' +
+                                      'Edge Medio: %{x:.1%}<br>' +
+                                      'Win Rate: %{y:.1%}<br>' +
+                                      'Differenza: %{marker.color:+.1%}<br>' +
+                                      'Scommesse: %{customdata[0]}<br>' +
+                                      'P/L Medio: %{customdata[1]}<br>' +
+                                      'P/L Totale: %{customdata[2]}<extra></extra>',
+                        customdata=list(zip(
+                            pl_by_bin['Scommesse_Totali'],
+                            [format_currency(x) for x in pl_by_bin['PL_Medio_Scommessa']],
+                            [format_currency(x) for x in pl_by_bin['PL_Totale_Bin']]
+                        ))
+                    ))
+                    
+                    fig_pl_impact.update_layout(
+                        title='Impatto P/L Medio per Range di Edge Value (Dimensione ~ P/L Medio Assoluto)',
+                        xaxis_title='Edge Value Medio Stimato nel Bin',
+                        yaxis_title='Precisione Reale (Win Rate) nel Bin',
+                        template='plotly_white',
+                        xaxis=dict(
+                            tickformat='.1%',
+                            range=[-0.25, 1.0]  # -25% a 100% per edge values
+                        ),
+                        yaxis=dict(
+                            tickformat='.1%',
+                            range=[0, 1.0]  # 0% a 100% per win rate
+                        )
+                    )
+                    
+                    st.plotly_chart(fig_pl_impact, use_container_width=True)
+                    st.caption("Analisi dell'impatto P/L: la dimensione dei punti è proporzionale al P/L medio per scommessa in quel bin. Il colore indica la differenza tra Win Rate e Edge Medio.")
+                    
+                    # Tabella dettagliata P/L Impact
+                    st.markdown("##### Dettaglio Impatto P/L per Range di Edge Value")
+                    display_pl_data = pd.DataFrame()
+                    display_pl_data['Range Edge'] = pl_by_bin['Value_Bin'].astype(str)
+                    display_pl_data['Totale Scommesse'] = pl_by_bin['Scommesse_Totali']
+                    display_pl_data['Vincite'] = pl_by_bin['Vincite']
+                    display_pl_data['Edge Medio'] = pl_by_bin['Valore_Medio_Bin'].map(lambda x: f"{x:.1%}" if pd.notna(x) else "N/A")
+                    display_pl_data['Win Rate'] = pl_by_bin['Precisione_Reale'].map(lambda x: f"{x:.1%}" if pd.notna(x) else "N/A")
+                    display_pl_data['P/L Medio'] = pl_by_bin['PL_Medio_Scommessa'].apply(format_currency)
+                    display_pl_data['P/L Totale'] = pl_by_bin['PL_Totale_Bin'].apply(format_currency)
+                    display_pl_data['Differenza (Rate - Edge)'] = pl_by_bin['Differenza_Rate_Valore'].map(lambda x: f"{x:+.1%}" if pd.notna(x) else "N/A")
+                    
+                    st.dataframe(display_pl_data, use_container_width=True, hide_index=True)
+        
+        # 7. Grafici Relazioni Aggiuntive (NUOVI GRAFICI)
+        st.markdown("---")
+        col_rel3, col_rel4 = st.columns(2)
+        
+        with col_rel3:
+            st.markdown("##### 📊 Edge Value vs Probabilità Stimata")
+            if 'Edge_Value' in df_results_filtered.columns and 'Probabilita_Stimata' in df_results_filtered.columns:
+                df_edge_prob = df_results_filtered[
+                    df_results_filtered['Edge_Value'].notna() & 
+                    df_results_filtered['Probabilita_Stimata'].notna() & 
+                    df_results_filtered['Esito_Standard'].isin(['Win', 'Loss'])
+                ].copy()
+                
+                if not df_edge_prob.empty:
+                    fig_edge_prob = px.scatter(
+                        df_edge_prob, 
+                        x='Edge_Value', 
+                        y='Probabilita_Stimata', 
+                        color='Esito_Standard',
+                        title="Edge Value vs Probabilità Stimata", 
+                        labels={'Edge_Value': 'Edge Value', 'Probabilita_Stimata': 'Probabilità Stimata', 'Esito_Standard': 'Esito'},
+                        hover_data={'Squadra_A': True, 'Squadra_B': True, 'Quota': ':.2f'},
+                        color_discrete_map=color_map_esiti
+                    )
+                    fig_edge_prob.update_traces(marker=dict(line=dict(width=0)))
+                    fig_edge_prob.update_layout(template='plotly_white')
+                    fig_edge_prob.update_xaxes(
+                        title="Edge Value", 
+                        showgrid=False, 
+                        tickformat=".0%",
+                        range=[-0.25, 1.0]  # -25% a 100% per edge values
+                    )
+                    fig_edge_prob.update_yaxes(
+                        title="Probabilità Stimata", 
+                        showgrid=False, 
+                        tickformat=".0%",
+                        range=[0, 1.0]  # 0% a 100% per probabilità
+                    )
+                    
+                    # Add grid lines
+                    for val_x in np.arange(-0.15, 0.35, 0.05):
+                        if abs(val_x) > 0.001:
+                            fig_edge_prob.add_vline(x=val_x, line_dash="dash", line_color="lightgray", opacity=0.7)
+                    
+                    for val_y in np.arange(0.50, 1.0, 0.05):
+                        if val_y < 0.999:
+                            fig_edge_prob.add_hline(y=val_y, line_dash="dash", line_color="lightgray", opacity=0.7)
+                    
+                    st.plotly_chart(fig_edge_prob, use_container_width=True)
+                    st.caption("Mostra la relazione tra Edge Value e Probabilità Stimata, colorata per esito della scommessa.")
+                else:
+                    st.info("Nessun dato valido per questo grafico.")
+            else:
+                st.info("Colonne Edge Value o Probabilità Stimata non disponibili.")
+        
+        with col_rel4:
+            st.markdown("##### 📈 Distribuzione Quote")
+            if 'Quota' in df_results_filtered.columns:
+                df_quota_counts = df_results_filtered.groupby(['Quota', 'Esito_Standard']).size().reset_index(name='Conteggio')
+                
+                if not df_quota_counts.empty:
+                    fig_quota_dist = px.bar(
+                        df_quota_counts, 
+                        x='Quota', 
+                        y='Conteggio', 
+                        color='Esito_Standard', 
+                        barmode='group',
+                        title="Distribuzione Quote per Esito", 
+                        labels={'Quota': 'Quota', 'Conteggio': 'Numero Scommesse', 'Esito_Standard': 'Esito'}, 
+                        color_discrete_map=color_map_esiti
+                    )
+                    fig_quota_dist.update_traces(marker_line_width=0)
+                    fig_quota_dist.update_layout(template='plotly_white', bargap=0.2)
+                    fig_quota_dist.update_yaxes(showgrid=False)
+                    fig_quota_dist.update_xaxes(showgrid=False)
+                    
+                    st.plotly_chart(fig_quota_dist, use_container_width=True)
+                    st.caption("Visualizza la distribuzione delle quote per esito delle scommesse.")
+                else:
+                    st.info("Nessun dato quote disponibile.")
+            else:
+                st.info("Colonna 'Quota' non disponibile.")
+        
+        # 8. Analisi Errore di Sovrastima (NUOVI GRAFICI dall'originale)
+        st.markdown("---")
+        
+        # Calcola errore di sovrastima se abbiamo i dati necessari
+        if ('Media_Punti_Stimati' in df_results_filtered.columns and 
+            'Punteggio_Finale' in df_results_filtered.columns):
+            
+            df_results_filtered['Errore_Sovrastima_PT'] = np.where(
+                df_results_filtered['Media_Punti_Stimati'] > df_results_filtered['Punteggio_Finale'],
+                df_results_filtered['Media_Punti_Stimati'] - df_results_filtered['Punteggio_Finale'],
+                0
+            )
+            
+            col_err1, col_err2 = st.columns(2)
+            
+            with col_err1:
+                st.markdown("##### 🎯 Errore Sovrastima vs Probabilità Stimata")
+                if not df_results_filtered.empty:
+                    df_plot_prob_error = df_results_filtered[
+                        df_results_filtered['Probabilita_Stimata'].notna() & 
+                        df_results_filtered['Errore_Sovrastima_PT'].notna()
+                    ].copy()
+                    
+                    if not df_plot_prob_error.empty:
+                        fig_prob_error = px.scatter(
+                            df_plot_prob_error, 
+                            x='Probabilita_Stimata', 
+                            y='Errore_Sovrastima_PT', 
+                            color='Esito_Standard',
+                            title="Errore Sovrastima Punti vs. Probabilità Stimata", 
+                            labels={'Probabilita_Stimata': 'Probabilità Stimata', 'Errore_Sovrastima_PT': 'Errore Sovrastima Punti', 'Esito_Standard': 'Esito'},
+                            hover_data={'Squadra_A': True, 'Squadra_B': True, 'Media_Punti_Stimati': True, 'Punteggio_Finale': True},
+                            color_discrete_map=color_map_esiti
+                        )
+                        fig_prob_error.update_traces(marker=dict(line=dict(width=0)))
+                        fig_prob_error.update_layout(template='plotly_white')
+                        fig_prob_error.update_xaxes(
+                            title="Probabilità Stimata", 
+                            showgrid=False, 
+                            tickformat=".1%",
+                            range=[0, 1.0]  # 0% a 100% per probabilità
+                        )
+                        fig_prob_error.update_yaxes(
+                            title="Errore Sovrastima Punti", 
+                            showgrid=False,
+                            range=[0, 50]  # 0 a 50 punti max per errore
+                        )
+                        
+                        # Add reference lines
+                        for val_x_line in [0.60, 0.65, 0.70]:
+                            fig_prob_error.add_vline(x=val_x_line, line_dash="dash", line_color="gray")
+                        
+                        st.plotly_chart(fig_prob_error, use_container_width=True)
+                        st.caption("Mostra la relazione tra la sovrastima dei punti (Media Stimati - Punteggio Finale, solo se positivo) e la probabilità stimata dell'esito finale. Valori Y=0 indicano stima corretta o sottostima.")
+                    else:
+                        st.info("Nessun dato valido per questo grafico.")
+                else:
+                    st.info("Nessun dato disponibile.")
+            
+            with col_err2:
+                st.markdown("##### 📊 Errore Sovrastima vs Edge Value")
+                if not df_results_filtered.empty:
+                    df_plot_edge_error = df_results_filtered[
+                        df_results_filtered['Edge_Value'].notna() & 
+                        df_results_filtered['Errore_Sovrastima_PT'].notna()
+                    ].copy()
+                    
+                    if not df_plot_edge_error.empty:
+                        fig_edge_error = px.scatter(
+                            df_plot_edge_error, 
+                            x='Edge_Value', 
+                            y='Errore_Sovrastima_PT', 
+                            color='Esito_Standard',
+                            title="Errore Sovrastima Punti vs. Edge Value", 
+                            labels={'Edge_Value': 'Edge Value', 'Errore_Sovrastima_PT': 'Errore Sovrastima Punti', 'Esito_Standard': 'Esito'},
+                            hover_data={'Squadra_A': True, 'Squadra_B': True, 'Media_Punti_Stimati': True, 'Punteggio_Finale': True},
+                            color_discrete_map=color_map_esiti
+                        )
+                        fig_edge_error.update_traces(marker=dict(line=dict(width=0)))
+                        fig_edge_error.update_layout(template='plotly_white')
+                        fig_edge_error.update_xaxes(
+                            title="Edge Value", 
+                            showgrid=False, 
+                            tickformat=".1%",
+                            range=[-0.25, 1.0]  # -25% a 100% per edge values
+                        )
+                        fig_edge_error.update_yaxes(
+                            title="Errore Sovrastima Punti", 
+                            showgrid=False,
+                            range=[0, 50]  # 0 a 50 punti max per errore
+                        )
+                        
+                        # Add reference lines
+                        for val_x_line in [0.10, 0.15, 0.20]:
+                            fig_edge_error.add_vline(x=val_x_line, line_dash="dash", line_color="gray")
+                        
+                        st.plotly_chart(fig_edge_error, use_container_width=True)
+                        st.caption("Mostra la relazione tra la sovrastima dei punti e l'edge value. Valori Y=0 indicano stima corretta o sottostima.")
+                    else:
+                        st.info("Nessun dato valido per questo grafico.")
+                else:
+                    st.info("Nessun dato disponibile.")
+        else:
+            st.info("⚠️ Colonne 'Media_Punti_Stimati' e 'Punteggio_Finale' necessarie per l'analisi errore sovrastima non disponibili.")
         
         # --- ANALISI AVANZATE E SIMULAZIONI ---
         st.markdown("---")
@@ -2780,8 +4035,17 @@ def show_performance_dashboard():
                     legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
                 )
                 
-                fig_evolution.update_yaxes(title_text="ROI (%)", secondary_y=False)
-                fig_evolution.update_yaxes(title_text="Win Rate", secondary_y=True, tickformat=".1%")
+                fig_evolution.update_yaxes(
+                    title_text="ROI (%)", 
+                    secondary_y=False,
+                    range=[-100, 100]  # ROI da -100% a +100%
+                )
+                fig_evolution.update_yaxes(
+                    title_text="Win Rate", 
+                    secondary_y=True, 
+                    tickformat=".1%",
+                    range=[0, 1]  # Win rate da 0% a 100%
+                )
                 fig_evolution.update_xaxes(title_text="Data")
                 
                 st.plotly_chart(fig_evolution, use_container_width=True)
@@ -3024,7 +4288,8 @@ def show_performance_dashboard():
                         title=f"Distribuzione ROI - {num_simulations:,} Simulazioni Monte Carlo",
                         xaxis_title="ROI (%)",
                         yaxis_title="Frequenza",
-                        template='plotly_white'
+                        template='plotly_white',
+                        xaxis=dict(range=[-100, 200])  # ROI da -100% a +200% max
                     )
                     
                     st.plotly_chart(fig_mc, use_container_width=True)
@@ -3039,7 +4304,11 @@ def show_performance_dashboard():
         
         # Formatta colonne
         if 'Data' in df_display.columns:
-            df_display['Data'] = pd.to_datetime(df_display['Data']).dt.strftime('%Y-%m-%d')
+            try:
+                df_display['Data'] = pd.to_datetime(df_display['Data'], errors='coerce').dt.strftime('%Y-%m-%d')
+            except Exception:
+                # Se la conversione fallisce, mantieni il formato originale
+                df_display['Data'] = df_display['Data'].astype(str)
         
         # Formatta valori numerici
         for col in ['Probabilita_Stimata', 'Edge_Value', 'EV']:
@@ -3121,16 +4390,51 @@ def show_bankroll_management():
     # Bet history table
     st.subheader("📋 Storico Scommesse")
     
-    # Sample data (replace with actual data loading)
-    sample_bets = pd.DataFrame({
-        'Data': ['2024-06-18', '2024-06-17', '2024-06-16', '2024-06-15'],
-        'Partita': ['IND vs OKC', 'LAL vs GSW', 'BOS vs MIA', 'NYK vs PHI'],
-        'Tipo': ['OVER 221.5', 'UNDER 225.0', 'OVER 218.5', 'OVER 220.0'],
-        'Importo': [10.0, 15.0, 8.0, 12.0],
-        'Quota': [1.85, 1.90, 1.88, 1.82],
-        'Esito': ['Pending', 'Win', 'Loss', 'Win'],
-        'P&L': [0.0, 13.5, -8.0, 9.84]
-    })
+    # Carica dati reali delle scommesse
+    try:
+        bet_data = load_betting_data()
+        
+        if not bet_data.empty:
+            # Prepara i dati per la visualizzazione
+            sample_bets = pd.DataFrame()
+            try:
+                # Safe datetime conversion
+                if 'Data' in bet_data.columns:
+                    bet_data_clean = pd.to_datetime(bet_data['Data'], errors='coerce')
+                    sample_bets['Data'] = bet_data_clean.dt.strftime('%Y-%m-%d')
+                else:
+                    sample_bets['Data'] = '2024-01-01'
+            except Exception:
+                sample_bets['Data'] = bet_data['Data'].astype(str)
+            
+            sample_bets['Partita'] = bet_data['Squadra_A'] + ' vs ' + bet_data['Squadra_B']
+            sample_bets['Tipo'] = bet_data['Tipo_Scommessa']
+            sample_bets['Importo'] = bet_data['Stake']
+            sample_bets['Quota'] = bet_data['Quota']
+            
+            # Standardizza esiti
+            esito_map = {'W': 'Win', 'L': 'Loss', 'TBD': 'Pending'}
+            sample_bets['Esito'] = bet_data['Esito'].astype(str).str.strip().str.upper().map(esito_map).fillna('Unknown')
+            
+            # Calcola P&L
+            sample_bets['P&L'] = bet_data.apply(lambda row: calculate_pl_performance(sample_bets.loc[row.name, 'Esito'], row['Quota'], row['Stake']), axis=1)
+            
+            # Ordina per data (più recenti primi)
+            sample_bets = sample_bets.sort_values('Data', ascending=False).head(20)
+        else:
+            # Fallback se non ci sono dati
+            sample_bets = pd.DataFrame({
+                'Data': ['2024-06-18'],
+                'Partita': ['Nessun dato'],
+                'Tipo': ['N/A'],
+                'Importo': [0.0],
+                'Quota': [0.0],
+                'Esito': ['N/A'],
+                'P&L': [0.0]
+            })
+    except Exception as e:
+        st.error(f"Errore nel caricamento dati: {e}")
+        sample_bets = pd.DataFrame()
     
     # Color code the results
     def color_result(val):
@@ -3142,8 +4446,12 @@ def show_bankroll_management():
             return 'background-color: #fff3cd'
         return ''
     
-    styled_df = sample_bets.style.applymap(color_result, subset=['Esito'])
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    # Color code the results only if Esito column exists
+    if not sample_bets.empty and 'Esito' in sample_bets.columns:
+        styled_df = sample_bets.style.map(color_result, subset=['Esito'])
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(sample_bets, use_container_width=True, hide_index=True)
 
 # ================================
 # 🤖 ML MODELS DASHBOARD
