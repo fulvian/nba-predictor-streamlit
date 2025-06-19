@@ -1904,11 +1904,9 @@ def show_recommendations_tab(system):
                         game_id = game.get('game_id', f"CUSTOM_{game.get('away_team', 'Away')}_{game.get('home_team', 'Home')}")
                         
                         # Salva usando il metodo del sistema (IDENTICO A MAIN.PY)
-                        if hasattr(system, 'save_pending_bet'):
-                            system.save_pending_bet(selected_bet, game_id)
-                            st.success("📲 Scommessa salvata! Il sistema aggiornerà automaticamente il bankroll.")
-                        else:
-                            st.warning("⚠️ Sistema di salvataggio non disponibile")
+                                                                        # Salva la scommessa usando la funzione dedicata
+                        save_pending_bet(selected_bet, game_id)
+                        st.success("📲 Scommessa salvata! Il sistema aggiornerà automaticamente il bankroll.")
                         
                         # Feedback finale
                         st.balloons()
@@ -2277,7 +2275,7 @@ def clean_numeric_value_performance(value_str):
                     game_id = game.get('game_id', f"CUSTOM_{game.get('away_team', 'Away')}_{game.get('home_team', 'Home')}")
                     
                     # Qui si dovrebbe chiamare il metodo per salvare la scommessa
-                    # system.save_pending_bet(selected_bet, game_id)
+                    save_pending_bet(selected_bet, game_id)
                     
                     st.success("🎉 Scommessa piazzata con successo!")
                     st.session_state['bet_placed'] = True
@@ -3164,6 +3162,311 @@ def load_betting_data():
         
     except Exception as e:
         st.error(f"Errore nel caricamento dati scommesse: {e}")
+        return pd.DataFrame()
+
+def save_pending_bet(bet_data, game_id):
+    """Salva una scommessa in attesa di risultato nel JSON e aggiorna il CSV."""
+    try:
+        pending_file = 'data/pending_bets.json'
+        os.makedirs('data', exist_ok=True)
+        
+        # Converte i dati in tipi JSON serializzabili
+        clean_bet_data = {}
+        for key, value in bet_data.items():
+            if isinstance(value, (int, float, str)):
+                clean_bet_data[key] = value
+            elif hasattr(value, 'item'):  # NumPy scalars
+                clean_bet_data[key] = value.item()
+            elif isinstance(value, bool):
+                clean_bet_data[key] = bool(value)
+            else:
+                clean_bet_data[key] = float(value) if value is not None else 0.0
+        
+        try:
+            with open(pending_file, 'r') as f:
+                pending_bets = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            pending_bets = []
+        
+        # Controlla se esiste già una scommessa per questo game_id
+        existing_bet_index = None
+        for i, bet in enumerate(pending_bets):
+            if bet.get('game_id') == game_id and bet.get('status') == 'pending':
+                existing_bet_index = i
+                break
+        
+        if existing_bet_index is not None:
+            old_bet_data = pending_bets[existing_bet_index]['bet_data']
+            st.warning(f"⚠️ Scommessa esistente trovata per {game_id}")
+            st.write(f"ATTUALE: {old_bet_data.get('type', 'N/A')} {old_bet_data.get('line', 'N/A')} @ {old_bet_data.get('odds', 'N/A')} (€{old_bet_data.get('stake', 0):.2f})")
+            st.write(f"NUOVA: {clean_bet_data.get('type', 'N/A')} {clean_bet_data.get('line', 'N/A')} @ {clean_bet_data.get('odds', 'N/A')} (€{clean_bet_data.get('stake', 0):.2f})")
+            
+            # Per Streamlit, sostituisci automaticamente (semplificato)
+            pending_bets[existing_bet_index] = {
+                'bet_id': f"{game_id}_{clean_bet_data['type']}_{clean_bet_data['line']}",
+                'game_id': game_id,
+                'bet_data': clean_bet_data,
+                'timestamp': datetime.now().isoformat(),
+                'status': 'pending',
+                'replaced_at': datetime.now().isoformat(),
+                'original_bet': old_bet_data
+            }
+            st.success(f"🔄 Scommessa sostituita: {clean_bet_data['type']} {clean_bet_data['line']}")
+        else:
+            # Nessuna scommessa esistente, aggiungi normalmente
+            pending_bet = {
+                'bet_id': f"{game_id}_{clean_bet_data['type']}_{clean_bet_data['line']}",
+                'game_id': game_id,
+                'bet_data': clean_bet_data,
+                'timestamp': datetime.now().isoformat(),
+                'status': 'pending'
+            }
+            pending_bets.append(pending_bet)
+            st.success(f"💾 Scommessa salvata: {clean_bet_data['type']} {clean_bet_data['line']}")
+        
+        # Salva nel JSON
+        with open(pending_file, 'w') as f:
+            json.dump(pending_bets, f, indent=2)
+        
+        # Aggiorna anche il CSV per coerenza
+        _update_csv_with_bet(clean_bet_data, game_id)
+        
+    except Exception as e:
+        st.error(f"⚠️ Errore nel salvataggio scommessa: {e}")
+
+def _update_csv_with_bet(bet_data, game_id):
+    """Aggiorna il file CSV con la nuova scommessa."""
+    try:
+        csv_file_path = 'data/risultati_bet_completi.csv'
+        
+        # Carica il CSV esistente o crea nuovo DataFrame
+        try:
+            df_existing = pd.read_csv(csv_file_path)
+        except FileNotFoundError:
+            df_existing = pd.DataFrame()
+        
+        # Prepara i dati per il CSV nel formato corretto
+        current_date = datetime.now().strftime('%d %b %Y')
+        
+        new_row = {
+            'Data': current_date,
+            'Squadra A': 'Team A',  # Placeholder - dovrebbe essere estratto dal game_id
+            'Squadra B': 'Team B',  # Placeholder
+            'Quota': bet_data.get('odds', 0),
+            'Stake': bet_data.get('stake', 0),
+            'Tipo Scommessa': f"{bet_data.get('type', 'OVER')} {bet_data.get('line', 0)}",
+            'Probabilita Stimata': bet_data.get('probability', 0.6) * 100,  # Converti in percentuale
+            'Edge Value': bet_data.get('edge', 0) * 100,  # Converti in percentuale
+            'Esito': 'TBD',  # To Be Determined
+            'Punteggio finale': '',  # Vuoto inizialmente
+            'Media Punti Stimati': bet_data.get('line', 0),
+            'Confidenza': 'Alta' if bet_data.get('quality_score', 0) > 80 else 'Media'
+        }
+        
+        # Aggiungi la nuova riga
+        df_updated = pd.concat([df_existing, pd.DataFrame([new_row])], ignore_index=True)
+        
+        # Salva il CSV aggiornato
+        df_updated.to_csv(csv_file_path, index=False)
+        
+    except Exception as e:
+        print(f"⚠️ Errore nell'aggiornamento CSV: {e}")
+
+def update_bankroll_from_bet(bet_result, actual_total=None):
+    """Aggiorna il bankroll basandosi sul risultato di una scommessa."""
+    if not actual_total or not bet_result:
+        return None
+    
+    bet_type = bet_result.get('type')
+    line = bet_result.get('line')
+    odds = bet_result.get('odds')
+    stake = bet_result.get('stake')
+    
+    if not all([bet_type, line, odds, stake]):
+        st.warning("⚠️ Informazioni scommessa incomplete per aggiornamento bankroll")
+        return None
+        
+    # Determina se la scommessa è vinta
+    if bet_type == 'OVER':
+        bet_won = actual_total > line
+    else:  # UNDER
+        bet_won = actual_total <= line
+    
+    # Carica bankroll attuale
+    current_bankroll = load_bankroll_data()['current_bankroll']
+    
+    # Calcola profit/loss
+    if bet_won:
+        profit = stake * (odds - 1)
+        new_bankroll = current_bankroll + profit
+        st.success(f"🟢 SCOMMESSA VINTA! Profit: €{profit:.2f}")
+    else:
+        loss = stake
+        new_bankroll = current_bankroll - loss
+        st.error(f"🔴 Scommessa persa. Loss: €{loss:.2f}")
+    
+    # Salva il nuovo bankroll
+    _save_bankroll(new_bankroll)
+    
+    # Aggiorna anche il CSV con il risultato
+    _update_csv_with_result(bet_result, actual_total, bet_won, profit if bet_won else -stake)
+    
+    return {
+        'bet_won': bet_won,
+        'profit_loss': profit if bet_won else -stake,
+        'new_bankroll': new_bankroll
+    }
+
+def _save_bankroll(new_bankroll):
+    """Salva il bankroll aggiornato nel file JSON."""
+    try:
+        bankroll_data = {'current_bankroll': float(new_bankroll), 'initial_bankroll': 100.0}
+        
+        # Salva nel file principale
+        with open('data/bankroll.json', 'w') as f:
+            json.dump(bankroll_data, f, indent=2)
+        
+        st.success(f"💰 Bankroll aggiornato: €{new_bankroll:.2f}")
+        
+    except Exception as e:
+        st.error(f"⚠️ Errore nel salvataggio del bankroll: {e}")
+
+def _update_csv_with_result(bet_data, actual_total, bet_won, profit_loss):
+    """Aggiorna il CSV con il risultato della scommessa."""
+    try:
+        csv_file_path = 'data/risultati_bet_completi.csv'
+        
+        if not os.path.exists(csv_file_path):
+            return
+        
+        df = pd.read_csv(csv_file_path)
+        
+        # Trova la riga da aggiornare (ultima scommessa pendente che corrisponde)
+        bet_type_line = f"{bet_data.get('type', 'OVER')} {bet_data.get('line', 0)}"
+        
+        # Cerca la riga con tipo scommessa corrispondente e esito TBD
+        mask = (df['Tipo Scommessa'] == bet_type_line) & (df['Esito'] == 'TBD')
+        
+        if mask.any():
+            # Trova l'ultimo match (più recente)
+            last_match_idx = df[mask].index[-1]
+            
+            # Aggiorna con i risultati
+            df.loc[last_match_idx, 'Esito'] = 'W' if bet_won else 'L'
+            df.loc[last_match_idx, 'Punteggio finale'] = actual_total
+            
+            # Salva il CSV aggiornato
+            df.to_csv(csv_file_path, index=False)
+            
+    except Exception as e:
+        print(f"⚠️ Errore nell'aggiornamento risultato CSV: {e}")
+
+def check_and_update_pending_bets():
+    """Controlla tutte le scommesse pendenti e aggiorna automaticamente i risultati."""
+    try:
+        pending_file = 'data/pending_bets.json'
+        if not os.path.exists(pending_file):
+            st.info("📝 Nessuna scommessa pendente trovata")
+            return
+        
+        with open(pending_file, 'r') as f:
+            pending_bets = json.load(f)
+        
+        if not pending_bets:
+            st.info("📝 Nessuna scommessa pendente")
+            return
+        
+        st.info(f"🔄 Controllo {len(pending_bets)} scommesse pendenti...")
+        
+        updated_bets = []
+        bankroll_updates = 0
+        
+        for bet in pending_bets:
+            if bet['status'] != 'pending':
+                updated_bets.append(bet)
+                continue
+            
+            game_id = bet['game_id']
+            bet_data = bet['bet_data']
+            
+            # Qui andresti a recuperare automaticamente il risultato
+            # Per ora aggiungiamo un placeholder
+            result = None  # get_game_result_automatically(game_id)
+            
+            if result and result.get('status') == 'COMPLETED':
+                update_result = update_bankroll_from_bet(bet_data, result['total_score'])
+                if update_result:
+                    bet['status'] = 'completed'
+                    bet['result'] = {
+                        'actual_total': result['total_score'],
+                        'bet_won': update_result['bet_won'],
+                        'profit_loss': update_result['profit_loss'],
+                        'completed_at': datetime.now().isoformat()
+                    }
+                    bankroll_updates += 1
+                    st.success(f"✅ Scommessa {game_id} aggiornata automaticamente!")
+            
+            updated_bets.append(bet)
+        
+        # Salva le scommesse aggiornate
+        with open(pending_file, 'w') as f:
+            json.dump(updated_bets, f, indent=2)
+        
+        if bankroll_updates > 0:
+            st.success(f"🎉 {bankroll_updates} scommesse aggiornate automaticamente!")
+        else:
+            st.info("📋 Nessuna scommessa da aggiornare al momento")
+            
+    except Exception as e:
+        st.error(f"⚠️ Errore nel controllo scommesse pendenti: {e}")
+
+def export_complete_betting_data():
+    """Esporta tutti i dati delle scommesse in un CSV completo."""
+    try:
+        # Carica dati da JSON
+        pending_file = 'data/pending_bets.json'
+        betting_data = []
+        
+        if os.path.exists(pending_file):
+            with open(pending_file, 'r') as f:
+                pending_bets = json.load(f)
+            
+            for bet in pending_bets:
+                bet_data = bet.get('bet_data', {})
+                result = bet.get('result', {})
+                
+                row = {
+                    'Data': bet.get('timestamp', ''),
+                    'Game_ID': bet.get('game_id', ''),
+                    'Tipo_Scommessa': f"{bet_data.get('type', '')} {bet_data.get('line', '')}",
+                    'Quota': bet_data.get('odds', 0),
+                    'Stake': bet_data.get('stake', 0),
+                    'Probabilita_Stimata': bet_data.get('probability', 0),
+                    'Edge_Value': bet_data.get('edge', 0),
+                    'Quality_Score': bet_data.get('quality_score', 0),
+                    'Status': bet.get('status', ''),
+                    'Esito': 'W' if result.get('bet_won') else 'L' if result.get('bet_won') is False else 'TBD',
+                    'Punteggio_Finale': result.get('actual_total', ''),
+                    'Profit_Loss': result.get('profit_loss', 0),
+                    'Completed_At': result.get('completed_at', '')
+                }
+                betting_data.append(row)
+        
+        if betting_data:
+            df_export = pd.DataFrame(betting_data)
+            
+            # Salva CSV completo
+            export_path = f'data/complete_betting_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            df_export.to_csv(export_path, index=False)
+            
+            st.success(f"📊 Dati esportati in: {export_path}")
+            return df_export
+        else:
+            st.warning("⚠️ Nessun dato da esportare")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        st.error(f"⚠️ Errore nell'esportazione: {e}")
         return pd.DataFrame()
 
 def show_performance_dashboard():
@@ -4345,12 +4648,18 @@ def show_performance_dashboard():
         st.subheader("💾 Download ed Esportazione")
         
         csv_data = df_filtered.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Scarica Dati Performance (.csv)",
-            data=csv_data,
-            file_name=f'nba_predictor_performance_{pd.Timestamp.now().strftime("%Y%m%d")}.csv',
-            mime='text/csv'
-        )
+                    st.download_button(
+                label="📥 Scarica Dati Performance (.csv)",
+                data=csv_data,
+                file_name=f'nba_predictor_performance_{pd.Timestamp.now().strftime("%Y%m%d")}.csv',
+                mime='text/csv'
+            )
+            
+            # Pulsante per esportare dati completi
+            if st.button("📊 Esporta Dati Completi JSON+CSV"):
+                exported_df = export_complete_betting_data()
+                if not exported_df.empty:
+                    st.dataframe(exported_df.head(10))
         
     except Exception as e:
         st.error(f"Errore nel caricamento della dashboard performance: {e}")
