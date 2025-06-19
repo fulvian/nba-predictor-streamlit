@@ -22,5 +22,10 @@ html5lib>=1.1
 python-dateutil>=2.8.0
 pytz>=2023.3
 
-# Optional: for better performance
+# Streamlit Cloud optimizations
 gunicorn>=21.0.0
+watchdog>=3.0.0
+
+# Additional dependencies for cloud deployment
+packaging>=23.0
+protobuf>=4.21.0
