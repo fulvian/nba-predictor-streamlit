@@ -571,7 +571,7 @@ class NBADataProvider:
 
     def get_player_stats(self, player_id, season=None):
         """
-        Recupera le statistiche stagionali di un giocatore per l'analisi degli infortuni.
+        Recupera le statistiche stagionali REALI di un giocatore usando l'endpoint più affidabile.
         
         Args:
             player_id: ID del giocatore NBA
@@ -583,27 +583,99 @@ class NBADataProvider:
         if season is None:
             season = self._get_season_str_for_nba_api(datetime.today())
             
+        # Valida il player_id
         try:
+            player_id = int(player_id)
+        except (ValueError, TypeError):
+            print(f"⚠️ [STATS] Player ID non valido: {player_id}")
+            return None
+            
+        # Cache check
+        cache_key = f"player_stats_{player_id}_{season}"
+        if cache_key in self.player_stats_cache:
+            return self.player_stats_cache[cache_key]
+            
+        try:
+            print(f"   🔄 [NBA_API] Recupero statistiche per player_id={player_id}, season={season}")
+            
             # Rate limiting adattivo
             self._adaptive_sleep()
             
-            from nba_api.stats.endpoints import playerdashboardbyyearoveryear
+            # METODO 1: PlayerCareerStats - Più affidabile per statistiche stagionali
+            from nba_api.stats.endpoints import playercareerstats
             
-            # Recupera le statistiche complete del giocatore
-            player_stats = playerdashboardbyyearoveryear.PlayerDashboardByYearOverYear(
+            career_stats = playercareerstats.PlayerCareerStats(
                 player_id=str(player_id),
-                season=season,
                 headers=self.headers
             )
             
-            # Prendi il primo DataFrame che contiene le statistiche generali
-            stats_df = player_stats.get_data_frames()[1]  # Index 1 ha le statistiche della stagione
+            # Prendi le statistiche per stagione
+            season_totals_df = career_stats.season_totals_regular_season.get_data_frame()
             
-            if not stats_df.empty:
-                return stats_df
-            else:
-                return None
+            if not season_totals_df.empty:
+                # Filtra per la stagione corrente
+                current_season_stats = season_totals_df[season_totals_df['SEASON_ID'] == season]
+                
+                if not current_season_stats.empty:
+                    stats_row = current_season_stats.iloc[0]
+                    print(f"   ✅ [NBA_API] Statistiche trovate: {stats_row['PTS']:.1f} PTS, {stats_row['AST']:.1f} AST, {stats_row['REB']:.1f} REB")
+                    
+                    # Cache e ritorna
+                    self.player_stats_cache[cache_key] = current_season_stats
+                    return current_season_stats
+                else:
+                    print(f"   ⚠️ [NBA_API] Nessuna statistica per la stagione {season}")
+            
+            # METODO 2: Se non trova nella stagione corrente, prova l'ultima stagione disponibile
+            if not season_totals_df.empty:
+                # Ordina per stagione e prendi l'ultima disponibile
+                latest_season_stats = season_totals_df.sort_values('SEASON_ID', ascending=False).iloc[0:1]
+                latest_season = latest_season_stats.iloc[0]['SEASON_ID']
+                stats_row = latest_season_stats.iloc[0]
+                
+                print(f"   📊 [NBA_API] Usando ultima stagione disponibile: {latest_season}")
+                print(f"   ✅ [NBA_API] Statistiche: {stats_row['PTS']:.1f} PTS, {stats_row['AST']:.1f} AST, {stats_row['REB']:.1f} REB")
+                
+                # Cache e ritorna
+                self.player_stats_cache[cache_key] = latest_season_stats
+                return latest_season_stats
+            
+            # METODO 3: Se career stats fallisce, prova PlayerDashboard
+            print(f"   🔄 [NBA_API] Tentativo fallback con PlayerDashboard...")
+            
+            from nba_api.stats.endpoints import playerdashboardbygeneralsplits
+            
+            player_dashboard = playerdashboardbygeneralsplits.PlayerDashboardByGeneralSplits(
+                player_id=str(player_id),
+                season=season,
+                season_type_all_star='Regular Season',
+                headers=self.headers
+            )
+            
+            # Il primo DataFrame contiene le statistiche generali
+            dashboard_stats_df = player_dashboard.overall_player_dashboard.get_data_frame()
+            
+            if not dashboard_stats_df.empty:
+                stats_row = dashboard_stats_df.iloc[0]
+                print(f"   ✅ [NBA_API] Dashboard stats: {stats_row['PTS']:.1f} PTS, {stats_row['AST']:.1f} AST, {stats_row['REB']:.1f} REB")
+                
+                # Cache e ritorna
+                self.player_stats_cache[cache_key] = dashboard_stats_df
+                return dashboard_stats_df
+            
+            print(f"   ❌ [NBA_API] Nessuna statistica trovata per player_id={player_id}")
+            return None
                 
         except Exception as e:
-            print(f"⚠️ Errore recupero statistiche per giocatore {player_id}: {e}")
+            # Rileva rate limiting
+            error_msg = str(e)
+            is_rate_limited = ('rate' in error_msg.lower() or 'limit' in error_msg.lower() or 
+                              'too many' in error_msg.lower() or '429' in error_msg or
+                              'Expecting value' in error_msg)
+            
+            if is_rate_limited:
+                print(f"   🚨 [NBA_API] Rate limit per player {player_id}")
+                self._adaptive_sleep(is_rate_limited=True)
+            
+            print(f"   ❌ [NBA_API] Errore recupero statistiche player {player_id}: {e}")
             return None

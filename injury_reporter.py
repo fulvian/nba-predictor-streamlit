@@ -644,45 +644,76 @@ class InjuryReporter:
                     'min': 0  # Will be updated with actual minutes if available
                 }
                 
-                # INTEGRAZIONE STATISTICHE NBA per giocatori infortunati
+                # INTEGRAZIONE STATISTICHE NBA REALI per giocatori infortunati
                 if status != 'active' and self.nba_data_provider:
                     try:
-                        print(f"   📊 [NBA_STATS] Recupero statistiche per {player_name}...")
+                        print(f"   📊 [NBA_STATS] Recupero statistiche NBA reali per {player_name}...")
                         
-                        # Recupera le statistiche stagionali del giocatore dal NBADataProvider
-                        player_stats = self.nba_data_provider.get_player_stats(
+                        # Recupera le statistiche stagionali del giocatore dal NBADataProvider MIGLIORATO
+                        player_stats_df = self.nba_data_provider.get_player_stats(
                             player_id=row['PLAYER_ID'], 
                             season=season or "2024-25"
                         )
                         
-                        if player_stats is not None and not player_stats.empty:
+                        if player_stats_df is not None and not player_stats_df.empty:
                             # Integra le statistiche reali NBA
-                            stats_row = player_stats.iloc[0]  # Prendi la prima riga
+                            stats_row = player_stats_df.iloc[0]  # Prendi la prima riga
                             
-                            nba_stats = {
-                                'PTS': float(stats_row.get('PTS', 0)),
-                                'AST': float(stats_row.get('AST', 0)), 
-                                'REB': float(stats_row.get('REB', 0)),
-                                'STL': float(stats_row.get('STL', 0)),
-                                'BLK': float(stats_row.get('BLK', 0)),
-                                'FGM': float(stats_row.get('FGM', 0)),
-                                'FGA': float(stats_row.get('FGA', 1)),  # Evita divisione per 0
-                                'FTM': float(stats_row.get('FTM', 0)),
-                                'FTA': float(stats_row.get('FTA', 1)),  # Evita divisione per 0
-                                'TOV': float(stats_row.get('TOV', 0)),
-                                'PF': float(stats_row.get('PF', 0)),
-                                'MIN': float(stats_row.get('MIN', 20))
+                            # ESTRAZIONE ROBUSTA delle statistiche con controllo delle colonne disponibili
+                            available_columns = list(stats_row.index)
+                            print(f"   🔍 [NBA_STATS] Colonne disponibili per {player_name}: {available_columns[:10]}...")  # Mostra prime 10
+                            
+                            # Mappatura flessibile delle colonne (gestisce diversi formati dell'API)
+                            nba_stats = {}
+                            
+                            # Mappatura colonne statistiche (più formati possibili)
+                            stat_mappings = {
+                                'PTS': ['PTS', 'POINTS', 'PTS_PER_GAME'],
+                                'AST': ['AST', 'ASSISTS', 'AST_PER_GAME'], 
+                                'REB': ['REB', 'REBOUNDS', 'TOTAL_REB', 'REB_PER_GAME'],
+                                'STL': ['STL', 'STEALS', 'STL_PER_GAME'],
+                                'BLK': ['BLK', 'BLOCKS', 'BLK_PER_GAME'],
+                                'FGM': ['FGM', 'FIELD_GOALS_MADE', 'FG_MADE'],
+                                'FGA': ['FGA', 'FIELD_GOALS_ATTEMPTED', 'FG_ATT'],
+                                'FTM': ['FTM', 'FREE_THROWS_MADE', 'FT_MADE'],
+                                'FTA': ['FTA', 'FREE_THROWS_ATTEMPTED', 'FT_ATT'],
+                                'TOV': ['TOV', 'TURNOVERS', 'TO'],
+                                'PF': ['PF', 'PERSONAL_FOULS', 'FOULS'],
+                                'MIN': ['MIN', 'MINUTES', 'MP', 'MINS_PLAYED']
                             }
                             
-                            # Aggiungi le statistiche al player dictionary
-                            player.update(nba_stats)
-                            print(f"   ✅ [NBA_STATS] Statistiche NBA integrate per {player_name}: {nba_stats['PTS']:.1f} PTS, {nba_stats['AST']:.1f} AST, {nba_stats['REB']:.1f} REB")
+                            # Estrai ogni statistica usando la mappatura flessibile
+                            for stat_key, possible_columns in stat_mappings.items():
+                                stat_value = 0.0  # Default
+                                
+                                for col_name in possible_columns:
+                                    if col_name in available_columns:
+                                        try:
+                                            stat_value = float(stats_row[col_name])
+                                            break  # Trovato, esci dal loop
+                                        except (ValueError, TypeError):
+                                            continue  # Prova la prossima colonna
+                                
+                                nba_stats[stat_key] = stat_value
+                            
+                            # VALIDAZIONE QUALITÀ DATI: Controlla se le statistiche sono realistiche
+                            total_activity = nba_stats['PTS'] + nba_stats['AST'] + nba_stats['REB'] + nba_stats['FGM']
+                            
+                            if total_activity > 0:
+                                # Statistiche valide trovate
+                                player.update(nba_stats)
+                                print(f"   ✅ [NBA_STATS] Statistiche NBA REALI integrate per {player_name}:")
+                                print(f"       📊 {nba_stats['PTS']:.1f} PTS, {nba_stats['AST']:.1f} AST, {nba_stats['REB']:.1f} REB, {nba_stats['MIN']:.1f} MIN")
+                            else:
+                                print(f"   ⚠️ [NBA_STATS] Statistiche trovate ma valori tutti zero per {player_name} - possibile giocatore non attivo")
+                                # Non aggiungere statistiche se sono tutte zero
                             
                         else:
-                            print(f"   ⚠️ [NBA_STATS] Nessuna statistica trovata per {player_name}")
+                            print(f"   ❌ [NBA_STATS] Nessuna statistica NBA trovata per {player_name} - utilizzerà impatto zero")
                             
                     except Exception as e:
-                        print(f"   ⚠️ [NBA_STATS_ERROR] Errore recupero statistiche per {player_name}: {e}")
+                        print(f"   ❌ [NBA_STATS_ERROR] Errore recupero statistiche NBA per {player_name}: {e}")
+                        # Non aggiungiamo statistiche fasulle in caso di errore
 
                 roster_with_injuries.append(player)
             

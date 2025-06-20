@@ -15,6 +15,14 @@ from player_impact_analyzer import PlayerImpactAnalyzer
 
 # MODIFICA: Usa il nuovo sistema momentum predictor selector
 try:
+    from momentum_calculator_real import RealMomentumCalculator
+    REAL_MOMENTUM_AVAILABLE = True
+    print("🎯 Sistema momentum REALE caricato (NBA game logs)")
+except ImportError as e:
+    REAL_MOMENTUM_AVAILABLE = False
+    print(f"⚠️ Sistema momentum reale non disponibile: {e}")
+
+try:
     from momentum_predictor_selector import MomentumPredictorSelector
     MOMENTUM_SELECTOR_AVAILABLE = True
     print("✅ Sistema momentum selector ML caricato")
@@ -51,24 +59,34 @@ class NBACompleteSystem:
         self.impact_analyzer = PlayerImpactAnalyzer(self.data_provider)
         self.injury_reporter = InjuryReporter(self.data_provider)
         
-        # Inizializza sistema momentum appropriato
-        if MOMENTUM_SELECTOR_AVAILABLE:
+        # Inizializza sistema momentum appropriato - PRIORITÀ AL SISTEMA REALE
+        if REAL_MOMENTUM_AVAILABLE:
+            self.momentum_predictor = RealMomentumCalculator()
+            self.use_real_momentum = True
+            self.use_momentum_selector = False
+            self.use_advanced_momentum = False
+            print("🎯 Sistema momentum REALE attivato (NBA game logs)")
+        elif MOMENTUM_SELECTOR_AVAILABLE:
             self.momentum_predictor = MomentumPredictorSelector()
+            self.use_real_momentum = False
             self.use_momentum_selector = True
             self.use_advanced_momentum = False
             print("🚀 Sistema momentum selector ML attivato")
         elif ADVANCED_MOMENTUM_AVAILABLE is True:
             self.momentum_predictor = AdvancedPlayerMomentumPredictor(nba_data_provider=self.data_provider)
+            self.use_real_momentum = False
             self.use_momentum_selector = False
             self.use_advanced_momentum = True
             print("🔬 Sistema momentum avanzato attivato")
         elif ADVANCED_MOMENTUM_AVAILABLE is False:
             self.momentum_predictor = PlayerMomentumPredictor(nba_data_provider=self.data_provider)
+            self.use_real_momentum = False
             self.use_momentum_selector = False
             self.use_advanced_momentum = False
             print("📊 Sistema momentum base attivato")
         else:
             self.momentum_predictor = None
+            self.use_real_momentum = False
             self.use_momentum_selector = False
             self.use_advanced_momentum = False
             print("⚠️ Nessun sistema momentum disponibile - continuando senza momentum")
@@ -254,7 +272,13 @@ class NBACompleteSystem:
         # Passo 4: Calcolo momentum
         print("4. Calcolo momentum giocatori...")
         if self.momentum_predictor:
-            if self.use_momentum_selector:
+            if self.use_real_momentum:
+                print("   🔄 Inizializzazione sistema MOMENTUM REALE (NBA game logs)...")
+                momentum_impact = self._calculate_real_momentum_impact(
+                    home_roster_df, away_roster_df, 
+                    game.get('home_team'), game.get('away_team')
+                )
+            elif self.use_momentum_selector:
                 print("   🔄 Inizializzazione sistema MOMENTUM SELECTOR ML...")
                 momentum_impact = self._calculate_momentum_selector_impact(
                     home_roster_df, away_roster_df, 
@@ -391,12 +415,21 @@ class NBACompleteSystem:
             confidence = result.get('confidence', 0.0)
             reasoning = result.get('reasoning', 'N/A')
             
-            # CORREZIONE: Il momentum selector predice già score_deviation (impatto diretto)
-            # prediction = score_deviation previsto (es. 168.4 = 168.4 punti di differenza dal baseline)
-            # NON serve moltiplicare per 0.1, ma dobbiamo limitare l'impatto per evitare valori estremi
+            # CORREZIONE CRITICA: Il modello predice valori nella scala sbagliata
+            # prediction = score_deviation nel formato modello (es. -454.45)
+            # Dobbiamo normalizzare e scalare correttamente per l'impatto NBA
             
-            # Limitiamo l'impatto tra -20 e +20 punti per evitare predizioni irrealistiche
-            momentum_impact_total = np.clip(prediction, -20, 20)
+            # STEP 1: Normalizza la predizione del modello (che è su scala diversa)
+            # Se la predizione è estrema, probabilmente è su scala diversa (centinaia vs singole unità)
+            if abs(prediction) > 100:
+                # Scala da centinaia a unità singole (divide per fattore appropriato)
+                normalized_prediction = prediction / 50.0  # Fattore di calibrazione empirico
+            else:
+                normalized_prediction = prediction
+            
+            # STEP 2: Applica un clamp realistico per momentum NBA (massimo ±8 punti)
+            # I migliori team NBA raramente hanno momentum superiore a 5-8 punti di impatto
+            momentum_impact_total = np.clip(normalized_prediction, -8.0, 8.0)
             
             # Calcola confidence basato sul modello usato e accuracy
             if model_used == 'regular_season':
@@ -407,18 +440,21 @@ class NBACompleteSystem:
                 effective_confidence = confidence * 0.75  # Media confidenza per hybrid
             
             # Valuta qualità del sistema
+            # DEBUG: Mostra sempre la trasformazione per verificare la correzione
+            print(f"   🔧 Debug Momentum: Raw={prediction:+.2f} → Normalized={normalized_prediction:+.2f} → Final={momentum_impact_total:+.2f}")
+            
             if momentum_impact_total > 2.0 and effective_confidence > 0.8:
                 print(f"   🟢 🚀 Sistema MOMENTUM SELECTOR ML ATTIVO - Modello: {model_used.upper()}")
-                print(f"      📊 Predizione: {prediction:+.2f} | Confidence: {confidence:.1%} | Reasoning: {reasoning}")
-                print(f"      ⚡ Impatto calcolato: {momentum_impact_total:+.2f} pts")
+                print(f"      📊 Predizione Raw: {prediction:+.2f} | Confidence: {confidence:.1%} | Reasoning: {reasoning}")
+                print(f"      ⚡ Impatto Finale: {momentum_impact_total:+.2f} pts")
             elif effective_confidence > 0.6:
                 print(f"   🟢 ⚖️  Sistema MOMENTUM SELECTOR EQUILIBRATO - Modello: {model_used.upper()}")
-                print(f"      📊 Predizione: {prediction:+.2f} | Confidence: {confidence:.1%}")
-                print(f"      ⚡ Impatto: {momentum_impact_total:+.2f} pts")
+                print(f"      📊 Predizione Raw: {prediction:+.2f} | Confidence: {confidence:.1%}")
+                print(f"      ⚡ Impatto Finale: {momentum_impact_total:+.2f} pts")
             else:
                 print(f"   🟡 ⚠️  Sistema MOMENTUM SELECTOR INCERTO - Modello: {model_used.upper()}")
-                print(f"      📊 Predizione: {prediction:+.2f} | Confidence: {confidence:.1%}")
-                print(f"      ⚡ Impatto limitato: {momentum_impact_total:+.2f} pts")
+                print(f"      📊 Predizione Raw: {prediction:+.2f} | Confidence: {confidence:.1%}")
+                print(f"      ⚡ Impatto Finale: {momentum_impact_total:+.2f} pts")
             
             return {
                 'total_impact': momentum_impact_total,
@@ -638,7 +674,18 @@ class NBACompleteSystem:
         
         # Sistema Momentum
         if momentum_impact and momentum_impact.get('total_impact') is not None:
-            if momentum_impact.get('selector_system'):
+            if momentum_impact.get('real_data_system'):
+                confidence = momentum_impact.get('confidence_factor', 0)
+                total_impact = momentum_impact.get('total_impact', 0)
+                home_perf = momentum_impact.get('home_performance', 'unknown')
+                away_perf = momentum_impact.get('away_performance', 'unknown')
+                if abs(total_impact) > 2.0 and confidence > 0.8:
+                    print(f"🟢 SISTEMA MOMENTUM:       🎯 NBA REALE ATTIVO ({home_perf}/{away_perf}, Conf: {confidence:.0%})")
+                elif confidence > 0.6:
+                    print(f"🟢 SISTEMA MOMENTUM:       ⚖️  NBA REALE EQUILIBRATO ({home_perf}/{away_perf}, Conf: {confidence:.0%})")
+                else:
+                    print(f"🟡 SISTEMA MOMENTUM:       ⚠️  NBA REALE INCERTO ({home_perf}/{away_perf}, Conf: {confidence:.0%})")
+            elif momentum_impact.get('selector_system'):
                 confidence = momentum_impact.get('confidence_factor', 0)
                 model_used = momentum_impact.get('model_used', 'unknown')
                 total_impact = momentum_impact.get('total_impact', 0)
@@ -703,6 +750,44 @@ class NBACompleteSystem:
 
         for detail_string in injured_players_details:
             print(f"     - {detail_string}")
+
+    def _calculate_real_momentum_impact(self, home_roster_df, away_roster_df, home_team_name, away_team_name):
+        """Calcola momentum impact usando dati NBA reali (game logs + plus/minus)."""
+        try:
+            # Usa il RealMomentumCalculator per calcolare l'impatto
+            result = self.momentum_predictor.calculate_game_momentum_differential(
+                home_roster_df, away_roster_df, home_team_name, away_team_name
+            )
+            
+            total_impact = result.get('total_impact', 0.0)
+            confidence = result.get('confidence_factor', 1.0)
+            home_performance = result.get('home_momentum', {}).get('team_performance', 'unknown')
+            away_performance = result.get('away_momentum', {}).get('team_performance', 'unknown')
+            
+            # Valuta qualità del sistema momentum reale
+            if abs(total_impact) > 2.0 and confidence > 0.8:
+                print(f"   🟢 🎯 Sistema MOMENTUM REALE ATTIVO - Casa: {home_performance}, Ospite: {away_performance}")
+                print(f"      📊 Impatto: {total_impact:+.2f} pts | Confidence: {confidence:.1%}")
+            elif confidence > 0.6:
+                print(f"   🟢 ⚖️  Sistema MOMENTUM REALE EQUILIBRATO - Casa: {home_performance}, Ospite: {away_performance}")
+                print(f"      📊 Impatto: {total_impact:+.2f} pts | Confidence: {confidence:.1%}")
+            else:
+                print(f"   🟡 ⚠️  Sistema MOMENTUM REALE INCERTO - Casa: {home_performance}, Ospite: {away_performance}")
+                print(f"      📊 Impatto limitato: {total_impact:+.2f} pts | Confidence: {confidence:.1%}")
+            
+            return {
+                'total_impact': total_impact,
+                'home_momentum': result.get('home_momentum', {}),
+                'away_momentum': result.get('away_momentum', {}),
+                'confidence_factor': confidence,
+                'real_data_system': True,
+                'home_performance': home_performance,
+                'away_performance': away_performance
+            }
+            
+        except Exception as e:
+            print(f"   🔴 ❌ Sistema MOMENTUM REALE FALLBACK - Errore: {e}")
+            return {'total_impact': 0.0, 'error': str(e)}
 
     def _calculate_base_momentum_impact(self, home_team_id, away_team_id):
         """Calcola momentum impact usando il sistema base."""
@@ -772,33 +857,44 @@ class NBACompleteSystem:
         home_injuries = []
         away_injuries = []
         
+        # PROCESSING HOME INJURIES - Estrai dati reali NBA
         for detail in home_impact_result.get('injured_players_details', []):
             try:
-                # Parse del formato: "Jarace Walker (Out) - Impatto: -0.53 pts"
+                # Parse del formato: "Jarace Walker (Out) - Impatto: -0.53 pts [NBA Data]"
                 if ' - Impatto: ' in detail:
                     player_part, impact_part = detail.split(' - Impatto: ')
                     player_name = player_part.split(' (')[0]
                     status = player_part.split(' (')[1].split(')')[0].upper()
-                    impact = abs(float(impact_part.replace(' pts', '')))
+                    # Rimuovi sia ' pts' che eventuali tag come '[NBA Data]'
+                    impact_clean = impact_part.replace(' pts', '').split('[')[0].strip()
+                    impact = abs(float(impact_clean))
                     home_injuries.append({"player": player_name, "status": status, "impact": impact})
-            except:
-                # Fallback per parsing errors
-                home_injuries.append({"player": "Unknown Player", "status": "OUT", "impact": 0.50})
+            except Exception as e:
+                # Ignora errori di parsing - mantieni solo dati validi
+                continue
         
+        # PROCESSING AWAY INJURIES - Estrai dati reali NBA
         for detail in away_impact_result.get('injured_players_details', []):
             try:
                 if ' - Impatto: ' in detail:
                     player_part, impact_part = detail.split(' - Impatto: ')
                     player_name = player_part.split(' (')[0]
                     status = player_part.split(' (')[1].split(')')[0].upper()
-                    impact = abs(float(impact_part.replace(' pts', '')))
+                    # Rimuovi sia ' pts' che eventuali tag come '[NBA Data]'
+                    impact_clean = impact_part.replace(' pts', '').split('[')[0].strip()
+                    impact = abs(float(impact_clean))
                     away_injuries.append({"player": player_name, "status": status, "impact": impact})
-            except:
-                away_injuries.append({"player": "Unknown Player", "status": "OUT", "impact": 0.50})
+            except Exception as e:
+                # Ignora errori di parsing - mantieni solo dati validi
+                continue
         
-        # Se non ci sono injuries (sistema fallback), usa dati mock minimi per display
+        # Se non ci sono injuries REALI, mostra messaggio appropriato
         if not home_injuries and not away_injuries:
             home_injuries = [{"player": "Nessun infortunio", "status": "ACTIVE", "impact": 0.00}]
+            away_injuries = [{"player": "Nessun infortunio", "status": "ACTIVE", "impact": 0.00}]
+        elif not home_injuries:
+            home_injuries = [{"player": "Nessun infortunio", "status": "ACTIVE", "impact": 0.00}]
+        elif not away_injuries:
             away_injuries = [{"player": "Nessun infortunio", "status": "ACTIVE", "impact": 0.00}]
         
         home_total_impact = sum(inj["impact"] for inj in home_injuries)
@@ -1057,9 +1153,18 @@ class NBACompleteSystem:
         potential_win = bet_stake * (bet_odds - 1)
         roi_percent = (potential_win / bet_stake * 100) if bet_stake > 0 else 0
         
-        # Informazioni partita
-        game_date = datetime.now().strftime("%d/%m/%Y")
-        game_time = "20:00 EST"
+        # Informazioni partita - usa data reale dal game object
+        if 'date' in game and game['date']:
+            # Converte da formato '2025-06-22' a '22/06/2025'
+            try:
+                game_date_obj = datetime.strptime(game['date'], '%Y-%m-%d')
+                game_date = game_date_obj.strftime("%d/%m/%Y")
+            except (ValueError, TypeError):
+                game_date = game.get('date', datetime.now().strftime("%d/%m/%Y"))
+        else:
+            game_date = datetime.now().strftime("%d/%m/%Y")
+        
+        game_time = game.get('time', "20:00 EST")  # Usa orario dal game se disponibile
         central_line = args.line if args and hasattr(args, 'line') and args.line else "N/A"
         
         # Header con titolo centrato
