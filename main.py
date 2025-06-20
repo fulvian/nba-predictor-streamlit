@@ -93,7 +93,7 @@ class NBACompleteSystem:
         
         self.probabilistic_model = ProbabilisticModel()
 
-    def _load_bankroll(self, default=100.0):
+    def _load_bankroll(self, default=89.48):
         """Carica il bankroll dal file JSON, o usa valore di default."""
         # Prova prima data/bankroll.json poi bankroll.json
         bankroll_paths = ['data/bankroll.json', 'bankroll.json']

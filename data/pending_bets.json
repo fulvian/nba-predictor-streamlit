@@ -96,5 +96,58 @@
       "odds_score": 30,
       "total_raw_score": 32.5
     }
+  },
+  {
+    "bet_id": "0042400407_OVER_216.0",
+    "game_id": "0042400407",
+    "bet_data": {
+      "type": "OVER",
+      "line": 216.0,
+      "odds": 1.95,
+      "probability": 0.67439,
+      "implied_probability": 0.5128205128205129,
+      "true_probability": 0.48,
+      "edge": 0.31506049999999997,
+      "quality_score": 0.91,
+      "edge_score": 30,
+      "confidence_score": 0.9,
+      "risk_score": 1.0,
+      "consistency_score": 0.4,
+      "stake": 4.1,
+      "is_value": true,
+      "margin": 0.06837606837606858,
+      "simulation_wins": 67439,
+      "total_simulations": 100000,
+      "optimization_score": 32.5,
+      "prob_score": 35,
+      "odds_score": 30,
+      "total_raw_score": 32.5
+    },
+    "timestamp": "2025-06-20T12:06:55.983138",
+    "status": "pending",
+    "replaced_at": "2025-06-20T12:06:55.983226",
+    "original_bet": {
+      "type": "OVER",
+      "line": 216.0,
+      "odds": 1.95,
+      "probability": 0.67439,
+      "implied_probability": 0.5128205128205129,
+      "true_probability": 0.48,
+      "edge": 0.31506049999999997,
+      "quality_score": 0.91,
+      "edge_score": 30,
+      "confidence_score": 0.9,
+      "risk_score": 1.0,
+      "consistency_score": 0.4,
+      "stake": 4.1,
+      "is_value": true,
+      "margin": 0.06837606837606858,
+      "simulation_wins": 67439,
+      "total_simulations": 100000,
+      "optimization_score": 32.5,
+      "prob_score": 35,
+      "odds_score": 30,
+      "total_raw_score": 32.5
+    }
   }
 ]
