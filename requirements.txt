@@ -30,3 +30,13 @@ watchdog>=3.0.0
 # Additional dependencies for cloud deployment
 packaging>=23.0
 protobuf>=4.21.0
+
+# Sistema di monitoraggio quote avanzato
+apscheduler>=3.10.0
+python-telegram-bot>=20.0
+sqlalchemy>=2.0.0
+
+# Per scraping dei dati di consenso
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+selenium>=4.15.0  # Per scraping dinamico se necessario

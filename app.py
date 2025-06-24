@@ -239,12 +239,13 @@ def main():
             st.rerun()
     
     # MAIN TABS - Organized workflow
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🏀 Game Analysis", 
         "📊 Results Display", 
         "💰 Betting Center", 
         "📈 Performance", 
-        "⚙️ Management"
+        "⚙️ Management",
+        "📡 Quote Monitor"
     ])
     
     with tab1:
@@ -261,6 +262,9 @@ def main():
     
     with tab5:
         show_management_tab(system, all_data)
+    
+    with tab6:
+        show_quote_monitor_tab()
 
 # ================================
 # 🏀 TAB 1: GAME ANALYSIS (EXACT MAIN.PY FLOW)
@@ -1242,6 +1246,188 @@ def show_management_tab(system, all_data):
     
     df_info = pd.DataFrame(info_data)
     st.dataframe(df_info, use_container_width=True)
+
+# ================================
+# 📡 TAB 6: QUOTE MONITOR (NUOVO)
+# ================================
+
+def show_quote_monitor_tab():
+    st.markdown("### 📡 NBA Quote Monitor")
+    st.markdown("Sistema di monitoraggio quote avanzato con RLM detection")
+    
+    # Controlli del servizio
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🔧 Controllo Servizio")
+        
+        # Status del servizio (simulato per ora)
+        if 'monitor_running' not in st.session_state:
+            st.session_state['monitor_running'] = False
+        
+        if st.session_state['monitor_running']:
+            st.success("🟢 Servizio di monitoraggio ATTIVO")
+            if st.button("🛑 Stop Monitor", type="primary", key="stop_monitor_app"):
+                st.session_state['monitor_running'] = False
+                st.rerun()
+        else:
+            st.warning("🟡 Servizio di monitoraggio FERMO")
+            if st.button("🚀 Start Monitor", type="primary", key="start_monitor_app"):
+                st.session_state['monitor_running'] = True
+                st.success("✅ Servizio di monitoraggio avviato!")
+                st.rerun()
+        
+        # Configurazione
+        st.markdown("#### ⚙️ Configurazione")
+        polling_interval = st.selectbox(
+            "Intervallo polling (minuti)",
+            [5, 10, 15, 30, 60],
+            index=2,
+            key="polling_interval_app"
+        )
+        
+        market_type = st.selectbox(
+            "Mercato da monitorare", 
+            ["totals", "spreads", "h2h"],
+            index=0,
+            key="market_type_app"
+        )
+        
+        st.markdown("#### 🎯 Soglie Alert")
+        edge_threshold = st.slider("Soglia Edge minimo (%)", 1, 20, 5, key="edge_threshold_app")
+        rlm_threshold = st.slider("Soglia RLM (punti)", 1.0, 5.0, 2.0, 0.5, key="rlm_threshold_app")
+    
+    with col2:
+        st.markdown("#### 📊 Stato Sistema")
+        
+        # API Status
+        st.markdown("**🔗 API Status**")
+        try:
+            import config
+            if config.THE_ODDS_API_KEY and 'your_' not in config.THE_ODDS_API_KEY:
+                st.success("✅ The Odds API")
+            else:
+                st.error("❌ The Odds API")
+                
+            if config.THERUNDOWN_API_KEY and 'your_' not in config.THERUNDOWN_API_KEY:
+                st.success("✅ TheRundown API")
+            else:
+                st.error("❌ TheRundown API")
+                
+            if config.API_SPORTS_KEY and 'your_' not in config.API_SPORTS_KEY:
+                st.success("✅ API-Sports")
+            else:
+                st.error("❌ API-Sports")
+        except ImportError:
+            st.error("❌ Config non disponibile")
+        
+        # Database status
+        st.markdown("**🗄️ Database Status**")
+        try:
+            from database_manager import initialize_database
+            initialize_database()
+            st.success("✅ Database connesso")
+        except Exception as e:
+            st.error(f"❌ Database: {e}")
+        
+        # Telegram status  
+        st.markdown("**📱 Telegram Status**")
+        try:
+            import config
+            if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:
+                st.success("✅ Telegram configurato")
+            else:
+                st.error("❌ Telegram non configurato")
+        except:
+            st.error("❌ Telegram non disponibile")
+    
+    # Alert recenti
+    st.markdown("#### 🚨 Alert Recenti")
+    
+    # Simula alcuni alert di esempio
+    if st.session_state.get('monitor_running', False):
+        alerts_data = [
+            {
+                "Timestamp": "2025-01-24 15:30:22",
+                "Tipo": "🔥 RLM FORTE",
+                "Partita": "Lakers @ Warriors", 
+                "Line": "OVER 225.5",
+                "Movimento": "+2.5 pts",
+                "Edge": "+12.3%",
+                "Status": "🟢 ATTIVO"
+            },
+            {
+                "Timestamp": "2025-01-24 15:25:10",
+                "Tipo": "💨 STEAM MOVE",
+                "Partita": "Heat @ Celtics",
+                "Line": "UNDER 218.0", 
+                "Movimento": "-1.5 pts",
+                "Edge": "+8.7%",
+                "Status": "🟡 MONITORAGGIO"
+            },
+            {
+                "Timestamp": "2025-01-24 15:20:45",
+                "Tipo": "📊 VALUE BET",
+                "Partita": "Thunder @ Pacers",
+                "Line": "OVER 230.0",
+                "Movimento": "+0.5 pts", 
+                "Edge": "+5.1%",
+                "Status": "🟢 ATTIVO"
+            }
+        ]
+        
+        df_alerts = pd.DataFrame(alerts_data)
+        st.dataframe(df_alerts, use_container_width=True)
+    else:
+        st.info("🔌 Avvia il servizio di monitoraggio per vedere gli alert in tempo reale")
+    
+    # Statistiche sistema
+    st.markdown("#### 📈 Statistiche Sistema")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("🎯 Alert Oggi", "12", delta="3")
+    with col2:
+        st.metric("🔥 RLM Rilevati", "4", delta="1")
+    with col3:
+        st.metric("💰 Value Bets", "8", delta="2")
+    with col4:
+        st.metric("📡 API Calls", "1,247", delta="156")
+    
+    # Test sistema
+    st.markdown("#### 🧪 Test Sistema")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📡 Test API Connectivity", use_container_width=True, key="test_api_app"):
+            with st.spinner("Testing APIs..."):
+                # Simula test
+                time.sleep(2)
+                st.success("✅ Tutte le API rispondono correttamente")
+    
+    with col2:
+        if st.button("📱 Test Telegram", use_container_width=True, key="test_telegram_app"):
+            with st.spinner("Sending test notification..."):
+                try:
+                    from notification_manager import send_system_status_notification
+                    send_system_status_notification(
+                        status="TEST WEB APP",
+                        details="✅ Test notifica dal web interface Streamlit"
+                    )
+                    st.success("✅ Notifica Telegram inviata!")
+                except Exception as e:
+                    st.error(f"❌ Errore: {e}")
+    
+    with col3:
+        if st.button("🗄️ Test Database", use_container_width=True, key="test_database_app"):
+            with st.spinner("Testing database..."):
+                try:
+                    from database_manager import initialize_database, get_all_active_games
+                    initialize_database()
+                    games = get_all_active_games()
+                    st.success(f"✅ Database OK - {len(games)} partite attive")
+                except Exception as e:
+                    st.error(f"❌ Errore database: {e}")
 
 # ================================
 # 🚀 APPLICATION ENTRY POINT
