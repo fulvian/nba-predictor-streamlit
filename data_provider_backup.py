@@ -267,207 +267,74 @@ class NBADataProvider:
             print(f"⚠️ Formato stagione non riconosciuto: {season}, uso stagione corrente")
             return self._get_season_str_for_nba_api(date.today())
 
-    def get_scheduled_games(self, days_ahead=7, specific_date=None):
-        """
-        Context7-Compliant NBA Game Detection for Next 7 Days
-        Uses ScheduleLeagueV2 with correct column names (gameDate, homeTeam_teamName, awayTeam_teamName)
-        """
+    def get_scheduled_games(self, days_ahead=3, specific_date=None):
         scheduled_games = []
-
+        
         if specific_date:
-            print(f"📅 Getting NBA games for specific date: {specific_date}...")
-            target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
-
-            # For specific dates, try both old and new methods
-            try:
-                # Try Context7-compliant approach first
-                scheduled_games = self._try_context7_schedule(target_date)
-            except Exception as e:
-                print(f"   ⚠️ Context7 approach failed: {e}")
-                # Fallback to old method
-                scheduled_games = self._try_legacy_scoreboard(specific_date)
-
+            print(f"📅 Cercando partite per la data specifica: {specific_date}...")
+            dates_to_check = [datetime.strptime(specific_date, '%Y-%m-%d').date()]
         else:
-            print(f"📅 Getting NBA games for NEXT {days_ahead} DAYS (Context7-Compliant)...")
-
-            # Use Context7-compliant approach for next 7 days
-            today = date.today()
-            start_date = today + timedelta(days=1)  # Skip today (already played)
-            end_date = today + timedelta(days=days_ahead)
-
-            print(f"📅 Date Range: {start_date} to {end_date}")
-
-            # Determine NBA season
-            year = start_date.year
-            if start_date.month >= 10:  # NBA season starts in October
-                season = f"{year}-{str(year+1)[-2:]}"
-            else:
-                season = f"{year-1}-{str(year)[-2:]}"
-
-            print(f"🏀 NBA Season: {season}")
-
-            try:
-                from nba_api.stats.endpoints import scheduleleaguev2
-
-                # Get schedule for the season (Context7-compliant approach)
-                print("🔄 Fetching season schedule...")
-                schedule = scheduleleaguev2.ScheduleLeagueV2(
-                    league_id='00',
-                    season=season
-                )
-
-                # Get data frames
-                data_frames = schedule.get_data_frames()
-
-                if not data_frames:
-                    print("❌ No data frames returned")
-                    return []
-
-                # Use the first data frame (LeagueSchedule)
-                df = data_frames[0]
-
-                print(f"📊 Schedule DataFrame: {df.shape[0]} total games")
-
-                # Context7-compliant: use correct column names discovered via debugging
-                date_column = 'gameDate'
-                if date_column in df.columns:
-                    print(f"✅ Found date column: {date_column}")
-                else:
-                    print("❌ gameDate column not found!")
-                    return []
-
-                # Convert date column to datetime
-                df[date_column] = pd.to_datetime(df[date_column])
-
-                # Filter games for our date range (skip today, include next 7 days)
-                start_datetime = datetime.combine(start_date, datetime.min.time())
-                end_datetime = datetime.combine(end_date, datetime.max.time())
-
-                filtered_df = df[
-                    (df[date_column] >= start_datetime) &
-                    (df[date_column] <= end_datetime)
-                ]
-
-                print(f"📊 Found {len(filtered_df)} games in next {days_ahead} days")
-
-                if len(filtered_df) == 0:
-                    print("⚠️  No games found in next 7 days")
-                    return []
-
-                # Convert to our format using Context7-discovered column structure
-                for _, row in filtered_df.iterrows():
-                    try:
-                        # Use correct column names from Context7 research
-                        away_team = row.get('awayTeam_teamName', 'Unknown')
-                        home_team = row.get('homeTeam_teamName', 'Unknown')
-                        away_team_id = row.get('awayTeam_teamId', 0)
-                        home_team_id = row.get('homeTeam_teamId', 0)
-                        game_id = row.get('gameId', f"SCHEDULE_{len(scheduled_games)}")
-
-                        # Format date
-                        game_date = row[date_column].strftime('%Y-%m-%d')
-
-                        scheduled_games.append({
-                            'away_team': away_team,
-                            'home_team': home_team,
-                            'away_team_id': away_team_id,
-                            'home_team_id': home_team_id,
-                            'game_id': game_id,
-                            'date': game_date,
-                            'time': row[date_column].strftime('%H:%M'),
-                            'time_utc': row[date_column].isoformat(),
-                            'status': 'Scheduled',
-                            'score': '',
-                            'source': 'NBA ScheduleLeagueV2 (Context7-Compliant)',
-                            'api_endpoint': 'stats.nba.com/stats/scheduleleaguev2',
-                            'season': season,
-                            'odds': []
-                        })
-
-                    except Exception as e:
-                        print(f"⚠️  Error processing game: {e}")
-                        continue
-
-                print(f"✅ Successfully processed {len(scheduled_games)} games for next {days_ahead} days")
-
-            except Exception as e:
-                print(f"❌ Context7-compliant error: {str(e)}")
-                # Fallback to legacy method
-                return self._try_legacy_multiple_days(days_ahead)
-
-        if not scheduled_games:
-            print("❌ No NBA games found")
-        else:
-            print(f"✅ Found {len(scheduled_games)} NBA games!")
-
-        return scheduled_games
-
-    def _try_context7_schedule(self, target_date):
-        """Try Context7-compliant ScheduleLeagueV2 for specific date"""
-        try:
-            # Implementation similar to above but for specific date
-            # This is a simplified version - in production would use the same logic as above
-            return []
-        except Exception as e:
-            print(f"   ❌ Context7 approach failed: {e}")
-            return []
-
-    def _try_legacy_scoreboard(self, specific_date):
-        """Fallback to original scoreboard method"""
-        try:
-            scheduled_games = []
-            print(f"📅 Using legacy ScoreboardV2 for {specific_date}...")
-
-            time.sleep(NBA_API_REQUEST_DELAY)
-            scoreboard = scoreboardv2.ScoreboardV2(
-                game_date=specific_date,
-                league_id='00',
-                headers=self.headers
-            )
-
-            games = scoreboard.game_header.get_data_frame()
-            print(f"   📊 Legacy NBA API response received for {specific_date}")
-
-            if not games.empty:
-                for _, game in games.iterrows():
-                    try:
-                        home_team_info = self.team_id_to_info.get(game['HOME_TEAM_ID'])
-                        away_team_info = self.team_id_to_info.get(game['VISITOR_TEAM_ID'])
-
-                        if not home_team_info or not away_team_info:
-                            continue
-
-                        scheduled_games.append({
-                            'date': specific_date,
-                            'time': game.get('GAME_STATUS_TEXT', ''),
-                            'home_team': home_team_info['full_name'],
-                            'away_team': away_team_info['full_name'],
-                            'home_team_id': home_team_info['id'],
-                            'away_team_id': away_team_info['id'],
-                            'game_id': game['GAME_ID'],
-                            'source': 'NBA ScoreboardV2 (Legacy Fallback)',
-                            'odds': []
-                        })
-                    except Exception as e:
-                        continue
-
-            return scheduled_games
-
-        except Exception as e:
-            print(f"   ❌ Legacy method also failed: {e}")
-            return []
-
-    def _try_legacy_multiple_days(self, days_ahead):
-        """Fallback to original method for multiple days"""
-        scheduled_games = []
-        base_date = date.today()
-        dates_to_check = [base_date + timedelta(days=days_offset) for days_offset in range(days_ahead)]
-
+            print(f"📅 Cercando partite per i prossimi {days_ahead} giorni...")
+            base_date = date.today()
+            dates_to_check = [base_date + timedelta(days=days_offset) for days_offset in range(days_ahead)]
+        
         for current_date in dates_to_check:
             date_str = current_date.strftime('%Y-%m-%d')
-            legacy_games = self._try_legacy_scoreboard(date_str)
-            scheduled_games.extend(legacy_games)
-
+            print(f"📅 Cercando partite per il {date_str}...")
+            
+            try:
+                time.sleep(NBA_API_REQUEST_DELAY)
+                scoreboard = scoreboardv2.ScoreboardV2(
+                    game_date=date_str,
+                    league_id='00',
+                    headers=self.headers
+                )
+                
+                try:
+                    games = scoreboard.game_header.get_data_frame()
+                    print(f"   📊 NBA API response ricevuta per {date_str}")
+                    
+                    if games.empty:
+                        print(f"   ℹ️ Nessuna partita trovata per {date_str}")
+                        continue
+                        
+                    for _, game in games.iterrows():
+                        try:
+                            home_team_info = self.team_id_to_info.get(game['HOME_TEAM_ID'])
+                            away_team_info = self.team_id_to_info.get(game['VISITOR_TEAM_ID'])
+                            
+                            if not home_team_info or not away_team_info:
+                                print(f"   ⚠️ Info squadra mancante per game_id: {game['GAME_ID']}")
+                                continue
+                                
+                            scheduled_games.append({
+                                'date': date_str,
+                                'time': game.get('GAME_STATUS_TEXT', ''),
+                                'home_team': home_team_info['full_name'],
+                                'away_team': away_team_info['full_name'],
+                                'home_team_id': home_team_info['id'],
+                                'away_team_id': away_team_info['id'],
+                                'game_id': game['GAME_ID'],
+                                'odds': []
+                            })
+                            print(f"   ✅ {away_team_info['full_name']} @ {home_team_info['full_name']}")
+                        except Exception as e:
+                            print(f"   ⚠️ Errore processing game: {e}")
+                            continue
+                            
+                except Exception as e:
+                    print(f"   ⚠️ Errore parsing NBA API response: {e}")
+                    continue
+                    
+            except Exception as e:
+                print(f"   ❌ Errore chiamata NBA API per {date_str}: {e}")
+                continue
+                
+        if not scheduled_games:
+            print("❌ Nessuna partita trovata")
+        else:
+            print(f"✅ Trovate {len(scheduled_games)} partite totali")
+            
         return scheduled_games
 
     # --- METODO CORRETTO ---
