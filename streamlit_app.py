@@ -80,24 +80,79 @@ def main():
             st.success("✅ Data Provider")
         except ImportError:
             st.error("❌ Data Provider")
-            
+
         try:
             import injury_reporter
             st.success("✅ Injury Reporter")
         except ImportError:
             st.error("❌ Injury Reporter")
-            
+
         try:
             import momentum_predictor_selector
             st.success("✅ Momentum Selector")
         except ImportError:
             st.error("❌ Momentum Selector")
-            
+
         try:
             import probabilistic_model
             st.success("✅ Probabilistic Model")
         except ImportError:
             st.error("❌ Probabilistic Model")
+
+        try:
+            import nba_schedule_scraper
+            st.success("✅ NBA Schedule Scraper & Quote Monitor")
+        except ImportError:
+            st.error("❌ NBA Schedule Scraper & Quote Monitor")
+
+        # Game Detection Status
+        st.subheader("📊 Game Detection Status")
+
+        # Test game detection
+        try:
+            from data_provider import NBADataProvider
+            data_provider = NBADataProvider()
+
+            # Try to get today's games
+            from datetime import datetime
+            today_str = datetime.now().strftime('%Y-%m-%d')
+
+            with st.spinner(f"Detecting games for {today_str}..."):
+                games = data_provider.get_scheduled_games(days_ahead=1, specific_date=today_str)
+
+                if games:
+                    # Count games by source
+                    sources = {}
+                    for game in games:
+                        source = game.get('source', 'unknown')
+                        sources[source] = sources.get(source, 0) + 1
+
+                    st.success(f"🎉 Found {len(games)} games for {today_str}")
+
+                    for source, count in sources.items():
+                        if source == 'nba_api':
+                            st.success(f"   📊 NBA API: {count} games")
+                        elif source == 'scraper':
+                            st.info(f"   🌐 Schedule Scraper: {count} games")
+                        elif source == 'mock':
+                            st.warning(f"   🎲 Mock Data: {count} games")
+                        else:
+                            st.info(f"   ❓ {source}: {count} games")
+                else:
+                    st.error(f"❌ No games found for {today_str}")
+
+                    # Show diagnostic info
+                    with st.expander("🔍 Diagnostic Information"):
+                        st.write("**Possible Issues:**")
+                        st.write("1. NBA season is off-season")
+                        st.write("2. API rate limiting")
+                        st.write("3. Network connectivity issues")
+                        st.write("4. Schedule scraper blocked")
+
+        except Exception as e:
+            st.error(f"❌ Game detection failed: {str(e)}")
+            with st.expander("🔍 Error Details"):
+                st.code(str(e))
         
         # Configuration options
         st.subheader("🎯 Analysis Settings")

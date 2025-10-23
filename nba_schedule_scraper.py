@@ -256,26 +256,46 @@ class NBAScheduleScraper:
         try:
             # Pattern per estrarre orario
             time_patterns = [
-                r'(\d{1,2}):(\s{2}):\s{2})\s*.*?)\s*(?:\s{2}):\s{2})\s{2})\s*(AM|PM|ET)\s*(?:\s{2})\s*)\s{2})\s*(?:\s{2}))\s*)',
-                r'(\d{1,2}):(\s{2})\s{2}):\s{2}):\s{2}.*?(\s{2})\s*(?:\s{2})\s*?)',
-                r'(\d{1,2})\s{2}:\s{2}\s*:\s{2}\s{2})\s*?(\s{2})\s*?(\s{2}))\s{2}))\s*?)'
+                r'(\d{1,2}):(\d{2})\s*(AM|PM|ET)',  # "7:30 PM" o "7:30 PM ET"
+                r'(\d{1,2})\s*(AM|PM)',                # "7 PM"
+                r'(\d{1,2}):(\d{2})',                 # "7:30"
             ]
 
             for pattern in time_patterns:
-                match = re.search(pattern, time_text)
+                match = re.search(pattern, time_text, re.IGNORECASE)
                 if match:
-                    time_str = match.group(0)
-                    try:
-                        # Formato HH:MM AM/PM
-                        if 'AM' in time_str:
-                            time_obj = datetime.strptime(time_str, "%I:%M %p")
-                        else:
-                            time_obj = datetime.strptime(time_str, "%I:%M %p")
-                        return time_obj
-                    except ValueError:
-                        continue
+                    groups = match.groups()
+                    if len(groups) >= 2:
+                        hour = int(groups[0])
+                        minute = int(groups[1]) if len(groups) > 1 and groups[1].isdigit() else 0
+                        period = groups[2] if len(groups) > 2 else groups[-1] if len(groups) > 1 else None
 
-            # Fallback a orario corrente se non trova match
+                        # Converti 12-hour a 24-hour
+                        if period and 'PM' in period.upper() and hour != 12:
+                            hour += 12
+                        elif period and 'AM' in period.upper() and hour == 12:
+                            hour = 0
+
+                        # Crea datetime object per oggi
+                        today = datetime.now()
+                        return today.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+            # Fallback: estrai solo numeri
+            numbers = re.findall(r'\d+', time_text)
+            if len(numbers) >= 1:
+                hour = int(numbers[0])
+                minute = int(numbers[1]) if len(numbers) > 1 else 0
+                hour = min(23, max(0, hour))  # Validazione
+                minute = min(59, max(0, minute))  # Validazione
+
+                today = datetime.now()
+                return today.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+            # Fallback finale: orario corrente
+            return datetime.now().replace(microsecond=0)
+
+        except Exception as e:
+            # Fallback finale: orario corrente
             return datetime.now().replace(microsecond=0)
 
     def _parse_score(self, score_text):
@@ -284,22 +304,35 @@ class NBAScheduleScraper:
         """
         try:
             # Pattern per estrarre punteggi
-            score_pattern = r'(\w+)\s*(\d+)\s*-\s*(\d+)'
-            match = re.search(score_pattern, score_text)
+            score_patterns = [
+                r'(\d+)\s*-\s*(\d+)',                    # "100 - 95"
+                r'(\w+)\s+(\d+)\s*-\s*(\w+)\s+(\d+)',    # "HOME 100 - AWAY 95"
+            ]
 
-            if match:
-                home_score = int(match.group(1))
-                away_score = int(match.group(2))
-                return home_score, away_score
+            for pattern in score_patterns:
+                match = re.search(pattern, score_text)
+                if match:
+                    groups = match.groups()
+                    if len(groups) == 2:  # Solo numeri
+                        home_score = int(groups[0])
+                        away_score = int(groups[1])
+                        return home_score, away_score
+                    elif len(groups) == 4:  # Team + numeri
+                        home_score = int(groups[1])
+                        away_score = int(groups[3])
+                        return home_score, away_score
 
-            # Fallback
-            scores = score_text.split('-')
-            if len(scores) == 2:
+            # Fallback: estrai tutti i numeri
+            numbers = re.findall(r'\d+', score_text)
+            if len(numbers) >= 2:
                 try:
-                    return int(scores[0]), int(scores[1])
+                    return int(numbers[0]), int(numbers[1])
                 except:
                     return 0, 0
 
+            return 0, 0
+
+        except Exception:
             return 0, 0
 
     def get_todays_games(self, target_date=None):
