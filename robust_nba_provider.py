@@ -24,7 +24,7 @@ import os
 import pickle
 from pathlib import Path
 
-class NBADataProvider:
+class RobustNBADataProvider:
     """Provider NBA dati robusto con gestione intelligente dei timeout"""
 
     def __init__(self):
