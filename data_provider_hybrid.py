@@ -28,7 +28,7 @@ from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.static import players as nba_players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 
-class NBADataProvider:
+class NBAHybridDataProvider:
     """
     Provider NBA dati ibrido che combina The Odds API e NBA API.
 
