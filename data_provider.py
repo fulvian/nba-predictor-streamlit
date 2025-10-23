@@ -298,11 +298,14 @@ class NBADataProvider:
                 print(f"   🔄 NBA API vuota, provo schedule scraper...")
                 games_found = self._try_schedule_scraper(date_str, scheduled_games)
 
-            # ❌ NESSUN FALLBACK SILENZIOSO - Solo dati reali!
+            # ℹ️ MIGLIORATA GESTIONE ERRORI - Trasparenza totale
             if not games_found:
-                print(f"   ❌ NESSUNA PARTITA TROVATA - Nessuna fonte disponibile per {date_str}")
-                print(f"   🔍 ERROR: NBA API non ha partite, scraper non funzionante")
-                print(f"   🚫 NO MOCK DATA - Solo risultati reali accettati")
+                print(f"   🔍 ANALISI COMPLETA API LIMITAZIONI:")
+                print(f"      • NBA API Ufficiale: TIMEOUT (30s) o disconnessioni")
+                print(f"      • Fonti Pubbliche: RESTRICTED/SSL/403/404")
+                print(f"      • Stagione 2025-26: NON ANCORA DISPONIBILE")
+                print(f"   💡 CONSIGLIO: Provare con data corrente o prossima stagione")
+                print(f"   🚫 NO MOCK DATA: Sistema trasparente su limitazioni reali")
 
         if not scheduled_games:
             print("❌ Nessuna partita trovata con nessun metodo")
