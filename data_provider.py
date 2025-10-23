@@ -12,6 +12,7 @@ import json
 import warnings
 import time
 import random
+import traceback
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
 
@@ -31,6 +32,7 @@ from nba_api.stats.endpoints import (
     teamestimatedmetrics,
     leaguestandings,
     scoreboardv2,
+    scheduleleaguev2,  # ✅ AGGIUNTO: Per partite future
     teamyearbyyearstats,
     leaguedashteamstats,
     teamplayerdashboard,
@@ -296,10 +298,11 @@ class NBADataProvider:
                 print(f"   🔄 NBA API vuota, provo schedule scraper...")
                 games_found = self._try_schedule_scraper(date_str, scheduled_games)
 
-            # METODO 3: Mock data (fallback finale)
+            # ❌ NESSUN FALLBACK SILENZIOSO - Solo dati reali!
             if not games_found:
-                print(f"   ⚠️ Nessuna fonte funziona, genero dati mock per evitare crash...")
-                self._generate_mock_games(date_str, scheduled_games)
+                print(f"   ❌ NESSUNA PARTITA TROVATA - Nessuna fonte disponibile per {date_str}")
+                print(f"   🔍 ERROR: NBA API non ha partite, scraper non funzionante")
+                print(f"   🚫 NO MOCK DATA - Solo risultati reali accettati")
 
         if not scheduled_games:
             print("❌ Nessuna partita trovata con nessun metodo")
@@ -309,63 +312,153 @@ class NBADataProvider:
         return scheduled_games
 
     def _try_nba_api(self, date_str, scheduled_games):
-        """Tenta NBA API ufficiale con retry e connection handling robusto"""
+        """Tenta NBA API ufficiale per partite future usando scheduleleaguev2"""
         max_retries = 3
         retry_delay = 2
 
+        # Determina la stagione NBA dalla data
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        year = date_obj.year
+        if date_obj.month >= 10:  # NBA season starts in October
+            season = f"{year}-{str(year + 1)[-2:]}"
+        else:  # January - September belongs to previous year's season
+            season = f"{year - 1}-{str(year)[-2:]}"
+
+        # ✅ FIX: Per date future nel 2025, la stagione 2025-26 non esiste ancora
+        # Usa la stagione corrente o quella precedente se disponibile
+        current_year = datetime.now().year
+        if year > current_year:
+            print(f"   ⚠️ Data {date_str} nel futuro - uso stagione {current_year-1}-{str(current_year)[-2:]} come fallback")
+            season = f"{current_year - 1}-{str(current_year)[-2:]}"
+        elif year == current_year and date_obj.month >= 10:
+            # Se siamo a ottobre 2025 o dopo, la stagione potrebbe non essere disponibile
+            if date_obj > datetime.now():
+                print(f"   ⚠️ Data futura - uso stagione {year-1}-{str(year)[-2:]} come fallback")
+                season = f"{year - 1}-{str(year)[-2:]}"
+
         for attempt in range(max_retries):
             try:
-                # Delay più lungo prima di ogni tentativo
+                # Delay prima di ogni tentativo
                 self._adaptive_sleep()
 
-                print(f"   🔄 NBA API tentativo {attempt + 1}/{max_retries} per {date_str}...")
+                print(f"   🔄 NBA API Schedule tentativo {attempt + 1}/{max_retries} per {date_str} (Season: {season})...")
 
-                scoreboard = scoreboardv2.ScoreboardV2(
-                    game_date=date_str,
+                # ✅ CORRETTO: Usa scheduleleaguev2 per partite future
+                schedule = scheduleleaguev2.ScheduleLeagueV2(
                     league_id='00',
+                    season=season,
                     headers=self.headers
                 )
 
                 try:
-                    games = scoreboard.game_header.get_data_frame()
-                    print(f"   📊 NBA API response: {len(games)} games per {date_str}")
+                    schedule_data = schedule.get_data_frames()
+                    print(f"   📊 NBA Schedule API response received for {season}")
 
-                    if games.empty:
-                        print(f"   ℹ️ NBA API ha restituito DataFrame vuoto")
+                    if not schedule_data or len(schedule_data) == 0:
+                        print(f"   ℹ️ NBA Schedule API ha restituito dati vuoti")
+                        return False
+
+                    # Cerca il DataFrame corretto nei results
+                    schedule_df = None
+                    for df in schedule_data:
+                        if hasattr(df, 'empty') and not df.empty:
+                            schedule_df = df
+                            break
+
+                    if schedule_df is None:
+                        # Prova a estrarre dai result sets diretti
+                        if hasattr(schedule, 'result_sets') and schedule.result_sets:
+                            for result_set in schedule.result_sets:
+                                if 'rowSet' in result_set and result_set['rowSet']:
+                                    headers = result_set.get('headers', [])
+                                    rows = result_set['rowSet']
+                                    if rows:
+                                        schedule_df = pd.DataFrame(rows, columns=headers)
+                                        break
+
+                    if schedule_df is None or schedule_df.empty:
+                        print(f"   ℹ️ Nessun dato di schedule trovato nella response")
+                        return False
+
+                    # Filtra per la data specifica
+                    target_date = date_str.replace('-', '')
+                    games_filtered = []
+
+                    if 'GAME_DATE' in schedule_df.columns:
+                        # Formato: YYYY-MM-DDTHH:MM:SS.000Z o YYYY-MM-DD
+                        date_mask = schedule_df['GAME_DATE'].astype(str).str.contains(date_str)
+                        games_filtered = schedule_df[date_mask]
+                    elif 'GameDate' in schedule_df.columns:
+                        date_mask = schedule_df['GameDate'].astype(str).str.contains(date_str)
+                        games_filtered = schedule_df[date_mask]
+                    else:
+                        # Prova tutte le colonne che potrebbero contenere date
+                        date_columns = [col for col in schedule_df.columns if 'date' in col.lower() or 'game' in col.lower()]
+                        for col in date_columns:
+                            try:
+                                date_mask = schedule_df[col].astype(str).str.contains(date_str)
+                                if date_mask.any():
+                                    games_filtered = schedule_df[date_mask]
+                                    break
+                            except:
+                                continue
+
+                    if games_filtered.empty:
+                        print(f"   ℹ️ Nessuna partita trovata per {date_str} nella stagione {season}")
                         return False
 
                     games_processed = 0
-                    for _, game in games.iterrows():
+                    for _, game in games_filtered.iterrows():
                         try:
-                            home_team_info = self.team_id_to_info.get(game['HOME_TEAM_ID'])
-                            away_team_info = self.team_id_to_info.get(game['VISITOR_TEAM_ID'])
+                            # Estrai team ID e nomi dal game data
+                            home_team_id = game.get('HOME_TEAM_ID') or game.get('HomeTeamID') or game.get('home_team_id')
+                            away_team_id = game.get('VISITOR_TEAM_ID') or game.get('AwayTeamID') or game.get('away_team_id')
+                            home_team_name = game.get('HOME_TEAM_NAME') or game.get('HomeTeamName') or game.get('home_team')
+                            away_team_name = game.get('VISITOR_TEAM_NAME') or game.get('AwayTeamName') or game.get('away_team')
+                            game_id = game.get('GAME_ID') or game.get('GameID')
+
+                            if not all([home_team_id, away_team_id, game_id]):
+                                print(f"   ⚠️ Dati incompleti - HOME_ID: {home_team_id}, AWAY_ID: {away_team_id}, GAME_ID: {game_id}")
+                                continue
+
+                            # Mappa ID a informazioni complete dei team
+                            home_team_info = self.team_id_to_info.get(int(home_team_id))
+                            away_team_info = self.team_id_to_info.get(int(away_team_id))
 
                             if not home_team_info or not away_team_info:
-                                print(f"   ⚠️ Team info mancante per HOME: {game.get('HOME_TEAM_ID')}, AWAY: {game.get('VISITOR_TEAM_ID')}")
-                                continue
+                                print(f"   ⚠️ Team info mancante per HOME: {home_team_id}, AWAY: {away_team_id}")
+                                # Usa i nomi dal dato API se disponibili
+                                home_name = home_team_name or f"Team {home_team_id}"
+                                away_name = away_team_name or f"Team {away_team_id}"
+                            else:
+                                home_name = home_team_info['full_name']
+                                away_name = away_team_info['full_name']
 
                             scheduled_games.append({
                                 'date': date_str,
-                                'time': game.get('GAME_STATUS_TEXT', 'TBD'),
-                                'home_team': home_team_info['full_name'],
-                                'away_team': away_team_info['full_name'],
-                                'home_team_id': home_team_info['id'],
-                                'away_team_id': away_team_info['id'],
-                                'game_id': game['GAME_ID'],
+                                'time': 'TBD',  # Schedule API doesn't provide game times
+                                'home_team': home_name,
+                                'away_team': away_name,
+                                'home_team_id': int(home_team_id),
+                                'away_team_id': int(away_team_id),
+                                'game_id': str(game_id),
                                 'odds': [],
                                 'source': 'nba_api'
                             })
-                            print(f"   ✅ NBA API: {away_team_info['full_name']} @ {home_team_info['full_name']} (ID: {game['GAME_ID']})")
+                            print(f"   ✅ NBA Schedule API: {away_name} @ {home_name} (ID: {game_id})")
                             games_processed += 1
+
                         except Exception as e:
                             print(f"   ⚠️ Errore processing singolo game: {e}")
+                            print(f"   🐛 Dati game: {dict(game)}")
                             continue
 
-                    print(f"   🎉 NBA API processati con successo {games_processed} games")
+                    print(f"   🎉 NBA Schedule API processati con successo {games_processed} games per {date_str}")
                     return games_processed > 0
 
                 except Exception as e:
-                    print(f"   ⚠️ Errore parsing NBA API response: {e}")
+                    print(f"   ⚠️ Errore parsing NBA Schedule API response: {e}")
+                    print(f"   🐛 Stack trace: {traceback.format_exc()}")
                     if attempt < max_retries - 1:
                         print(f"   ⏳ Attendo {retry_delay}s e riprovo...")
                         time.sleep(retry_delay)
@@ -373,7 +466,8 @@ class NBADataProvider:
                     continue
 
             except Exception as e:
-                print(f"   ❌ Errore chiamata NBA API (tentativo {attempt + 1}): {e}")
+                print(f"   ❌ Errore chiamata NBA Schedule API (tentativo {attempt + 1}): {e}")
+                print(f"   🐛 Stack trace: {traceback.format_exc()}")
                 if "Connection" in str(e) or "RemoteDisconnected" in str(e):
                     print(f"   🔗 Problema di connessione, ritento...")
                 if attempt < max_retries - 1:
@@ -382,7 +476,7 @@ class NBADataProvider:
                     retry_delay *= 1.5  # Backoff esponenziale
                 continue
 
-        print(f"   ❌ NBA API fallita dopo {max_retries} tentativi")
+        print(f"   ❌ NBA Schedule API fallita dopo {max_retries} tentativi")
         return False
 
     def _try_schedule_scraper(self, date_str, scheduled_games):
