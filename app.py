@@ -19,7 +19,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import ALL main components - EXACT REPLICATION of main.py
 try:
-    from main import NBACompleteSystem
+    from main import EnhancedStreamlitNBAApp
     from data_provider import NBADataProvider
     from injury_reporter import InjuryReporter
     from player_impact_analyzer import PlayerImpactAnalyzer
@@ -132,7 +132,11 @@ def initialize_complete_system():
     with st.spinner("🚀 Initializing NBA Complete System..."):
         try:
             data_provider = NBADataProvider()
-            system = NBACompleteSystem(data_provider, auto_mode=True)
+            system = EnhancedStreamlitNBAApp()
+            if system.initialize_system():
+                st.success("✅ NBA Enhanced System Initialized Successfully!")
+            else:
+                st.error("❌ System initialization failed - cannot proceed")
             return system
         except Exception as e:
             st.error(f"❌ System initialization failed: {e}")
