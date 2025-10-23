@@ -9,6 +9,7 @@ Optimized for cloud environment with proper error handling.
 import streamlit as st
 import sys
 import os
+from datetime import datetime, date, timedelta
 
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
