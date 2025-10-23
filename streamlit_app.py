@@ -128,72 +128,99 @@ def main():
             st.metric("Current Bankroll", "€100.00")
     
     # Main content
-    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Analysis", "📊 Results", "💰 Betting", "📈 Performance"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏀 NBA Games", "📊 Analysis", "💰 Betting", "📈 Performance"])
     
     with tab1:
-        st.header("🎯 Game Analysis")
-        
-        # Team selection
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🏠 Home Team")
-            home_team = st.selectbox(
-                "Select Home Team",
-                ["Lakers", "Warriors", "Celtics", "Heat", "Thunder", "Pacers", "Bucks", "Nets"],
-                index=0
-            )
-        
-        with col2:
-            st.subheader("🛫 Away Team")
-            away_team = st.selectbox(
-                "Select Away Team",
-                ["Lakers", "Warriors", "Celtics", "Heat", "Thunder", "Pacers", "Bucks", "Nets"],
-                index=1
-            )
-        
-        # Analysis button
-        if st.button("🚀 Start Analysis", type="primary"):
-            with st.spinner("Running comprehensive analysis..."):
-                try:
-                    # Import and run analysis
-                    from main import NBACompleteSystem
-                    from data_provider import NBADataProvider
-                    
-                    # Create mock args
-                    class MockArgs:
-                        def __init__(self):
-                            self.line = central_line
-                            self.auto_mode = auto_mode
-                    
-                    args = MockArgs()
-                    
-                    # Initialize system
-                    data_provider = NBADataProvider()
-                    system = NBACompleteSystem(data_provider, auto_mode=auto_mode)
-                    
-                    # Create game object
-                    game = {
-                        'away_team': away_team,
-                        'home_team': home_team,
-                        'away_team_id': 1610612747,  # Mock IDs
-                        'home_team_id': 1610612744,
-                        'game_id': f"CUSTOM_{away_team}_{home_team}",
-                        'odds': []
-                    }
-                    
-                    # Run analysis
-                    results = system.analyze_game(game, central_line=central_line, args=args)
-                    
-                    # Store results in session state
-                    st.session_state.analysis_results = results
-                    st.session_state.game_info = game
-                    
-                    st.success("✅ Analysis completed successfully!")
-                    
-                except Exception as e:
-                    st.error(f"❌ Analysis failed: {str(e)}")
-                    st.exception(e)
+        st.header("🏀 Real NBA Games Detection")
+
+        # Date selection
+        selected_date = st.date_input(
+            "Select Date for NBA Games",
+            value=datetime.now().date(),
+            min_value=date(2024, 1, 1),
+            max_value=date(2026, 12, 31)
+        )
+
+        selected_date_str = selected_date.strftime('%Y-%m-%d')
+
+        st.info(f"📅 Detecting NBA games for: **{selected_date_str}**")
+
+        # Detect real NBA games
+        try:
+            with st.spinner(f"🔍 Searching for NBA games on {selected_date_str}..."):
+                from data_provider import NBADataProvider
+                dp = NBADataProvider()
+
+                # Get real NBA games for selected date
+                scheduled_games = dp.get_scheduled_games(specific_date=selected_date_str)
+
+            # Display results
+            if scheduled_games:
+                st.success(f"✅ Found {len(scheduled_games)} NBA games for {selected_date_str}")
+
+                # Display games in cards
+                for i, game in enumerate(scheduled_games, 1):
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="game-card">
+                            <h3>🏀 Game {i}: {game['away_team']} @ {game['home_team']}</h3>
+                            <p><strong>Date:</strong> {game['date']}</p>
+                            <p><strong>Source:</strong> {game.get('source', 'NBA API')}</p>
+                            <p><strong>Game ID:</strong> {game.get('game_id', 'N/A')}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # Analysis button for each real game
+                        if st.button(f"🚀 Analyze Game {i}: {game['away_team']} @ {game['home_team']}", key=f"analyze_{i}"):
+                            with st.spinner(f"Running comprehensive analysis for {game['away_team']} @ {game['home_team']}..."):
+                                try:
+                                    # Import and run analysis
+                                    from main import NBACompleteSystem
+
+                                    # Create mock args
+                                    class MockArgs:
+                                        def __init__(self):
+                                            self.line = central_line
+                                            self.auto_mode = auto_mode
+
+                                    args = MockArgs()
+
+                                    # Initialize system
+                                    system = NBACompleteSystem(dp, auto_mode=auto_mode)
+
+                                    # Run analysis on REAL NBA game
+                                    results = system.analyze_game(game, central_line=central_line, args=args)
+
+                                    # Store results in session state
+                                    st.session_state.analysis_results = results
+                                    st.session_state.game_info = game
+
+                                    st.success("✅ Analysis completed successfully!")
+
+                                except Exception as e:
+                                    st.error(f"❌ Analysis failed: {str(e)}")
+                                    st.exception(e)
+            else:
+                st.warning(f"⚠️ No NBA games found for {selected_date_str}")
+
+                # Show troubleshooting info
+                with st.expander("🔧 Troubleshooting Information"):
+                    st.markdown("""
+                    **Possible reasons for no games detected:**
+
+                    1. **NBA API Connection Issues**: The official NBA API might be temporarily unavailable
+                    2. **Date Range**: The selected date might be outside of current NBA season
+                    3. **Schedule Not Available**: Game schedules for future dates might not be released yet
+
+                    **Technical Details:**
+                    - The app uses `scheduleleaguev2` NBA API endpoint for future games
+                    - It automatically determines the correct NBA season (e.g., 2025-26)
+                    - It retries API calls up to 3 times with exponential backoff
+                    """)
+
+        except Exception as e:
+            st.error(f"❌ Error detecting NBA games: {str(e)}")
+            st.exception(e)
     
     with tab2:
         st.header("📊 Analysis Results")
