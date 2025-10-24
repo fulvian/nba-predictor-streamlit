@@ -377,8 +377,10 @@ def display_advanced_results(results, game):
 
                 full_bet_data = []
                 for bet in value_bets:
-                    potential_win = bet.get('stake', 0) * bet['odds']
-                    roi = ((potential_win - bet.get('stake', 0)) / bet.get('stake', 0)) * 100
+                    stake = bet.get('stake', 0)
+                    potential_win = stake * bet['odds']
+                    # Fix ZeroDivisionError: calcola ROI solo se stake > 0
+                    roi = ((potential_win - stake) / stake * 100) if stake > 0 else 0.0
 
                     full_bet_data.append({
                         'Bet Type': f"{bet['type']} {bet['line']}",

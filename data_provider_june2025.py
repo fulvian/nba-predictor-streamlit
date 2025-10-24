@@ -359,8 +359,315 @@ class NBADataProvider:
         return None
 
     def get_team_roster(self, team_id: int, season: str = None) -> Optional[pd.DataFrame]:
-        """Placeholder per compatibilità"""
-        return pd.DataFrame()
+        """
+        🏀 Ottieni roster completo squadra con metodo multi-sourcing robusto.
+
+        Strategy: NBA API (CommonTeamRoster) → Basketball Reference → Cache
+
+        Args:
+            team_id: NBA team ID
+            season: Stagione (format 'YYYY-YY', default current season)
+
+        Returns:
+            DataFrame con roster completo o None se errore
+        """
+        try:
+            # Determina stagione corrente se non specificata
+            if season is None:
+                season = self._get_season_str_for_nba_api(date.today())
+
+            print(f"📊 Getting roster for team_id={team_id}, season={season}")
+
+            # Tenta cache prima
+            cache_key = f"roster_{team_id}_{season}"
+            if cache_key in self.team_data_cache:
+                print(f"   ✅ Using cached roster data")
+                return self.team_data_cache[cache_key].copy()
+
+            # METODO 1: NBA API CommonTeamRoster
+            print(f"   🏀 Method 1: NBA API CommonTeamRoster...")
+            nba_roster = self._get_nba_roster(team_id, season)
+            if nba_roster is not None and not nba_roster.empty:
+                print(f"      ✅ NBA API roster: {len(nba_roster)} players")
+                # Arricchisci con statistiche se possibile
+                enhanced_roster = self._enhance_roster_with_stats(nba_roster, team_id, season)
+                self.team_data_cache[cache_key] = enhanced_roster
+                return enhanced_roster
+
+            # METODO 2: Basketball Reference fallback
+            print(f"   📚 Method 2: Basketball Reference fallback...")
+            team_info = self.team_id_to_info.get(team_id)
+            if team_info:
+                team_name = team_info['full_name']
+                bbref_roster = self._get_basketball_reference_roster(team_name, season, team_id)
+                if bbref_roster is not None and not bbref_roster.empty:
+                    print(f"      ✅ Basketball Reference roster: {len(bbref_roster)} players")
+                    self.team_data_cache[cache_key] = bbref_roster
+                    return bbref_roster
+
+            print(f"   ❌ All methods failed for team {team_id}")
+            return pd.DataFrame()
+
+        except Exception as e:
+            print(f"❌ Error in get_team_roster: {e}")
+            return pd.DataFrame()
+
+    def _get_nba_roster(self, team_id: int, season: str) -> Optional[pd.DataFrame]:
+        """
+        Ottieni roster da NBA API usando CommonTeamRoster.
+
+        Args:
+            team_id: NBA team ID
+            season: Season string 'YYYY-YY'
+
+        Returns:
+            DataFrame con roster o None
+        """
+        try:
+            # Rate limiting professionale
+            self._adaptive_sleep()
+
+            # Usa CommonTeamRoster dell'NBA API
+            from nba_api.stats.endpoints import commonteamroster
+
+            print(f"      📡 Calling CommonTeamRoster API...")
+            roster = commonteamroster.CommonTeamRoster(
+                team_id=team_id,
+                season=season,
+                headers=self.headers
+            )
+
+            # Get data frame
+            roster_df = roster.get_data_frames()
+            if roster_df and len(roster_df) > 0:
+                df = roster_df[0]
+                print(f"      ✅ CommonTeamRoster response: {len(df)} players")
+
+                # Rinomina colonne per consistenza
+                column_mapping = {
+                    'PLAYER_ID': 'player_id',
+                    'PLAYER': 'player_name',
+                    'NUM': 'jersey_number',
+                    'POSITION': 'position',
+                    'HEIGHT': 'height',
+                    'WEIGHT': 'weight',
+                    'BIRTH_DATE': 'birth_date',
+                    'AGE': 'age',
+                    'EXP': 'experience',
+                    'SCHOOL': 'college'
+                }
+
+                # Applica mapping se colonne esistono
+                for old_col, new_col in column_mapping.items():
+                    if old_col in df.columns:
+                        df = df.rename(columns={old_col: new_col})
+
+                # Aggiungi metadati
+                df['team_id'] = team_id
+                df['season'] = season
+                df['source'] = 'NBA_API_CommonTeamRoster'
+                df['data_quality'] = 'official'
+
+                return df
+            else:
+                print(f"      ❌ Empty CommonTeamRoster response")
+                return pd.DataFrame()
+
+        except Exception as e:
+            print(f"      ❌ CommonTeamRoster API error: {e}")
+            return pd.DataFrame()
+
+    def _enhance_roster_with_stats(self, roster_df: pd.DataFrame, team_id: int, season: str) -> pd.DataFrame:
+        """
+        Arricchisci roster con statistiche stagione corrente usando TeamPlayerDashboard.
+
+        Args:
+            roster_df: Base roster DataFrame
+            team_id: NBA team ID
+            season: Season string
+
+        Returns:
+            Enhanced roster with stats
+        """
+        try:
+            print(f"      📈 Enhancing roster with stats...")
+
+            # Rate limiting
+            self._adaptive_sleep()
+
+            # Usa TeamPlayerDashboard per statistiche
+            from nba_api.stats.endpoints import teamplayerdashboard
+
+            stats = teamplayerdashboard.TeamPlayerDashboard(
+                team_id=team_id,
+                season=season,
+                headers=self.headers
+            )
+
+            stats_dfs = stats.get_data_frames()
+            if stats_dfs and len(stats_dfs) > 1:  # Overall stats通常在第一个DataFrame
+                stats_df = stats_dfs[1]  # Team player stats通常在第二个DataFrame
+                print(f"         ✅ TeamPlayerDashboard: {len(stats_df)} players with stats")
+
+                # Merge statistics con roster
+                enhanced_df = roster_df.copy()
+
+                # Colonne statistiche chiave da aggiungere
+                stat_columns = ['PLAYER_ID', 'GP', 'PTS', 'REB', 'AST', 'PIE', 'PLUS_MINUS']
+                available_stats = [col for col in stat_columns if col in stats_df.columns]
+
+                if available_stats and 'PLAYER_ID' in stats_df.columns:
+                    # Rinomina per consistenza
+                    stats_mapping = {
+                        'PLAYER_ID': 'player_id',
+                        'GP': 'games_played',
+                        'PTS': 'points_per_game',
+                        'REB': 'rebounds_per_game',
+                        'AST': 'assists_per_game',
+                        'PIE': 'player_impact_estimate',
+                        'PLUS_MINUS': 'plus_minus'
+                    }
+
+                    for old_col, new_col in stats_mapping.items():
+                        if old_col in stats_df.columns:
+                            stats_df = stats_df.rename(columns={old_col: new_col})
+
+                    # Merge data
+                    enhanced_df = enhanced_df.merge(
+                        stats_df[['player_id'] + [stats_mapping.get(col, col) for col in available_stats if col != 'PLAYER_ID']],
+                        on='player_id',
+                        how='left'
+                    )
+
+                    print(f"         ✅ Enhanced roster with {len([col for col in enhanced_df.columns if col.endswith('_per_game')])} stat columns")
+
+                return enhanced_df
+            else:
+                print(f"         ⚠️ TeamPlayerDashboard stats not available")
+                return roster_df
+
+        except Exception as e:
+            print(f"         ❌ TeamPlayerDashboard error: {e}")
+            return roster_df
+
+    def _get_basketball_reference_roster(self, team_name: str, season: str, team_id: int) -> Optional[pd.DataFrame]:
+        """
+        Fallback a Basketball Reference per roster quando NBA API fallisce.
+
+        Args:
+            team_name: Full team name
+            season: Season string
+
+        Returns:
+            DataFrame con roster da Basketball Reference
+        """
+        try:
+            # Solo fallback se NBA API fallisce completamente
+            print(f"         📚 Basketball Reference fallback for {team_name}")
+
+            # Mappatura team name → Basketball Reference URL
+            team_url_mapping = {
+                'Atlanta Hawks': 'teams/ATL',
+                'Boston Celtics': 'teams/BOS',
+                'Brooklyn Nets': 'teams/BRK',
+                'Charlotte Hornets': 'teams/CHA',
+                'Chicago Bulls': 'teams/CHI',
+                'Cleveland Cavaliers': 'teams/CLE',
+                'Dallas Mavericks': 'teams/DAL',
+                'Denver Nuggets': 'teams/DEN',
+                'Detroit Pistons': 'teams/DET',
+                'Golden State Warriors': 'teams/GSW',
+                'Houston Rockets': 'teams/HOU',
+                'Indiana Pacers': 'teams/IND',
+                'Los Angeles Clippers': 'teams/LAC',
+                'Los Angeles Lakers': 'teams/LAL',
+                'Memphis Grizzlies': 'teams/MEM',
+                'Miami Heat': 'teams/MIA',
+                'Milwaukee Bucks': 'teams/MIL',
+                'Minnesota Timberwolves': 'teams/MIN',
+                'New Orleans Pelicans': 'teams/NOP',
+                'New York Knicks': 'teams/NYK',
+                'Oklahoma City Thunder': 'teams/OKC',
+                'Orlando Magic': 'teams/ORL',
+                'Philadelphia 76ers': 'teams/PHI',
+                'Phoenix Suns': 'teams/PHX',
+                'Portland Trail Blazers': 'teams/POR',
+                'Sacramento Kings': 'teams/SAC',
+                'San Antonio Spurs': 'teams/SAS',
+                'Toronto Raptors': 'teams/TOR',
+                'Utah Jazz': 'teams/UTA',
+                'Washington Wizards': 'teams/WAS'
+            }
+
+            team_abbr = team_url_mapping.get(team_name, 'teams/UNKNOWN')
+            if team_abbr == 'teams/UNKNOWN':
+                print(f"         ❌ Unknown team for Basketball Reference: {team_name}")
+                return pd.DataFrame()
+
+            # Estrai anno dalla season string
+            season_year = season.split('-')[0]
+            bbref_season = f"{int(season_year)-1}-{season_year[-2:]}"  # NBA season跨越两年
+
+            # Costruisci URL
+            url = f"https://www.basketball-reference.com/{team_abbr}/{bbref_season}.html"
+
+            print(f"         🔗 Basketball Reference URL: {url}")
+
+            # Importa BeautifulSoup per web scraping
+            from bs4 import BeautifulSoup
+            import requests
+
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+
+            response = requests.get(url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+
+                # Trova roster table
+                roster_table = soup.find('table', {'id': 'roster'})
+                if roster_table:
+                    rows = roster_table.find_all('tr')[1:]  # Skip header
+
+                    roster_data = []
+                    for row in rows:
+                        cols = row.find_all(['td', 'th'])
+                        if len(cols) >= 6:
+                            player_name = cols[0].text.strip()
+                            pos = cols[1].text.strip()
+                            height = cols[2].text.strip()
+                            weight = cols[3].text.strip()
+                            birth_date = cols[4].text.strip() if len(cols) > 4 else ''
+                            experience = cols[5].text.strip() if len(cols) > 5 else ''
+
+                            roster_data.append({
+                                'player_name': player_name,
+                                'position': pos,
+                                'height': height,
+                                'weight': weight,
+                                'birth_date': birth_date,
+                                'experience': experience,
+                                'team_id': team_id,
+                                'season': season,
+                                'source': 'Basketball_Reference',
+                                'data_quality': 'scraped'
+                            })
+
+                    if roster_data:
+                        df = pd.DataFrame(roster_data)
+                        print(f"         ✅ Basketball Reference roster: {len(df)} players")
+                        return df
+
+                print(f"         ❌ Roster table not found")
+                return pd.DataFrame()
+            else:
+                print(f"         ❌ Basketball Reference HTTP {response.status_code}")
+                return pd.DataFrame()
+
+        except Exception as e:
+            print(f"         ❌ Basketball Reference error: {e}")
+            return pd.DataFrame()
 
     def get_player_stats(self, player_id, season=None):
         """Placeholder per compatibilità"""
