@@ -18,6 +18,9 @@ from urllib.parse import urljoin, quote
 from nba_api.stats.endpoints import commonteamroster
 from nba_api.stats.static import teams as nba_teams
 
+# Import our new team mapper system
+from nba_team_mapper import get_team_mapper
+
 # Local imports
 # from config import NBA_API_REQUEST_DELAY
 NBA_API_REQUEST_DELAY = 0.6  # Definita localmente per evitare dipendenza da config
@@ -365,15 +368,25 @@ class InjuryReporter:
     def get_team_injuries(self, team_abbr, max_age_hours=6):
         """
         Ottieni injury reports per un team da fonti multiple con sistema di fallback robusto.
-        
-        GERARCHIA DELLE FONTI SEMPLIFICATE (solo fonti operative):
-        1. 📺 CBS SPORTS - Tabelle ben strutturate e affidabili  
+
+        GERARCHIA DELLE FONTI (NO MOCK):
+        1. 📺 CBS SPORTS - Tabelle ben strutturate e affidabili
         2. 📊 ESPN - Fonte mainstream con dati consistenti
         3. 🔄 CROSS-VALIDATION - Validazione incrociata tra CBS e ESPN
-        4. 💾 FALLBACK DATABASE - Solo per situazioni di emergenza
         """
         try:
-            print(f"\n🏥 === INJURY REPORT DUAL-SOURCE per {team_abbr} ===")
+            # 🔄 FIX: Converti team ID in abbreviation usando il nostro mapper
+            if isinstance(team_abbr, int):
+                team_mapper = get_team_mapper()
+                original_id = team_abbr
+                team_abbr = team_mapper.get_abbreviation(team_abbr)
+                print(f"🔄 [TEAM_MAPPER] {original_id} → {team_abbr}")
+
+                if not team_abbr:
+                    print(f"   ❌ Team ID {original_id} non valido")
+                    return []
+
+            print(f"\n🏥 === INJURY REPORT REAL per {team_abbr} ===")
             
             # Cache check
             cache_key = f"injuries_{team_abbr}"
@@ -433,20 +446,12 @@ class InjuryReporter:
             elif len(sources_successful) == 1:
                 print(f"\n   ⚠️ [SINGLE-SOURCE] Solo una fonte disponibile: {sources_successful[0]}")
                 
-            # FALLBACK DATABASE (solo se entrambe le fonti falliscono)
+            # 🚫 NO FALLBACK - Solo dati reali, niente mock
             if not all_injuries:
-                print(f"\n   💾 [FALLBACK] Entrambe le fonti primarie fallite - usando database emergenza")
-                try:
-                    fallback_injuries = self._get_fallback_injuries(team_abbr)
-                    if fallback_injuries:
-                        all_injuries.extend(fallback_injuries)
-                        sources_successful.append('fallback_db')
-                        print(f"   [FALLBACK] ✅ {len(fallback_injuries)} injuries dal database emergenza")
-                    else:
-                        print(f"   [FALLBACK] ⚠️ Nessun dato nel database emergenza")
-                        
-                except Exception as e:
-                    print(f"   [FALLBACK] ❌ Errore database: {e}")
+                print(f"\n   🚫 [REAL_ONLY] Nessuna injury trovata dalle fonti reali")
+                print(f"   📊 Fonti tentate: {', '.join(sources_tried)}")
+                print(f"   📊 Fonti riuscite: {', '.join(sources_successful)}")
+                print(f"   ℹ️  Sistema mock DEPRECATO - solo dati reali consentiti")
             
             # Calcolo confidence score semplificato
             confidence_score = self._calculate_confidence_score(sources_successful, len(all_injuries))

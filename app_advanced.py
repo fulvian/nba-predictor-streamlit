@@ -86,15 +86,34 @@ st.markdown("""
 
 # Cache functions for performance
 @st.cache_data(ttl=300)  # Cache for 5 minutes
-def get_nba_games_cached(_date_str, data_provider):
+def get_nba_games_cached(_date_str, _data_provider):
     """Cached version of NBA games retrieval"""
-    return data_provider.get_scheduled_games(specific_date=_date_str)
+    return _data_provider.get_scheduled_games(specific_date=_date_str)
 
 @st.cache_resource(ttl=3600)  # Cache for 1 hour
 def initialize_nba_system():
     """Initialize NBA system with caching"""
     try:
-        from data_provider import NBADataProvider
+        # Use new The Odds API provider (Context7 compliant, solves future games issue)
+        try:
+            from data_provider_the_odds_api import NBAOddsDataProvider as NBADataProvider
+            print("✅ The Odds API Data Provider caricato (Context7 Compliant - Future Games)")
+        except ImportError:
+            try:
+                from data_provider_june2025 import NBADataProvider
+                print("✅ June 2025 Data Provider caricato (Live Data API working)")
+            except ImportError:
+                try:
+                    from data_provider_hybrid import NBAHybridDataProvider as NBADataProvider
+                    print("✅ Hybrid Data Provider caricato (The Odds API + NBA API)")
+                except ImportError:
+                    try:
+                        from data_provider import NBADataProvider
+                        print("✅ NBA Data Provider caricato")
+                    except ImportError:
+                        NBADataProvider = None
+                        print("❌ Nessun Data Provider disponibile")
+
         from main import NBACompleteSystem
 
         dp = NBADataProvider()
@@ -187,12 +206,21 @@ def check_system_components():
 
 def format_impact(value):
     """Format impact value with color"""
-    if value > 0:
-        return f'<span class="impact-positive">+{value:.2f}</span>'
-    elif value < 0:
-        return f'<span class="impact-negative">{value:.2f}</span>'
-    else:
-        return f'<span class="impact-neutral">{value:.2f}</span>'
+    try:
+        # Convert to float if it's not already a number
+        if isinstance(value, str):
+            value = float(value)
+        elif value is None:
+            value = 0.0
+
+        if value > 0:
+            return f'<span class="impact-positive">+{value:.2f}</span>'
+        elif value < 0:
+            return f'<span class="impact-negative">{value:.2f}</span>'
+        else:
+            return f'<span class="impact-neutral">{value:.2f}</span>'
+    except (ValueError, TypeError) as e:
+        return f'<span class="impact-neutral">0.00</span>'
 
 def run_advanced_analysis(game, central_line=225.0):
     """Run advanced analysis using NBACompleteSystem"""
@@ -311,19 +339,80 @@ def display_advanced_results(results, game):
         if value_bets:
             st.subheader("🏆 Top Value Bets - Advanced Analysis")
 
+            # Show best bet first with detailed analysis
+            best_bet = value_bets[0]
+            st.markdown(f"""
+            <div class="metric-card">
+                <h3>🎯 <strong>SYSTEM'S TOP PICK</strong></h3>
+                <p><strong>Bet:</strong> {best_bet['type']} {best_bet['line']}</p>
+                <p><strong>Odds:</strong> {best_bet['odds']:.2f}</p>
+                <p><strong>Probability:</strong> {best_bet.get('probability', 0)*100:.1f}%</p>
+                <p><strong>Edge:</strong> {best_bet.get('edge', 0)*100:+.1f}%</p>
+                <p><strong>Quality Score:</strong> {best_bet.get('quality_score', 0)*100:.1f}/100</p>
+                <p><strong>Stake:</strong> €{best_bet.get('stake', 0):.2f}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
             # Create DataFrame for better display
             bet_data = []
-            for bet in value_bets[:10]:  # Top 10 bets
+            for i, bet in enumerate(value_bets[:10]):  # Top 10 bets
                 bet_data.append({
+                    '#': f"{i+1}",
                     'Type': f"{bet['type']} {bet['line']}",
                     'Odds': f"{bet['odds']:.2f}",
                     'Edge': f"{bet.get('edge', 0)*100:+.1f}%",
                     'Probability': f"{bet.get('probability', 0)*100:.1f}%",
-                    'Expected Value': f"{bet.get('expected_value', 0):+.3f}"
+                    'Quality': f"{bet.get('quality_score', 0)*100:.0f}",
+                    'Stake': f"€{bet.get('stake', 0):.2f}"
                 })
 
             df_bets = pd.DataFrame(bet_data)
             st.dataframe(df_bets, use_container_width=True, hide_index=True)
+
+            # Detailed betting analysis section
+            with st.expander("📊 Complete Betting Analysis with Stake Calculation"):
+
+                # Show all value bets with full details
+                st.subheader("💰 All Value Bets - Complete Analysis")
+
+                full_bet_data = []
+                for bet in value_bets:
+                    potential_win = bet.get('stake', 0) * bet['odds']
+                    roi = ((potential_win - bet.get('stake', 0)) / bet.get('stake', 0)) * 100
+
+                    full_bet_data.append({
+                        'Bet Type': f"{bet['type']} {bet['line']}",
+                        'Bookmaker Odds': f"{bet['odds']:.2f}",
+                        'Model Probability': f"{bet.get('probability', 0)*100:.1f}%",
+                        'Implied Probability': f"{(1/bet['odds'])*100:.1f}%",
+                        'Edge': f"{bet.get('edge', 0)*100:+.2f}%",
+                        'Quality Score': f"{bet.get('quality_score', 0)*100:.1f}/100",
+                        'Confidence Score': f"{bet.get('confidence_score', 0)*100:.1f}%",
+                        'Risk Score': f"{bet.get('risk_score', 0)*100:.1f}/100",
+                        'Stake (€)': f"€{bet.get('stake', 0):.2f}",
+                        'Potential Win (€)': f"€{potential_win:.2f}",
+                        'Expected ROI (%)': f"{roi:+.1f}%"
+                    })
+
+                if full_bet_data:
+                    df_full_bets = pd.DataFrame(full_bet_data)
+                    st.dataframe(df_full_bets, use_container_width=True, hide_index=True)
+
+                    # Summary statistics
+                    st.subheader("📈 Betting Portfolio Summary")
+                    total_stake = sum(bet.get('stake', 0) for bet in value_bets)
+                    avg_edge = sum(bet.get('edge', 0) for bet in value_bets) / len(value_bets) * 100
+                    avg_quality = sum(bet.get('quality_score', 0) for bet in value_bets) / len(value_bets) * 100
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Stake", f"€{total_stake:.2f}")
+                    with col2:
+                        st.metric("Average Edge", f"{avg_edge:+.2f}%")
+                    with col3:
+                        st.metric("Average Quality", f"{avg_quality:.1f}/100")
+                    with col4:
+                        st.metric("Value Bets", len(value_bets))
 
     # Advanced analytics section
     with st.expander("📊 Advanced Analytics Details"):
@@ -358,9 +447,29 @@ def display_advanced_results(results, game):
                 components = []
                 for key, value in momentum_data.items():
                     if key != 'total_impact':
+                        # Handle different value types safely
+                        if isinstance(value, (int, float)):
+                            formatted_value = f"{value:+.2f}"
+                        elif isinstance(value, str):
+                            # Try to convert string to float if it looks numeric
+                            try:
+                                numeric_value = float(value)
+                                formatted_value = f"{numeric_value:+.2f}"
+                            except ValueError:
+                                formatted_value = str(value)
+                        elif isinstance(value, dict):
+                            # Handle nested dictionaries
+                            if 'total_impact' in value:
+                                impact_val = value['total_impact']
+                                formatted_value = f"{impact_val:+.2f}" if isinstance(impact_val, (int, float)) else str(impact_val)
+                            else:
+                                # Use a representative value from the dict
+                                formatted_value = "📊 Data"
+                        else:
+                            formatted_value = str(value)
                         components.append({
                             'Component': key.replace('_', ' ').title(),
-                            'Value': f"{value:+.2f}"
+                            'Value': formatted_value
                         })
 
                 if components:

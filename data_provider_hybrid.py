@@ -106,9 +106,15 @@ class NBAHybridDataProvider:
                         # Estrai quote principali
                         main_odds = self._extract_main_odds(game)
 
+                        # Map team names to NBA team IDs
+                        away_team_id = self._get_team_id_by_name(game['away_team'])
+                        home_team_id = self._get_team_id_by_name(game['home_team'])
+
                         processed_game = {
                             'away_team': game['away_team'],
                             'home_team': game['home_team'],
+                            'away_team_id': away_team_id,
+                            'home_team_id': home_team_id,
                             'game_id': f"ODDS_{game.get('id', 'unknown')}",
                             'date': game_date.strftime('%Y-%m-%d'),
                             'time': game_time,
@@ -200,6 +206,35 @@ class NBAHybridDataProvider:
             print(f"      ⚠️ Errore estrazione quote: {e}")
 
         return odds_data
+
+    def _get_team_id_by_name(self, team_name):
+        """
+        Map team name to NBA team ID using the NBA teams database.
+
+        Args:
+            team_name: Full team name (e.g., "Oklahoma City Thunder")
+
+        Returns:
+            int: NBA team ID or None if not found
+        """
+        try:
+            # Try exact match first
+            for team in self.nba_teams_info:
+                if team['full_name'] == team_name:
+                    return team['id']
+
+            # Try partial match (for cases where team names might be slightly different)
+            team_name_lower = team_name.lower()
+            for team in self.nba_teams_info:
+                if team_name_lower in team['full_name'].lower() or team['full_name'].lower() in team_name_lower:
+                    return team['id']
+
+            # If still not found, return None
+            return None
+
+        except Exception as e:
+            print(f"      ⚠️ Errore mapping team {team_name} to ID: {e}")
+            return None
 
     def _get_nba_completed_games(self, days_back=3):
         """
