@@ -207,6 +207,150 @@ nba-predictor-streamlit/
 
 ---
 
+---
+
+## 📋 7-Step Workflow (MANDATORY)
+
+### Step 0: Enforcement Gate
+**Triggers**: >15min, code implementation, architectural decisions, multi-file, Context7 research
+**Flow**: User request → Complexity analysis → IF criteria met → Protocol/Override/Cancel choice
+
+### Step 1: Discussion (MANDATORY)
+- Present problem/objective
+- Discuss trade-offs
+- Obtain consensus
+- **NEW**: Task creation at Step 1 (prevents data loss)
+
+### Step 2: Analysis (MANDATORY)
+- Analyze codebase patterns
+- Identify files to modify
+- Estimate complexity
+- Define acceptance criteria
+
+### Step 3: Research (MANDATORY - Context7)
+- Use Context7 for technical decisions
+- Research best practices
+- Document findings
+- Validate approach
+
+### Step 4: Planning (MANDATORY)
+- Create TodoWrite list (10-15 min micro-tasks)
+- Define dependencies/completion criteria
+- **NEW**: Generate implementation plan (model-specific)
+
+### Step 5: Approval (MANDATORY + Strategic Choice)
+- Present complete plan + Context7 findings
+- Obtain explicit approval
+- **NEW**: Choose implementation model:
+  - **Option A**: Continue with Sonnet 4.5 (architectural)
+  - **Option B**: Handoff to GLM-4.6 (execution, ~70% cost savings)
+
+### Step 6: Implementation (MANDATORY)
+- One micro-task at a time
+- Mark "in_progress" → work → "completed"
+- Document with docstrings + type hints
+
+### Step 7: Verification (MANDATORY)
+- Tests for EVERY feature
+- 95%+ coverage requirement
+- Validate performance
+- E2E integration tests
+- Error handling verification
+
+---
+
+## 📄 Task Lifecycle
+
+### Creation (Step 1 - MANDATORY)
+**When**: Work >15 min OR code/architecture/research
+**Process**:
+- `task_first_handler.py` enforces at Step 1
+- Automatic complexity detection
+- Interactive enforcement gate
+- Use `get_direct_client().create_task()`
+- Define: title, description, task_type, priority (1-10), phase_name
+- Draft cleanup: >7 days auto-archived
+
+### Execution
+- Mark "active" via `get_direct_client().update_task()`
+- Follow 7-step workflow
+- Update progress continuously
+- Register decisions/learnings
+- TodoWrite real-time tracking
+
+### Completion
+- Verify TodoWrite "completed"
+- Tests 100% pass
+- Mark "completed"
+- Register lessons learned
+- Commit and push (if requested)
+
+---
+
+## 💾 Memory System
+
+### Automatic Storage (PostToolUse Hook)
+**When**: After EVERY tool execution
+**Content Types**: code, documentation, context, output, error, decision, learning
+**Process**: Automatic
+1. PostToolUse hook
+2. Content preview (300 chars)
+3. Keywords extraction
+4. Vector embeddings (Ollama)
+5. SQLite + sqlite-vec storage
+
+### Memory Search (PreToolUse Hook)
+**Flow**:
+1. Detect libraries (Context7)
+2. Search DevStream memory
+3. Assemble hybrid context
+4. Inject in Claude context
+5. Token budget management
+**Algorithm**: Hybrid search (semantic + keyword) via RRF
+**Threshold**: 0.5 relevance
+**Token Budget**: Context7 5000 + Memory 2000
+
+### Manual Operations (OPTIONAL)
+**MANDATORY Access Pattern**:
+```python
+from .claude.hooks.devstream.utils.direct_client import get_direct_client
+client = get_direct_client()
+```
+
+**Direct DB Tools**:
+- `get_direct_client().store_memory()` (content, content_type, keywords)
+- `get_direct_client().search_memory()` (query, content_type, limit)
+
+---
+
+## 📝 Context Injection
+
+### Context7 Integration (PreToolUse Hook)
+**Triggers**: Import statements, library mentions, code patterns, documentation requests
+**Process**: Automatic
+1. Context7 detect
+2. Retrieve docs via `mcp__context7__get-library-docs`
+3. Inject (max 5000 tokens)
+4. Priority ordering (official docs > examples > best practices)
+
+### DevStream Memory Context (PreToolUse Hook)
+**Priority Order**:
+1. Context7 Documentation (5000 tokens)
+2. DevStream Memory (2000 tokens - related code/decisions)
+3. Current File Context (remaining budget)
+
+**Config** (.env.devstream):
+```bash
+DEVSTREAM_CONTEXT7_ENABLED=true
+DEVSTREAM_CONTEXT7_AUTO_DETECT=true
+DEVSTREAM_CONTEXT7_TOKEN_BUDGET=5000
+DEVSTREAM_CONTEXT_INJECTION_ENABLED=true
+DEVSTREAM_CONTEXT_MAX_TOKENS=2000
+DEVSTREAM_CONTEXT_RELEVANCE_THRESHOLD=0.5
+```
+
+---
+
 <project_metadata>
 **Project**: nba-predictor-streamlit
 **Type**: Python Project
