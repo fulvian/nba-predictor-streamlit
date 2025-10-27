@@ -94,22 +94,22 @@ def get_nba_games_cached(_date_str, _data_provider):
 def initialize_nba_system():
     """Initialize NBA system with caching"""
     try:
-        # Use new The Odds API provider (Context7 compliant, solves future games issue)
+        # Use our corrected data provider first (with team ID support)
         try:
-            from data_provider_the_odds_api import NBAOddsDataProvider as NBADataProvider
-            print("✅ The Odds API Data Provider caricato (Context7 Compliant - Future Games)")
+            from data_provider import NBADataProvider
+            print("✅ NBA Data Provider con Team ID caricato (Corrected)")
         except ImportError:
             try:
-                from data_provider_june2025 import NBADataProvider
-                print("✅ June 2025 Data Provider caricato (Live Data API working)")
+                from data_provider_hybrid import NBAHybridDataProvider as NBADataProvider
+                print("✅ Hybrid Data Provider caricato (The Odds API + NBA API)")
             except ImportError:
                 try:
-                    from data_provider_hybrid import NBAHybridDataProvider as NBADataProvider
-                    print("✅ Hybrid Data Provider caricato (The Odds API + NBA API)")
+                    from data_provider_the_odds_api import NBAOddsDataProvider as NBADataProvider
+                    print("✅ The Odds API Data Provider caricato (Context7 Compliant - Future Games)")
                 except ImportError:
                     try:
-                        from data_provider import NBADataProvider
-                        print("✅ NBA Data Provider caricato")
+                        from data_provider_june2025 import NBADataProvider
+                        print("✅ June 2025 Data Provider caricato (Live Data API working)")
                     except ImportError:
                         NBADataProvider = None
                         print("❌ Nessun Data Provider disponibile")

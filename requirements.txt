@@ -1,42 +1,58 @@
-# NBA Predictor Streamlit - Requirements
-# Core dependencies
+# NBA Predictor Streamlit - Core Requirements
+# Generated from pyproject.toml dependencies
+# Install with: pip install -r requirements.txt
+
+# Core Streamlit and web framework
 streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.15.0
-
-# NBA API and data
-nba-api>=1.1.0
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-
-# Machine Learning
-scikit-learn>=1.3.0
-joblib>=1.3.0
-
-# Data processing
-lxml>=4.9.0
-html5lib>=1.1
-
-# Utilities
-python-dateutil>=2.8.0
-pytz>=2023.3
-python-dotenv>=1.0.0
-
-# Streamlit Cloud optimizations
 gunicorn>=21.0.0
 watchdog>=3.0.0
 
-# Additional dependencies for cloud deployment
+# Modern data processing and analytics
+polars>=1.0.0
+duckdb>=0.9.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization and plotting
+plotly>=5.15.0
+seaborn>=0.12.0
+matplotlib>=3.7.0
+
+# HTTP clients and API integration
+httpx>=0.24.0
+requests>=2.31.0
+
+# NBA API and data sources
+nba-api>=1.1.0
+
+# Web scraping and HTML processing
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+html5lib>=1.1
+selenium>=4.15.0
+
+# Machine learning and analytics
+scikit-learn>=1.3.0
+joblib>=1.3.0
+shap>=0.42.0
+xgboost>=1.7.0
+
+# Data utilities
+python-dateutil>=2.8.0
+pytz>=2023.3
+python-dotenv>=1.0.0
 packaging>=23.0
 protobuf>=4.21.0
 
-# Sistema di monitoraggio quote avanzato
-apscheduler>=3.10.0
-python-telegram-bot>=20.0
+# Database and async support
 sqlalchemy>=2.0.0
+apscheduler>=3.10.0
 
-# Per scraping dei dati di consenso
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-selenium>=4.15.0  # Per scraping dinamico se necessario
+# Monitoring and notifications
+python-telegram-bot>=20.0
+
+# Legacy dependencies - kept for compatibility
+# Some older scripts may still use these
+# pandas>=2.0.0 (already covered above)
+# numpy>=1.24.0 (already covered above)
+# plotly>=5.15.0 (already covered above)
