@@ -36,18 +36,30 @@ class TestNBAIntegration:
 
     def test_prediction_request_model(self):
         """Test prediction request Pydantic model."""
-        request = PredictionRequest(
-            game_id="test123",
+        from api.nba_prediction_api import GameData
+
+        # Create game data first with current season
+        game_data = GameData(
             home_team_id=1610612747,
             away_team_id=1610612744,
-            season="2024-25",
+            home_team_name="Los Angeles Lakers",
+            away_team_name="Golden State Warriors",
+            season="2025-26",
             game_date=date.today().isoformat()
         )
 
-        assert request.game_id == "test123"
-        assert request.home_team_id == 1610612747
-        assert request.away_team_id == 1610612744
-        assert request.season == "2024-25"
+        # Create prediction request with game data
+        request = PredictionRequest(
+            game=game_data,
+            prediction_type="classification",
+            include_shap=False
+        )
+
+        assert request.game.home_team_id == 1610612747
+        assert request.game.away_team_id == 1610612744
+        assert request.game.season == "2025-26"
+        assert request.prediction_type == "classification"
+        assert request.include_shap == False
 
     def test_game_data_model(self):
         """Test game data Pydantic model."""
@@ -55,13 +67,17 @@ class TestNBAIntegration:
             home_team_id=1610612747,
             away_team_id=1610612744,
             home_team_name="Los Angeles Lakers",
-            away_team_name="Golden State Warriors"
+            away_team_name="Golden State Warriors",
+            season="2025-26",
+            game_date=date.today().isoformat()
         )
 
         assert game_data.home_team_id == 1610612747
         assert game_data.away_team_id == 1610612744
         assert game_data.home_team_name == "Los Angeles Lakers"
         assert game_data.away_team_name == "Golden State Warriors"
+        assert game_data.season == "2025-26"
+        assert game_data.game_date == date.today().isoformat()
 
     def test_api_instantiation(self):
         """Test API instantiation."""

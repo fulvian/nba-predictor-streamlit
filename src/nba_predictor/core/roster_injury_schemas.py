@@ -6,7 +6,7 @@ Context7-compliant Pydantic models for comprehensive roster, injury, and lineup 
 
 from datetime import date, datetime
 from typing import Optional, List, Dict, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 from enum import Enum
 
 
@@ -110,7 +110,8 @@ class RosterInfo(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
     source: str = Field(..., description="Data source")
 
-    @validator('salary')
+    @field_validator('salary')
+    @classmethod
     def validate_salary(cls, v):
         if v is not None and v < 0:
             raise ValueError("Salary must be non-negative")
@@ -140,7 +141,8 @@ class InjuryInfo(BaseModel):
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="Data confidence score")
     notes: Optional[str] = Field(None, description="Additional injury notes")
 
-    @validator('availability_probability')
+    @field_validator('availability_probability')
+    @classmethod
     def validate_probability(cls, v):
         if v is not None and (v < 0.0 or v > 1.0):
             raise ValueError("Availability probability must be between 0.0 and 1.0")
@@ -219,7 +221,8 @@ class TeamRoster(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now, description="Last update timestamp")
     source: str = Field(..., description="Data source")
 
-    @validator('players')
+    @field_validator('players')
+    @classmethod
     def validate_players_unique(cls, v):
         player_ids = [p.player_id for p in v]
         if len(player_ids) != len(set(player_ids)):
