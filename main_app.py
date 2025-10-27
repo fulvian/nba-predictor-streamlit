@@ -15,8 +15,16 @@ if str(src_path) not in sys.path:
 # Import Streamlit and the data provider
 import streamlit as st
 from datetime import date, datetime
-from data_provider import NBADataProvider
-from nba_timezone_utils import NBATimezoneManager, generate_nba_schedule_fallback
+try:
+    from data_provider import NBADataProvider
+except ImportError:
+    NBADataProvider = None
+try:
+    from nba_timezone_utils import NBATimezoneManager, generate_nba_schedule_fallback
+except ImportError:
+    NBATimezoneManager = None
+    generate_nba_schedule_fallback = None
+# from mock_data_provider import create_nba_data_provider  # Disabilitato - usiamo solo API reali
 
 def create_modern_dashboard():
     """Create a modern dashboard that uses the backend data provider."""
@@ -29,11 +37,12 @@ def create_modern_dashboard():
         initial_sidebar_state="expanded"
     )
 
-    # Initialize data provider
+    # Initialize data provider - SOLO API REALI
     try:
         data_provider = NBADataProvider()
+        st.success("✅ Connected to BallDontLie API for real NBA games")
     except Exception as e:
-        st.error(f"❌ Failed to initialize data provider: {e}")
+        st.error(f"❌ Failed to initialize NBA data provider: {e}")
         st.stop()
 
     # Sidebar with navigation
@@ -73,8 +82,25 @@ def render_games_schedule_with_date_range(data_provider):
     st.header("📅 NBA Games Schedule")
     st.caption("Real NBA games from official schedule with BallDontLie API")
 
-    # Initialize timezone manager
-    tz_manager = NBATimezoneManager()
+    # Initialize timezone manager with fallback
+    if NBATimezoneManager:
+        tz_manager = NBATimezoneManager()
+    else:
+        # Simple timezone fallback
+        from dateutil import tz
+        class SimpleTimezoneManager:
+            def convert_utc_to_local(self, utc_dt, team_name):
+                eastern = tz.gettz('America/New_York')
+                local_dt = utc_dt.astimezone(eastern)
+                return local_dt, 'Eastern (Fallback)'
+
+            def get_game_times_by_timezone(self, utc_dt):
+                return {
+                    'UTC': utc_dt.strftime('%H:%M UTC'),
+                    'Eastern': utc_dt.astimezone(tz.gettz('America/New_York')).strftime('%H:%M ET'),
+                    'Pacific': utc_dt.astimezone(tz.gettz('America/Los_Angeles')).strftime('%H:%M PT')
+                }
+        tz_manager = SimpleTimezoneManager()
 
     # Date range selection options
     st.subheader("📆 Date Selection")
@@ -173,12 +199,44 @@ def render_games_schedule_with_date_range(data_provider):
                         enhanced_game['home_local_time'] = game.get('time', 'Unknown')
                         processed_games.append(enhanced_game)
 
-                # Filter games by selected date (using UTC dates - primary filter)
+                # Filter games by selected date (NBA schedule date filtering)
                 selected_date_str = selected_date.strftime('%Y-%m-%d')
-                selected_games = [
-                    game for game in processed_games
-                    if game.get('utc_date') == selected_date_str
+
+                # Primary filtering: use original NBA schedule date from 'date' field
+                # This ensures we show all NBA games scheduled for that calendar day
+                nba_schedule_games = [
+                    game for game in games
+                    if game.get('date') == selected_date_str
                 ]
+
+                # Secondary filtering: also check processed games for timezone matches
+                selected_games = []
+                for game in processed_games:
+                    game_date = game.get('date')  # Original NBA date
+                    game_utc_date = game.get('utc_date')
+                    game_local_date = game.get('local_date')
+
+                    # Include if matches NBA schedule date OR timezone-processed dates
+                    if (game_date == selected_date_str or
+                        game_utc_date == selected_date_str or
+                        game_local_date == selected_date_str):
+                        selected_games.append(game)
+
+                # Remove duplicates (some games might match multiple criteria)
+                unique_games = []
+                seen_ids = set()
+                for game in selected_games:
+                    game_id = game.get('game_id')
+                    if game_id and game_id not in seen_ids:
+                        unique_games.append(game)
+                        seen_ids.add(game_id)
+                selected_games = unique_games
+
+                # Debug info
+                matching_schedule = len(nba_schedule_games)
+                matching_processed = len(selected_games)
+                st.write(f"🏀 **NBA schedule date**: {matching_schedule} games")
+                st.write(f"🎯 **Total unique games**: {matching_processed} games")
 
                 # Show comprehensive debug info
                 st.info(f"📊 **Data Source**: {data_source}")

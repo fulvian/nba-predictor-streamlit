@@ -230,29 +230,29 @@ class NBABallDontLieClient:
             game_time = ""
             game_time_utc = ""
 
+            # IMPORTANT: Always use original NBA schedule date, not UTC date
+            # NBA games scheduled for Oct 27 might have UTC timestamps of Oct 28
+            if hasattr(bdl_game, 'date'):
+                game_date = bdl_game.date[:10]  # Original NBA schedule date
+
             # Use the status field for accurate UTC timestamps (contains datetime from API)
             if hasattr(bdl_game, 'status') and bdl_game.status and 'T' in bdl_game.status:
                 # BallDontLie provides UTC timestamp in status field like "2025-10-27T23:00:00Z"
                 datetime_str = bdl_game.status
                 try:
-                    # Parse the UTC datetime
+                    # Parse the UTC datetime for time information
                     dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
-                    game_date = dt.date().strftime('%Y-%m-%d')
                     game_time = dt.strftime('%H:%M')
                     game_time_utc = dt.isoformat()
                     self.logger.debug(f"✅ Parsed UTC datetime: {datetime_str} -> {game_date} {game_time}")
                 except Exception as e:
                     self.logger.warning(f"⚠️ Error parsing status datetime {datetime_str}: {e}")
-                    # Fallback to date field if datetime parsing fails
-                    if hasattr(bdl_game, 'date'):
-                        game_date = bdl_game.date[:10]
-            elif hasattr(bdl_game, 'date'):
-                # Fallback to date field if status field doesn't contain datetime
-                date_str = bdl_game.date
-                self.logger.warning(f"⚠️ Using fallback date field: {date_str}")
-                game_date = date_str[:10]  # Just the date part
+                    game_time = "00:00"  # Default time
+                    game_time_utc = f"{game_date}T00:00:00Z"
+            else:
+                # Fallback time information
                 game_time = "00:00"  # Default time
-                game_time_utc = f"{date_str}T00:00:00Z"
+                game_time_utc = f"{game_date}T00:00:00Z"
 
             # Build standardized game object
             nba_game: Dict[str, Any] = {

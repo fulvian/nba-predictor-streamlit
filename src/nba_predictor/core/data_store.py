@@ -468,6 +468,208 @@ class UnifiedDataStore:
                 extra={"error": str(e), "table_name": table_name}
             )
 
+    def store_player_stats(self, player_stats_df: pl.DataFrame, date_str: str) -> str:
+        """
+        Store NBA player statistics in Parquet format.
+
+        Args:
+            player_stats_df: Polars DataFrame containing player statistics
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            Path to stored Parquet file
+
+        Raises:
+            ValidationError: If DataFrame schema is invalid
+            DatabaseError: If storage operation fails
+        """
+        if player_stats_df is None or player_stats_df.height == 0:
+            raise ValidationError("Player stats DataFrame is empty or None")
+
+        try:
+            # Validate required columns
+            required_columns = {'player_id', 'player_name', 'team_id'}
+            missing_columns = required_columns - set(player_stats_df.columns)
+
+            if missing_columns:
+                logger.warning(f"Missing optional columns in player stats: {missing_columns}")
+
+            # Create file path
+            file_path = self.players_dir / f"player_stats_{date_str}.parquet"
+
+            # Ensure directory exists
+            self.players_dir.mkdir(parents=True, exist_ok=True)
+
+            # Store as Parquet
+            player_stats_df.write_parquet(file_path, compression="snappy")
+
+            # Update metadata
+            self._update_metadata("player_stats", date_str, len(player_stats_df))
+
+            logger.info(f"Stored player stats for {len(player_stats_df)} players to {file_path}")
+            return str(file_path)
+
+        except Exception as e:
+            logger.error(f"Failed to store player stats: {e}")
+            raise DatabaseError(f"Failed to store player stats: {e}") from e
+
+    def store_team_stats(self, team_stats_df: pl.DataFrame, date_str: str) -> str:
+        """
+        Store NBA team statistics in Parquet format.
+
+        Args:
+            team_stats_df: Polars DataFrame containing team statistics
+            date_str: Date string in YYYY-MM-DD format
+
+        Returns:
+            Path to stored Parquet file
+
+        Raises:
+            ValidationError: If DataFrame schema is invalid
+            DatabaseError: If storage operation fails
+        """
+        if team_stats_df is None or team_stats_df.height == 0:
+            raise ValidationError("Team stats DataFrame is empty or None")
+
+        try:
+            # Validate required columns
+            required_columns = {'team_id', 'team_name'}
+            missing_columns = required_columns - set(team_stats_df.columns)
+
+            if missing_columns:
+                logger.warning(f"Missing optional columns in team stats: {missing_columns}")
+
+            # Create file path
+            file_path = self.teams_dir / f"team_stats_{date_str}.parquet"
+
+            # Ensure directory exists
+            self.teams_dir.mkdir(parents=True, exist_ok=True)
+
+            # Store as Parquet
+            team_stats_df.write_parquet(file_path, compression="snappy")
+
+            # Update metadata
+            self._update_metadata("team_stats", date_str, len(team_stats_df))
+
+            logger.info(f"Stored team stats for {len(team_stats_df)} teams to {file_path}")
+            return str(file_path)
+
+        except Exception as e:
+            logger.error(f"Failed to store team stats: {e}")
+            raise DatabaseError(f"Failed to store team stats: {e}") from e
+
+    def get_player_stats(self, date_range: Optional[tuple[str, str]] = None) -> pl.DataFrame:
+        """
+        Retrieve player statistics from persistent storage.
+
+        Args:
+            date_range: Optional tuple of (start_date, end_date) in YYYY-MM-DD format
+
+        Returns:
+            Polars DataFrame containing player statistics
+        """
+        try:
+            if date_range:
+                start_date, end_date = date_range
+                pattern = f"player_stats_*.parquet"
+
+                # Get all player stats files
+                files = list(self.players_dir.glob(pattern))
+
+                # Filter by date range
+                valid_files = []
+                for file_path in files:
+                    file_date = file_path.stem.replace("player_stats_", "")
+                    try:
+                        file_date_dt = datetime.strptime(file_date, "%Y-%m-%d").date()
+                        if start_date <= file_date_dt <= end_date:
+                            valid_files.append(file_path)
+                    except ValueError:
+                        continue
+
+                if not valid_files:
+                    return pl.DataFrame()
+
+                # Read and combine all valid files
+                dfs = []
+                for file_path in valid_files:
+                    try:
+                        df = pl.read_parquet(file_path)
+                        dfs.append(df)
+                    except Exception as e:
+                        logger.warning(f"Failed to read {file_path}: {e}")
+
+                if dfs:
+                    return pl.concat(dfs)
+
+            # If no date range, get most recent
+            most_recent_file = max(self.players_dir.glob("player_stats_*.parquet"),
+                                  key=lambda x: x.stat().st_mtime, default=None)
+            if most_recent_file:
+                return pl.read_parquet(most_recent_file)
+
+            return pl.DataFrame()
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve player stats: {e}")
+            return pl.DataFrame()
+
+    def get_team_stats(self, date_range: Optional[tuple[str, str]] = None) -> pl.DataFrame:
+        """
+        Retrieve team statistics from persistent storage.
+
+        Args:
+            date_range: Optional tuple of (start_date, end_date) in YYYY-MM-DD format
+
+        Returns:
+            Polars DataFrame containing team statistics
+        """
+        try:
+            if date_range:
+                start_date, end_date = date_range
+                pattern = f"team_stats_*.parquet"
+
+                # Get all team stats files
+                files = list(self.teams_dir.glob(pattern))
+
+                # Filter by date range
+                valid_files = []
+                for file_path in files:
+                    file_date = file_path.stem.replace("team_stats_", "")
+                    try:
+                        file_date_dt = datetime.strptime(file_date, "%Y-%m-%d").date()
+                        if start_date <= file_date_dt <= end_date:
+                            valid_files.append(file_path)
+                    except ValueError:
+                        continue
+
+                if not valid_files:
+                    return pl.DataFrame()
+
+                # Read and combine all valid files
+                dfs = []
+                for file_path in valid_files:
+                    try:
+                        df = pl.read_parquet(file_path)
+                        dfs.append(df)
+                    except Exception as e:
+                        logger.warning(f"Failed to read {file_path}: {e}")
+
+                if dfs:
+                    return pl.concat(dfs)
+
+            # If no date range, get most recent
+            most_recent_file = max(self.teams_dir.glob("team_stats_*.parquet"),
+                                  key=lambda x: x.stat().st_mtime, default=None)
+            if most_recent_file:
+                return pl.read_parquet(most_recent_file)
+
+            return pl.DataFrame()
+
+        except Exception as e:
+            logger.error(f"Failed to retrieve team stats: {e}")
+            return pl.DataFrame()
+
     def get_metadata(self) -> pl.DataFrame:
         """
         Retrieve metadata about stored data.

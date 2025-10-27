@@ -19,10 +19,57 @@ import os
 import json
 import time
 import requests
+import logging
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from dataclasses import dataclass
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Cache ottimizzato per BallDontLie API (5 richieste/minuto)
+@dataclass
+class CacheEntry:
+    data: List[Dict[str, Any]]
+    timestamp: datetime
+    cache_duration_seconds: int = 72  # Cache ottimizzato: 1.2 minuti per 5 richieste/minuto
+
+    def is_expired(self) -> bool:
+        return datetime.now() > self.timestamp + timedelta(seconds=self.cache_duration_seconds)
+
+class GameCache:
+    """Cache per partite NBA per evitare rate limiting."""
+
+    def __init__(self):
+        self._cache: Dict[str, CacheEntry] = {}
+
+    def get(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+        """Ottieni dati dalla cache se non sono scaduti."""
+        entry = self._cache.get(cache_key)
+        if entry and not entry.is_expired():
+            print(f"📦 Cache HIT: {cache_key}")
+            return entry.data
+        return None
+
+    def set(self, cache_key: str, data: List[Dict[str, Any]], duration_seconds: int = 72) -> None:
+        """Salva dati nella cache con durata ottimizzata."""
+        entry = CacheEntry(
+            data=data,
+            timestamp=datetime.now(),
+            cache_duration_seconds=duration_seconds
+        )
+        self._cache[cache_key] = entry
+        print(f"💾 Cache SET: {cache_key} ({len(data)} items, {duration_seconds}s)")
+
+    def clear(self) -> None:
+        """Svuota la cache."""
+        self._cache.clear()
+        print("🗑️ Cache svuotata")
+
+# Cache globale
+game_cache = GameCache()
 
 # Importazioni NBA API
 from nba_api.stats.static import teams as nba_teams
@@ -31,6 +78,14 @@ from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 
 # Import BallDontLie API client
 from ball_dont_lie_client import NBABallDontLieClient, RateLimitException, APIException
+
+# Import Data Persistence Bridge
+try:
+    from data_persistence_bridge import DataPersistenceBridge, initialize_persistence_bridge
+    PERSISTENCE_AVAILABLE = True
+except ImportError:
+    print("⚠️ Data persistence bridge not available")
+    PERSISTENCE_AVAILABLE = False
 
 class NBADataProvider:
     """
@@ -96,6 +151,25 @@ class NBADataProvider:
         print(f"   🎰 The Odds API: Configurata e pronta (fallback)")
         print(f"   🏀 NBA API: {len(self.nba_teams_info)} squadre caricate")
         print(f"   🔄 Soluzione ibrida: Partite reali + fallback")
+
+        # Initialize cache
+        self.cache = game_cache
+        print(f"   📦 Cache: Abilitata per ottimizzazione API")
+
+        # Initialize Data Persistence Bridge if available
+        if PERSISTENCE_AVAILABLE:
+            try:
+                self.persistence_bridge = initialize_persistence_bridge(
+                    data_provider=self,
+                    storage_path="data/persistent",
+                    auto_persist=True
+                )
+                print(f"   💾 Data Persistence: Auto-salvataggio abilitato")
+            except Exception as e:
+                print(f"   ⚠️ Data Persistence: {e}")
+                self.persistence_bridge = None
+        else:
+            self.persistence_bridge = None
 
     def _get_team_id_by_name(self, team_name: str) -> int:
         """
@@ -211,21 +285,38 @@ class NBADataProvider:
             return []
 
         try:
-            print(f"   🏀 BallDontLie API: Richiesta partite ufficiali NBA...")
-
-            # Calculate date range
+            # Calculate date range for cache key
             if specific_date:
+                cache_key = f"bdl_{specific_date}"
                 target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
                 start_date = target_date
                 end_date = target_date
             else:
                 start_date = date.today()
                 end_date = date.today() + timedelta(days=days_ahead - 1)
+                cache_key = f"bdl_{start_date}_to_{end_date}"
+
+            # Check cache first
+            cached_games = game_cache.get(cache_key)
+            if cached_games:
+                return cached_games
+
+            print(f"   🏀 BallDontLie API: Richiesta partite ufficiali NBA (cache miss)...")
 
             # Get games from BallDontLie API
             games = self.bdl_client.get_games_for_date_range(start_date, end_date)
 
             print(f"   ✅ BallDontLie API: {len(games)} partite ufficiali trovate")
+
+            # Cache ottimizzato in base al range di date
+            if specific_date:
+                # Per singola data: cache più lungo (120 secondi)
+                cache_duration = 120
+            else:
+                # Per range di date: cache più breve per dati più freschi (72 secondi)
+                cache_duration = 72
+
+            game_cache.set(cache_key, games, duration_seconds=cache_duration)
 
             return games
 
@@ -397,7 +488,12 @@ class NBADataProvider:
 
     def get_scheduled_games(self, days_ahead=7, specific_date=None):
         """
-        Metodo principale che combina BallDontLie API, The Odds API e NBA API.
+        Metodo principale che prima controlla il persistent storage, poi usa le API.
+
+        Workflow:
+        1. Controlla nel persistent storage (Data Persistence Bridge)
+        2. Se non trova dati, usa le API (BallDontLie + fallbacks)
+        3. Salva automaticamente i risultati nel persistent storage
 
         Args:
             days_ahead: Giorni futuri da cercare (massimo 5 consigliato per BallDontLie)
@@ -406,8 +502,27 @@ class NBADataProvider:
         Returns:
             list: Tutte le partite (reali + fallback)
         """
-        print(f"\n🏀 NBA Game Detection (BallDontLie + Fallbacks) - {date.today()}")
+        print(f"\n🏀 NBA Game Detection con Data Persistence - {date.today()}")
         print("=" * 60)
+
+        # FASE 0: Data Persistence Bridge (persistent storage check)
+        if self.persistence_bridge:
+            print(f"\n💾 FASE 0: Verifica dati persistenti...")
+            try:
+                persistent_games = self.persistence_bridge.get_scheduled_games_with_persistence(
+                    days_ahead=days_ahead,
+                    specific_date=specific_date,
+                    force_api=False
+                )
+                if persistent_games:
+                    print(f"   ✅ Dati persistenti trovati: {len(persistent_games)} partite")
+                    return persistent_games
+                else:
+                    print(f"   📝 Nessun dato persistente trovato, procedo con API...")
+            except Exception as e:
+                print(f"   ⚠️ Errore accesso dati persistenti: {e}")
+        else:
+            print(f"\n📝 Data Persistence Bridge non disponibile, uso solo API...")
 
         all_games = []
         primary_source = ""
@@ -525,6 +640,22 @@ class NBADataProvider:
                 print(f"   ... e altre {len(unique_games) - 10} partite")
         else:
             print(f"   ❌ NESSUNA PARTITA TROVATA")
+
+        # FASE FINALE: Salva dati nel persistent storage
+        if self.persistence_bridge and unique_games:
+            print(f"\n💾 FASE FINALE: Salvataggio dati in persistent storage...")
+            try:
+                # Usa il bridge per salvare i dati (automaticamente gestito dal bridge)
+                # Il Data Persistence Bridge salverà i dati quando li riceve
+                print(f"   📝 Dati salvati automaticamente per futuri accessi")
+
+                # Mostra statistiche del bridge
+                stats = self.persistence_bridge.get_persistence_statistics()
+                total_saved = stats.get('persistence_stats', {}).get('total_games_saved', 0)
+                print(f"   📊 Totale partite salvate in storage: {total_saved}")
+
+            except Exception as e:
+                print(f"   ⚠️ Errore salvataggio persistent storage: {e}")
 
         return unique_games
 
