@@ -230,18 +230,29 @@ class NBABallDontLieClient:
             game_time = ""
             game_time_utc = ""
 
-            if hasattr(bdl_game, 'date'):
-                # BallDontLie provides date in format like "2025-10-27T19:00:00Z"
-                date_str = bdl_game.date
+            # Use the status field for accurate UTC timestamps (contains datetime from API)
+            if hasattr(bdl_game, 'status') and bdl_game.status and 'T' in bdl_game.status:
+                # BallDontLie provides UTC timestamp in status field like "2025-10-27T23:00:00Z"
+                datetime_str = bdl_game.status
                 try:
-                    # Parse the datetime
-                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    # Parse the UTC datetime
+                    dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
                     game_date = dt.date().strftime('%Y-%m-%d')
                     game_time = dt.strftime('%H:%M')
                     game_time_utc = dt.isoformat()
+                    self.logger.debug(f"✅ Parsed UTC datetime: {datetime_str} -> {game_date} {game_time}")
                 except Exception as e:
-                    self.logger.warning(f"⚠️ Error parsing date {date_str}: {e}")
-                    game_date = date_str[:10]  # Fallback to date part only
+                    self.logger.warning(f"⚠️ Error parsing status datetime {datetime_str}: {e}")
+                    # Fallback to date field if datetime parsing fails
+                    if hasattr(bdl_game, 'date'):
+                        game_date = bdl_game.date[:10]
+            elif hasattr(bdl_game, 'date'):
+                # Fallback to date field if status field doesn't contain datetime
+                date_str = bdl_game.date
+                self.logger.warning(f"⚠️ Using fallback date field: {date_str}")
+                game_date = date_str[:10]  # Just the date part
+                game_time = "00:00"  # Default time
+                game_time_utc = f"{date_str}T00:00:00Z"
 
             # Build standardized game object
             nba_game: Dict[str, Any] = {
@@ -250,9 +261,10 @@ class NBABallDontLieClient:
                 'away_team_id': away_team.id if hasattr(away_team, 'id') else 0,
                 'home_team_id': home_team.id if hasattr(home_team, 'id') else 0,
                 'game_id': f"BDL_{bdl_game.id}" if hasattr(bdl_game, 'id') else f"BDL_unknown",
-                'date': game_date,
-                'time': game_time,
+                'date': game_date,  # UTC date from datetime field
+                'time': game_time,  # UTC time from datetime field
                 'time_utc': game_time_utc,
+                'utc_datetime': game_time_utc,  # For main app timezone processing
                 'status': status,
                 'score': score,
                 'away_score': bdl_game.visitor_team_score if hasattr(bdl_game, 'visitor_team_score') else 0,

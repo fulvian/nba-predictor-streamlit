@@ -145,13 +145,15 @@ def render_games_schedule_with_date_range(data_provider):
                         home_local, home_tz = tz_manager.convert_utc_to_local(utc_dt, game['home_team'])
                         away_local, away_tz = tz_manager.convert_utc_to_local(utc_dt, game['away_team'])
 
-                        # Use home team's local date for filtering
+                        # Use UTC date for primary filtering (matches user expectation)
+                        utc_date = utc_dt.date().strftime('%Y-%m-%d')
                         local_date = home_local.strftime('%Y-%m-%d')
 
                         # Enhance game data with timezone info
                         enhanced_game = game.copy()
                         enhanced_game.update({
-                            'local_date': local_date,
+                            'utc_date': utc_date,  # Use for primary filtering
+                            'local_date': local_date,  # Display local time info
                             'home_local_time': home_local.strftime('%H:%M'),
                             'away_local_time': away_local.strftime('%H:%M'),
                             'home_timezone': home_tz,
@@ -166,40 +168,49 @@ def render_games_schedule_with_date_range(data_provider):
                         print(f"⚠️ Error processing game {game.get('game_id', 'unknown')}: {e}")
                         # Still add original game if timezone processing fails
                         enhanced_game = game.copy()
+                        enhanced_game['utc_date'] = game.get('date', '')  # Use original date
                         enhanced_game['local_date'] = game.get('date', '')
                         enhanced_game['home_local_time'] = game.get('time', 'Unknown')
                         processed_games.append(enhanced_game)
 
-                # Filter games by selected date (using local dates)
+                # Filter games by selected date (using UTC dates - primary filter)
                 selected_date_str = selected_date.strftime('%Y-%m-%d')
                 selected_games = [
                     game for game in processed_games
-                    if game.get('local_date') == selected_date_str
+                    if game.get('utc_date') == selected_date_str
                 ]
 
                 # Show comprehensive debug info
                 st.info(f"📊 **Data Source**: {data_source}")
                 st.write(f"🎯 **Looking for games on**: {selected_date_str}")
 
-                # Show available dates
+                # Show available dates (both UTC and local)
                 if processed_games:
-                    available_dates = sorted(set(game.get('local_date') for game in processed_games))
-                    st.write(f"📅 **Available dates**: {', '.join(available_dates)}")
+                    utc_dates = sorted(set(game.get('utc_date') for game in processed_games if game.get('utc_date')))
+                    local_dates = sorted(set(game.get('local_date') for game in processed_games if game.get('local_date')))
+                    st.write(f"📅 **Available UTC dates**: {', '.join(utc_dates)}")
+                    if local_dates != utc_dates:
+                        st.write(f"🌍 **Available local dates**: {', '.join(local_dates)}")
 
                 if selected_games:
-                    st.success(f"🏀 Found {len(selected_games)} games for {selected_date}")
+                    st.success(f"🏀 Found {len(selected_games)} games for {selected_date} (UTC)")
 
                     for game in selected_games:
-                        with st.expander(f"🏀 {game['away_team']} @ {game['home_team']} - {game.get('home_local_time', game['time'])}", expanded=True):
+                        # Display both UTC time and local time
+                        display_time = game.get('home_local_time', game.get('time', 'Unknown'))
+                        utc_time_info = game.get('time_utc', 'Unknown')
+
+                        with st.expander(f"🏀 {game['away_team']} @ {game['home_team']} - {display_time} (Local)", expanded=True):
                             col1, col2 = st.columns(2)
 
                             with col1:
                                 st.write("**📅 Game Details:**")
-                                st.write(f"• **Date**: {game.get('local_date', game.get('date', 'Unknown'))}")
+                                st.write(f"• **UTC Date**: {game.get('utc_date', game.get('date', 'Unknown'))}")
+                                st.write(f"• **Local Date**: {game.get('local_date', game.get('date', 'Unknown'))}")
+                                st.write(f"• **UTC Time**: {utc_time_info}")
                                 st.write(f"• **Home Time**: {game.get('home_local_time', game.get('time', 'Unknown'))} ({game.get('home_timezone', 'Unknown')})")
                                 st.write(f"• **Away Time**: {game.get('away_local_time', game.get('time', 'Unknown'))} ({game.get('away_timezone', 'Unknown')})")
                                 st.write(f"• **Status**: {game.get('status', 'Unknown')}")
-                                st.write(f"• **UTC Time**: {game.get('time_utc', 'Unknown')}")
                                 st.write(f"• **Source**: {game.get('source', 'Unknown')}")
 
                                 # Show timezone conversion details if requested
@@ -220,14 +231,14 @@ def render_games_schedule_with_date_range(data_provider):
                                 st.metric("Bookmakers", game.get('bookmakers_count', 0))
 
                 else:
-                    st.info(f"ℹ️ No games found for {selected_date}")
+                    st.info(f"ℹ️ No games found for {selected_date} (UTC)")
 
                     # Show nearby games with timezone info
                     if processed_games:
                         nearby_games = []
                         for game in processed_games:
                             try:
-                                game_date = date.fromisoformat(game.get('local_date', game.get('date', '2025-01-01')))
+                                game_date = date.fromisoformat(game.get('utc_date', game.get('date', '2025-01-01')))
                                 if abs(game_date - selected_date).days <= 3:
                                     nearby_games.append(game)
                             except:
@@ -237,7 +248,8 @@ def render_games_schedule_with_date_range(data_provider):
                             st.write("**📍 Nearby Games (±3 days):**")
                             for game in nearby_games[:10]:
                                 time_info = f"{game.get('home_local_time', game.get('time', 'Unknown'))} ({game.get('home_timezone', 'Unknown')})"
-                                st.write(f"• {game.get('local_date', game.get('date', 'Unknown'))}: {game['away_team']} @ {game['home_team']} - {time_info}")
+                                utc_date = game.get('utc_date', game.get('date', 'Unknown'))
+                                st.write(f"• {utc_date}: {game['away_team']} @ {game['home_team']} - {time_info}")
 
             except Exception as e:
                 st.error(f"❌ Error loading games: {e}")
