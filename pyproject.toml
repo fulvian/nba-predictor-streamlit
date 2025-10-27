@@ -247,13 +247,15 @@ module = [
 ]
 ignore_missing_imports = true
 
-# Pytest configuration
+# Pytest configuration (Context7-compliant)
 [tool.pytest.ini_options]
 minversion = "7.0"
+pythonpath = "src"
 addopts = [
     "--strict-markers",
     "--strict-config",
-    "--cov=src/nba_predictor",
+    "--import-mode=importlib",
+    "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
