@@ -22,24 +22,48 @@ import requests
 from datetime import datetime, date, timedelta
 from dateutil import parser
 from typing import Dict, List, Optional, Any
+from dotenv import load_dotenv
 
 # Importazioni NBA API
 from nba_api.stats.static import teams as nba_teams
 from nba_api.stats.static import players as nba_players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 
+# Import BallDontLie API client
+from ball_dont_lie_client import NBABallDontLieClient, RateLimitException, APIException
+
 class NBADataProvider:
     """
-    Provider NBA dati ibrido che combina The Odds API e NBA API.
+    Provider NBA dati ibrido che combina BallDontLie API, The Odds API e NBA API.
 
     Funzionalità:
-    - The Odds API: Partite future con quote e orari esatti
+    - BallDontLie API: Partite NBA ufficiali con scheduling reale (fonte primaria)
+    - The Odds API: Partite future con quote e orari esatti (fallback)
     - NBA API: Partite completate, statistiche e dati storici
-    - Nessun timeout, nessuna patch, dati reali garantiti
+    - Rate limiting automatico per BallDontLie API
+    - Dati reali garantiti senza timeout o patch
     """
 
     def __init__(self):
-        # The Odds API configuration
+        # Load environment variables
+        load_dotenv()
+
+        # BallDontLie API configuration (primary source)
+        try:
+            ball_dont_lie_api_key = os.getenv('BALLDONTLIE_API_KEY')
+            if ball_dont_lie_api_key:
+                self.bdl_client = NBABallDontLieClient(ball_dont_lie_api_key)
+                self.bdl_available = True
+            else:
+                self.bdl_client = None
+                self.bdl_available = False
+                print("⚠️ BallDontLie API key not found, will use fallback sources")
+        except Exception as e:
+            print(f"⚠️ BallDontLie client initialization failed: {e}")
+            self.bdl_client = None
+            self.bdl_available = False
+
+        # The Odds API configuration (fallback)
         self.odds_api_key = "d01e24415744d440168e0a489f233aac"
         self.odds_base_url = "https://api.the-odds-api.com/v4"
         self.odds_session = requests.Session()
@@ -64,10 +88,14 @@ class NBADataProvider:
             'Connection': 'keep-alive'
         }
 
-        print("✅ NBAHybridDataProvider inizializzato")
-        print(f"   🎰 The Odds API: Configurata e pronta")
+        print("✅ NBADataProvider inizializzato")
+        if self.bdl_available:
+            print(f"   🏀 BallDontLie API: Connessa e pronta (fonte primaria)")
+        else:
+            print(f"   ⚠️ BallDontLie API: Non disponibile, userò fallback")
+        print(f"   🎰 The Odds API: Configurata e pronta (fallback)")
         print(f"   🏀 NBA API: {len(self.nba_teams_info)} squadre caricate")
-        print(f"   🔄 Soluzione ibrida: Partite future + completate")
+        print(f"   🔄 Soluzione ibrida: Partite reali + fallback")
 
     def _get_team_id_by_name(self, team_name: str) -> int:
         """
@@ -162,6 +190,53 @@ class NBADataProvider:
 
         except Exception as e:
             print(f"   ❌ The Odds API exception: {e}")
+            return []
+
+    def _get_ball_dont_lie_games(self, days_ahead: int = 7, specific_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get NBA games using BallDontLie API with real schedule data.
+
+        Args:
+            days_ahead: Number of days ahead to fetch games for
+            specific_date: Specific date string (YYYY-MM-DD) if provided
+
+        Returns:
+            List of NBA games with real schedule information
+
+        Raises:
+            RateLimitException: When API rate limit is exceeded
+            APIException: When BallDontLie API call fails
+        """
+        if not self.bdl_available or not self.bdl_client:
+            return []
+
+        try:
+            print(f"   🏀 BallDontLie API: Richiesta partite ufficiali NBA...")
+
+            # Calculate date range
+            if specific_date:
+                target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                start_date = target_date
+                end_date = target_date
+            else:
+                start_date = date.today()
+                end_date = date.today() + timedelta(days=days_ahead - 1)
+
+            # Get games from BallDontLie API
+            games = self.bdl_client.get_games_for_date_range(start_date, end_date)
+
+            print(f"   ✅ BallDontLie API: {len(games)} partite ufficiali trovate")
+
+            return games
+
+        except RateLimitException as e:
+            print(f"   🚦 BallDontLie API rate limit exceeded: {e}")
+            return []
+        except APIException as e:
+            print(f"   ❌ BallDontLie API failed: {e}")
+            return []
+        except Exception as e:
+            print(f"   ❌ BallDontLie API unexpected error: {e}")
             return []
 
     def _extract_main_odds(self, game):
@@ -322,46 +397,78 @@ class NBADataProvider:
 
     def get_scheduled_games(self, days_ahead=7, specific_date=None):
         """
-        Metodo principale che combina partite future e completate.
+        Metodo principale che combina BallDontLie API, The Odds API e NBA API.
 
         Args:
-            days_ahead: Giorni futuri da cercare
+            days_ahead: Giorni futuri da cercare (massimo 5 consigliato per BallDontLie)
             specific_date: Data specifica (YYYY-MM-DD)
 
         Returns:
-            list: Tutte le partite (future + completate)
+            list: Tutte le partite (reali + fallback)
         """
-        print(f"\n🏀 NBA Hybrid Game Detection - {date.today()}")
+        print(f"\n🏀 NBA Game Detection (BallDontLie + Fallbacks) - {date.today()}")
         print("=" * 60)
 
         all_games = []
+        primary_source = ""
+        secondary_sources = []
 
-        # 1. Ottieni partite future da The Odds API
-        print(f"\n📅 FASE 1: Partite Future (The Odds API)")
-        future_games = self._get_odds_api_games(days_ahead=days_ahead)
+        # 1. Primario: BallDontLie API (official NBA schedule)
+        if self.bdl_available:
+            print(f"\n📅 FASE 1: Partite Ufficiali NBA (BallDontLie API)")
+            bdl_games = self._get_ball_dont_lie_games(days_ahead=days_ahead, specific_date=specific_date)
 
-        if specific_date:
-            # Filtra per data specifica
-            target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
-            filtered_future = [g for g in future_games if g['date'] == specific_date]
-            all_games.extend(filtered_future)
-            print(f"   📊 Filtrate {len(filtered_future)} partite per {specific_date}")
+            if bdl_games:
+                all_games.extend(bdl_games)
+                primary_source = "BallDontLie API (Official NBA Schedule)"
+                print(f"   ✅ BallDontLie API: {len(bdl_games)} partite ufficiali caricate")
+            else:
+                print(f"   ⚠️ BallDontLie API: Nessuna partita trovata, procedo con fallback")
         else:
-            all_games.extend(future_games)
+            print(f"\n📅 FASE 1: BallDontLie API non disponibile")
 
-        # 2. Ottieni partite completate da NBA API
-        print(f"\n📅 FASE 2: Partite Completate (NBA API)")
+        # 2. Fallback 1: The Odds API (se BallDontLie fallisce)
+        if not all_games:  # Solo se non abbiamo partite da BallDontLie
+            print(f"\n📅 FASE 2: Partite con Quote (The Odds API - Fallback)")
+            odds_games = self._get_odds_api_games(days_ahead=days_ahead)
+
+            if odds_games:
+                if specific_date:
+                    # Filtra per data specifica
+                    filtered_odds = [g for g in odds_games if g['date'] == specific_date]
+                    all_games.extend(filtered_odds)
+                    secondary_sources.append("The Odds API")
+                    print(f"   📊 Filtrate {len(filtered_odds)} partite per {specific_date}")
+                else:
+                    all_games.extend(odds_games)
+                    secondary_sources.append("The Odds API")
+
+                print(f"   ✅ The Odds API: {len(odds_games)} partite con quote trovate")
+            else:
+                print(f"   ❌ The Odds API: Nessuna partita trovata")
+
+        # 3. Fallback 2: NBA API completate (se necessario)
+        print(f"\n📅 FASE 3: Partite Completate (NBA Live API)")
         completed_games = self._get_nba_completed_games(days_back=3)
 
-        if specific_date:
-            # Filtra completate per data specifica
-            filtered_completed = [g for g in completed_games if g['date'] == specific_date]
-            all_games.extend(filtered_completed)
-            print(f"   📊 Filtrate {len(filtered_completed)} partite completate per {specific_date}")
-        else:
-            all_games.extend(completed_games)
+        if completed_games:
+            if specific_date:
+                # Filtra completate per data specifica
+                filtered_completed = [g for g in completed_games if g['date'] == specific_date]
+                all_games.extend(filtered_completed)
+                if filtered_completed:
+                    secondary_sources.append("NBA Live API")
+                print(f"   📊 Filtrate {len(filtered_completed)} partite completate per {specific_date}")
+            else:
+                all_games.extend(completed_games)
+                if completed_games:
+                    secondary_sources.append("NBA Live API")
 
-        # 3. Rimuovi duplicati e ordina
+            print(f"   ✅ NBA Live API: {len(completed_games)} partite completate")
+        else:
+            print(f"   ❌ NBA Live API: Nessuna partita completata")
+
+        # 4. Rimuovi duplicati e ordina
         seen_game_ids = set()
         unique_games = []
         for game in all_games:
@@ -373,16 +480,37 @@ class NBADataProvider:
         # Ordina per data e ora
         unique_games.sort(key=lambda x: (x['date'], x.get('time', '00:00')))
 
-        # 4. Risultato finale
+        # 5. Risultato finale
         print(f"\n📊 RISULTATO FINALE:")
         print(f"   🎯 Partite uniche trovate: {len(unique_games)}")
-        print(f"   🎰 Partite future: {len([g for g in unique_games if g['source'].startswith('The Odds')])}")
-        print(f"   🏀 Partite completate: {len([g for g in unique_games if g['source'].startswith('NBA')])}")
+
+        if primary_source:
+            print(f"   🏀 Fonte primaria: {primary_source}")
+        if secondary_sources:
+            print(f"   🔄 Fonti secondarie: {', '.join(secondary_sources)}")
+
+        # Statistiche per sorgente
+        bdl_count = len([g for g in unique_games if 'BallDontLie' in g['source']])
+        odds_count = len([g for g in unique_games if 'The Odds' in g['source']])
+        nba_count = len([g for g in unique_games if 'NBA Live' in g['source']])
+
+        if bdl_count > 0:
+            print(f"   🏀 Partite ufficiali NBA: {bdl_count}")
+        if odds_count > 0:
+            print(f"   🎰 Partite con quote: {odds_count}")
+        if nba_count > 0:
+            print(f"   📊 Partite completate: {nba_count}")
 
         if unique_games:
             print(f"\n🏀 PARTITE TROVATE:")
             for i, game in enumerate(unique_games[:10], 1):  # Mostra prime 10
-                source_icon = "🎰" if "Odds" in game['source'] else "🏀"
+                if 'BallDontLie' in game['source']:
+                    source_icon = "🏀"
+                elif 'The Odds' in game['source']:
+                    source_icon = "🎰"
+                else:
+                    source_icon = "📊"
+
                 score_text = f" [{game.get('score', '')}]" if game.get('score') else ""
                 time_text = f" {game.get('time', '')}" if game.get('time') else ""
 
@@ -453,12 +581,12 @@ class NBADataProvider:
 
 
 def main():
-    """Test del provider ibrido"""
+    """Test del provider ibrido con BallDontLie API"""
     print("🚀 TEST NBA HYBRID DATA PROVIDER")
-    print("The Odds API + NBA API = Soluzione Completa")
+    print("BallDontLie API + The Odds API + NBA API = Soluzione Completa")
     print("=" * 60)
 
-    provider = NBAHybridDataProvider()
+    provider = NBADataProvider()
 
     # Test per oggi
     today = date.today()
@@ -484,9 +612,11 @@ def main():
 
     total_games = len(today_games) + len(tomorrow_games) + len(week_games)
     if total_games > 0:
-        print("🎉 SUCCESS! NBA Hybrid Provider working!")
-        print("✅ The Odds API for scheduled games + betting odds")
+        print("🎉 SUCCESS! NBA Hybrid Provider with BallDontLie API working!")
+        print("✅ BallDontLie API for official NBA schedule (primary)")
+        print("✅ The Odds API for scheduled games + betting odds (fallback)")
         print("✅ NBA API for completed games + detailed stats")
+        print("✅ Rate limiting for API compliance")
         print("✅ No timeouts, no hardcoded patches")
         return True
     else:

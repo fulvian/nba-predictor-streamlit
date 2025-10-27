@@ -22,6 +22,9 @@ matplotlib>=3.7.0
 httpx>=0.24.0
 requests>=2.31.0
 
+# Rate limiting for API calls
+pyrate-limiter==3.9.0
+
 # NBA API and data sources
 nba-api>=1.1.0
 

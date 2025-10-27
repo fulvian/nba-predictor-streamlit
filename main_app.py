@@ -14,7 +14,7 @@ if str(src_path) not in sys.path:
 
 # Import Streamlit and the data provider
 import streamlit as st
-from datetime import date
+from datetime import date, datetime
 from data_provider import NBADataProvider
 from nba_timezone_utils import NBATimezoneManager, generate_nba_schedule_fallback
 
@@ -49,7 +49,7 @@ def create_modern_dashboard():
     ])
 
     with tab1:
-        render_games_schedule(data_provider)
+        render_games_schedule_with_date_range(data_provider)
 
     with tab2:
         render_analytics(data_provider)
@@ -60,40 +60,74 @@ def create_modern_dashboard():
     with tab4:
         render_system_status(data_provider)
 
-def render_games_schedule(data_provider):
-    """Render games schedule with robust timezone handling and API fallback."""
+def render_games_schedule_with_date_range(data_provider):
+    """
+    Render enhanced games schedule with date range selection.
+
+    Features:
+    - Single date selection (existing)
+    - Date range selection (1-5 days)
+    - Real NBA games data from BallDontLie API
+    - Rate limiting status indicator
+    """
     st.header("📅 NBA Games Schedule")
-    st.caption("NBA games with proper timezone handling and API fallback")
+    st.caption("Real NBA games from official schedule with BallDontLie API")
 
     # Initialize timezone manager
     tz_manager = NBATimezoneManager()
 
-    # Date selection
-    selected_date = st.date_input("Select Date", value=date.today())
+    # Date range selection options
+    st.subheader("📆 Date Selection")
 
-    # Timezone display preference
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        date_range_option = st.selectbox(
+            "Select Date Range:",
+            ["Single Date", "Next 3 Days", "Next 5 Days"],
+            help="Choose how many days of games to display"
+        )
+
+    with col2:
+        if date_range_option == "Single Date":
+            selected_date = st.date_input("Select Date", value=date.today())
+            days_ahead = 1
+            specific_date = selected_date.strftime('%Y-%m-%d')
+        else:
+            days_ahead = 3 if date_range_option == "Next 3 Days" else 5
+            specific_date = None
+            st.info(f"Showing games for next {days_ahead} days from today")
+
+    # Additional options
     show_timezone_info = st.checkbox("🌍 Show timezone details", value=True)
+    show_rate_limit_status = st.checkbox("🚦 Show API status", value=True)
 
-    if st.button("🔄 Load Games", type="primary"):
-        with st.spinner(f"Loading NBA games for {selected_date}..."):
+    # Load games button
+    if st.button("🔄 Load NBA Games", type="primary"):
+        with st.spinner(f"Loading NBA games..."):
             try:
-                # Try to get games from API first
-                st.write("🔄 Connecting to The Odds API...")
-                games = data_provider._get_odds_api_games(days_ahead=7)
+                # Use the new enhanced data provider
+                st.write("🏀 Connecting to BallDontLie API for real NBA schedule...")
+                games = data_provider.get_scheduled_games(days_ahead=days_ahead, specific_date=specific_date)
 
-                # Check if API returned games (quota check)
-                if not games:
-                    st.warning("⚠️ The Odds API quota exceeded. Using NBA Official API fallback.")
-                    st.info("📊 This demonstrates the timezone system with official NBA data.")
-                    games = generate_nba_schedule_fallback(selected_date)
+                if games:
+                    # Determine data source
+                    bdl_games = [g for g in games if 'BallDontLie' in g.get('source', '')]
+                    odds_games = [g for g in games if 'The Odds' in g.get('source', '')]
+                    nba_games = [g for g in games if 'NBA Live' in g.get('source', '')]
 
-                    if games and games[0].get('source', '').startswith('NBA Official API'):
-                        data_source = games[0]['source']
+                    if bdl_games:
+                        data_source = "BallDontLie API (Official NBA Schedule)"
+                        st.success(f"✅ Found {len(bdl_games)} real NBA games from official schedule")
+                    elif odds_games:
+                        data_source = "The Odds API (Betting Odds - Fallback)"
+                        st.info(f"📊 Found {len(odds_games)} games with betting odds")
                     else:
-                        data_source = "Enhanced Mock Data (All APIs Unavailable)"
+                        data_source = "NBA Live API (Completed Games - Fallback)"
+                        st.info(f"📊 Found {len(nba_games)} completed games")
                 else:
-                    st.success(f"✅ Connected! Found {len(games)} games from API")
-                    data_source = "The Odds API (Live Data)"
+                    st.warning("⚠️ No games found from any source")
+                    data_source = "No Data Available"
 
                 # Enhanced timezone processing
                 processed_games = []
