@@ -240,11 +240,40 @@ local_time, timezone = tz_manager.convert_utc_to_local(utc_time, "Golden State W
 
 ## 📚 Documentation
 
+- **[🏀 Unified Hybrid Pipeline Guide](docs/UNIFIED_HYBRID_PIPELINE_GUIDE.md)**: **COMPLETE SYSTEM GUIDE** - Use this pipeline
+- **[📊 Pipeline Comparison](docs/PIPELINE_COMPARISON.md)**: **WHICH PIPELINE TO USE** - Decision guide
+- **[🎯 NBA Game Download Guide](docs/nba_game_download_guide.md)**: Official data retrieval
 - **[User Guides](docs/guides/)**: Comprehensive usage documentation
 - **[API Documentation](docs/api/)**: Technical API reference
 - **[Architecture](docs/architecture/)**: System design and components
 - **[Examples](docs/examples/)**: Code examples and tutorials
 - **[Deployment](docs/deployment/)**: Production deployment guides
+
+### 🎯 **QUICK START: Unified Hybrid Pipeline**
+
+```python
+# Import the production-ready pipeline
+from nba_predictor.core.unified_hybrid_pipeline import UnifiedHybridPipeline
+
+# Initialize with all features
+pipeline = UnifiedHybridPipeline(
+    data_path="data",
+    model_path="models",
+    use_stacked_ensemble=False,  # Single model for stability
+    enable_explainability=True,   # SHAP explanations
+    validate_realism=True        # Realistic predictions
+)
+
+# Train and predict
+metrics = pipeline.train_unified_model()
+result = pipeline.predict_unified(
+    team1="Lakers", team2="Celtics",
+    line=225.0, home_team="Lakers"
+)
+print(f"Prediction: {result.predicted_total:.1f} points")
+```
+
+**📖 See [Complete Guide](docs/UNIFIED_HYBRID_PIPELINE_GUIDE.md) for detailed usage.**
 
 ## 📄 License
 
