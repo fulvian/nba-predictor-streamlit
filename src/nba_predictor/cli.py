@@ -92,9 +92,17 @@ class ModernNBACLIPrediction:
         try:
             logger.info(f"Starting prediction: {team1} vs {team2}, line: {line}")
 
-            # Validate teams exist in data store
-            team1_id = self.prediction_system.legacy_bridge.adapter.get_team_id(team1)
-            team2_id = self.prediction_system.legacy_bridge.adapter.get_team_id(team2)
+            # Validate teams exist in data store (handle both real data and legacy bridge)
+            if self.prediction_system.use_real_data and self.prediction_system.real_data_adapter:
+                # Use real data adapter
+                team1_info = self.prediction_system.real_data_adapter.find_team_by_name(team1)
+                team2_info = self.prediction_system.real_data_adapter.find_team_by_name(team2)
+                team1_id = team1_info["team_id"] if team1_info else None
+                team2_id = team2_info["team_id"] if team2_info else None
+            else:
+                # Use legacy bridge
+                team1_id = self.prediction_system.legacy_bridge.adapter.get_team_id(team1)
+                team2_id = self.prediction_system.legacy_bridge.adapter.get_team_id(team2)
 
             if not team1_id:
                 return self._error_response(f"Team '{team1}' not found in data store")
