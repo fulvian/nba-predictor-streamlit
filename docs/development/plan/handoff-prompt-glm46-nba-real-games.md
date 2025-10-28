@@ -1,285 +1,383 @@
-# 🚀 DevStream Task Handoff: NBA Real Games Download - BallDontLie API Integration
+# GLM-4.6 Handoff Prompt - NBA Hybrid Prediction Pipeline Implementation
 
-**FROM**: Claude Sonnet 4.5 (Strategic Planning Complete)
-**TO**: GLM-4.6 (Implementation Execution)
-
----
-
-## 📊 TASK CONTEXT
-
-**Task ID**: `nba-real-games-balldontlie`
-**Phase**: Implementation
-**Priority**: 9/10
-**Status**: Steps 1-5 COMPLETED by Sonnet 4.5 → Steps 6-7 DELEGATED to you
-
-**Your Role**: You are an **expert execution-focused coding agent**. Sonnet 4.5 has completed all strategic planning. Your job is **precise implementation** according to the approved plan.
+**Project**: nba-predictor-streamlit
+**Date**: 2025-10-28
+**Version**: GLM-4.6 Implementation Prompt
+**Status**: Ready for Handoff
 
 ---
 
-## ✅ WORK COMPLETED (Steps 1-5)
+## 🎯 Mission Critical Context
 
-- ✅ **DISCUSSION**: Problem analyzed - system shows invented NBA games instead of real schedule
-- ✅ **ANALYSIS**: Current system uses The Odds API (betting odds only) + mock data fallback
-- ✅ **RESEARCH**: BallDontLie API tested successfully with 11 real NBA games for today
-- ✅ **PLANNING**: Detailed implementation plan created (see linked file)
-- ✅ **APPROVAL**: User approved BallDontLie API integration with rate limiting
+You are GLM-4.6, a specialized AI agent tasked with implementing a **complete hybrid NBA prediction pipeline** that combines the best features from two existing systems. This is a **mission-critical implementation** with **zero tolerance for compromises**.
 
----
+### User's Explicit Requirements (Translation from Italian)
 
-## 📋 YOUR IMPLEMENTATION PLAN
+> "I don't admit any compromise whatsoever, none at all. We must do the job well, in a deep, complete, and functional way. I want no shortcuts, no fallbacks, no mocks. We must do the necessary, complete work, with all the time that is necessary."
 
-**COMPLETE PLAN**: `/Users/fulvioventura/nba-predictor-streamlit/docs/implementation-plan-glm46-nba-real-games.md`
-
-**READ THE PLAN FIRST** using:
-```bash
-cat /Users/fulvioventura/nba-predictor-streamlit/docs/implementation-plan-glm46-nba-real-games.md
-```
-
-**Plan Summary** (excerpt):
-Replace The Odds API with BallDontLie API to get official NBA schedule data.
-Implement PyrateLimiter for 5 req/min rate limiting.
-Support single date and 1-5 day range selection.
-Maintain all existing functionality while using real NBA data.
+> "We must take the best from both systems: maintain the core of the research version (based on research and best practices for statistical data processing) but keep ALL the additional functionalities and data that the enhanced version was calling."
 
 ---
 
-## 🎯 YOUR MISSION (Steps 6-7)
+## 🏀 Core Problem Statement
 
-### Step 6: IMPLEMENTATION
-- Execute micro-tasks **one at a time** using TodoWrite
-- Follow plan specifications **exactly**
-- Use `.venv/bin/python` for ALL Python commands
-- Run tests **after each micro-task**
-- **NEVER** mark completed with failing tests
+**Current State**: Two separate prediction pipelines with complementary strengths:
+1. **Research Pipeline** (`research_prediction_pipeline.py`): Advanced algorithms, Context7 best practices, SHAP explainability, but missing critical data integrations
+2. **Enhanced Pipeline** (`enhanced_prediction_pipeline.py`): Complete data integration (injuries, rosters, momentum, H2H) but outdated algorithms
 
-### Step 7: VERIFICATION
-- **95%+ test coverage** for all new code
-- **mypy --strict** zero errors
-- **Performance validation** (API calls < 2s)
-- **@code-reviewer** validation (automatic on commit)
+**Target State**: Single unified hybrid pipeline with:
+- Enhanced pipeline's complete data integration capabilities
+- Research pipeline's advanced algorithms and Context7 best practices
+- Real NBA data integration (no hardcoded values)
+- Complete SHAP explainability
+- 95%+ test coverage
+
+**Critical User Feedback**:
+- "Non dobbiamo mai utilizzare dati hardcoded, dobbiamo utilizzare dati reali" (Never use hardcoded data, only real data)
+- "Abbiamo previsioni che sono sotto i 150 punti" (Predictions under 150 points are unrealistic for NBA totals)
+- Prendi il meglio da entrambi i sistemi (Take the best from both systems)
 
 ---
 
-## 🔧 DEVSTREAM PROTOCOL COMPLIANCE (MANDATORY)
+## 📊 Technical Architecture
 
-**CRITICAL RULES** (from @CLAUDE.md):
-
-### Python Environment
-```bash
-# ALWAYS use .venv venv
-.venv/bin/python script.py       # ✅ CORRECT
-.venv/bin/python -m pytest       # ✅ CORRECT
-python script.py                       # ❌ FORBIDDEN
-```
-
-### TodoWrite Workflow
-1. Mark first task "in_progress"
-2. Implement according to plan
-3. Run tests
-4. Mark "completed" ONLY when:
-   - Tests pass 100%
-   - Type check passes
-   - Acceptance criteria met
-5. Proceed to next task
-
-### Context7 Usage
+### Base Architecture: Enhanced Pipeline Foundation
 ```python
-# When you encounter unknowns
-library_id = mcp__context7__resolve-library-id(libraryName="pyrate-limiter")
-docs = mcp__context7__get-library-docs(
-    context7CompatibleLibraryID=library_id,
-    topic="rate limiting implementation",
-    tokens=3000
-)
+# Base: enhanced_prediction_pipeline.py
+class UnifiedHybridPipeline:
+    def __init__(self):
+        # Enhanced capabilities (TO KEEP)
+        self.injury_analyzer = InjuryImpactAnalyzer()          # ✅ KEEP
+        self.roster_analyzer = RosterChangeAnalyzer()          # ✅ KEEP
+        self.momentum_analyzer = PlayerMomentumAnalyzer()      # ✅ KEEP
+        self.h2h_analyzer = HeadToHeadAnalyzer()              # ✅ KEEP
+        self.advanced_stats_calculator = AdvancedStatsCalculator()  # ✅ KEEP
+
+        # Research algorithms (TO INTEGRATE)
+        self.research_feature_engineer = ResearchFeatureEngineer()  # 🆕 INTEGRATE
+        self.stacked_ensemble = StackedEnsembleModel()        # 🆕 INTEGRATE
+        self.shap_explainer = SHAPExplainer()                 # 🆕 INTEGRATE
+        self.time_series_validator = TimeSeriesValidator()    # 🆕 INTEGRATE
 ```
 
-### Memory Search
+### Core Integration Strategy
+1. **Data Layer**: Keep enhanced pipeline's complete data integration
+2. **Feature Engineering**: Replace with research pipeline's Context7-based methods
+3. **Model Architecture**: Replace with research pipeline's stacked ensemble
+4. **Explainability**: Integrate research pipeline's SHAP system
+5. **Testing**: Implement comprehensive 95%+ coverage framework
+
+---
+
+## 🔧 Implementation Specifications
+
+### 1. Data Integration (KEEP from Enhanced)
+
+**Critical Data Sources to Maintain**:
 ```python
-# Before implementing, search for existing patterns
-mcp__devstream__devstream_search_memory(
-    query="BallDontLie API integration",
-    content_type="code",
-    limit=5
-)
+def load_all_integrated_data(self) -> Dict[str, Any]:
+    """KEEP ALL enhanced pipeline data integrations"""
+    return {
+        'game_data': self._load_historical_games(),          # ✅ KEEP
+        'injury_data': self._load_injury_reports(),          # ✅ KEEP
+        'roster_data': self._load_current_rosters(),         # ✅ KEEP
+        'player_stats': self._load_player_statistics(),      # ✅ KEEP
+        'odds_data': self._load_betting_odds(),              # ✅ KEEP
+        'h2h_data': self._load_head_to_head_history()        # ✅ KEEP
+    }
 ```
 
----
+**Real Data Requirements**:
+- Single source of truth: `/data/nba_data_with_mu_sigma_for_ml.csv` (5,995 real games)
+- Current season data integration via NBA API
+- Dynamic injury reports
+- Real-time roster updates
+- Live betting odds
 
-## 📚 CONTEXT7 RESEARCH (Pre-Completed by Sonnet)
+### 2. Feature Engineering (REPLACE with Research)
 
-**Libraries Researched**:
-- BallDontLie API: Official NBA data, tested with real games
-- PyrateLimiter: Rate limiting library, 9.3/10 trust score
-
-**Key Findings**:
-- BallDontLie API provides real NBA schedule (not just betting odds)
-- Rate limit: 5 requests/minute requires PyrateLimiter
-- Real NBA games found: 11 games for 2025-10-27
-- API key available: `BALLDONTLIE_API_KEY` in .env
-
-**Pattern Examples**:
+**Four Factors Feature Engineering**:
 ```python
-# BallDontLie API usage
-from balldontlie import BalldontlieAPI
-api = BalldontlieAPI(api_key=os.getenv('BALLDONTLIE_API_KEY'))
-games = api.nba.games.list(dates=['2025-10-27'])
+def create_four_factors_features(self, team_stats: Dict) -> Dict[str, float]:
+    """INTEGRATE research pipeline's Context7-based feature engineering"""
+    return {
+        # Shooting Efficiency (eFG%)
+        'efg_pct': self._calculate_effective_field_goal_percentage(team_stats),
 
-# PyrateLimiter rate limiting
-from pyrate_limiter import Duration, Rate, Limiter, BucketFullException
-rate = Rate(5, Duration.MINUTE)
-limiter = Limiter(rate)
-try:
-    limiter.try_acquire("api_call")
-    # Execute API call
-except BucketFullException:
-    # Handle rate limit
+        # Turnover Rate (TOV%)
+        'tov_pct': self._calculate_turnover_percentage(team_stats),
+
+        # Rebounding Rate (ORB%)
+        'orb_pct': self._calculate_offensive_rebound_percentage(team_stats),
+
+        # Free Throw Rate (FTR)
+        'ftr': self._calculate_free_throw_rate(team_stats),
+
+        # Advanced research-based features
+        'pace': self._calculate_team_pace(team_stats),
+        'offensive_rating': self._calculate_offensive_rating(team_stats),
+        'defensive_rating': self._calculate_defensive_rating(team_stats),
+        'net_rating': self._calculate_net_rating(team_stats)
+    }
 ```
 
-**When to use**: Use BallDontLie for real NBA schedule, PyrateLimiter for API rate limits
+### 3. Model Architecture (REPLACE with Research)
 
----
-
-## 🏗️ TECHNICAL SPECIFICATIONS
-
-**Files to Modify**:
-- `data_provider.py` - Replace The Odds API with BallDontLie
-- `main_app.py` - Add date range selection UI
-- `requirements.txt` - Add PyrateLimiter dependency
-
-**New Files to Create**:
-- `ball_dont_lie_client.py` - BallDontLie API client with rate limiting
-- `tests/unit/test_ball_dont_lie_client.py` - Tests for new client
-
-**Dependencies** (add to requirements.txt):
-- `pyrate-limiter==0.7.0`
-
----
-
-## 🚨 CRITICAL CONSTRAINTS (DO NOT VIOLATE)
-
-**FORBIDDEN ACTIONS**:
-- ❌ **NO** removal of features (find proper solution instead)
-- ❌ **NO** workarounds (implement correctly using Context7)
-- ❌ **NO** simplifications that reduce functionality
-- ❌ **NO** skipping tests or type hints
-- ❌ **NO** early quit on complex tasks (complete fully)
-
-**REQUIRED ACTIONS**:
-- ✅ **YES** use `.venv/bin/python` for ALL commands
-- ✅ **YES** follow TodoWrite plan strictly
-- ✅ **YES** use Context7 for unknowns (tools provided)
-- ✅ **YES** maintain ALL existing functionality
-- ✅ **YES** full type hints + docstrings EVERY function
-- ✅ **YES** tests for EVERY feature (95%+ coverage)
-
----
-
-## ✅ QUALITY GATES (Check Before Completion)
-
-### 1. Environment Verification
-```bash
-# Verify venv and Python version
-.venv/bin/python --version  # Must be 3.11.x
-.venv/bin/python -m pip list | grep -E "(balldontlie|pyrate-limiter)"
-```
-
-### 2. Implementation
-Follow plan in `/Users/fulvioventura/nba-predictor-streamlit/docs/implementation-plan-glm46-nba-real-games.md`
-
-### 3. Testing
-```bash
-# After EVERY micro-task
-.venv/bin/python -m pytest tests/unit/test_ball_dont_lie_client.py -v
-.venv/bin/python -m mypy ball_dont_lie_client.py --strict
-
-# Before completion (ALL tests)
-.venv/bin/python -m pytest tests/ -v \
-    --cov=ball_dont_lie_client \
-    --cov-report=term-missing \
-    --cov-report=html
-
-# REQUIREMENT: ≥95% coverage, 100% pass rate
-```
-
-### 4. Commit (if all tests pass)
-```bash
-git add ball_dont_lie_client.py data_provider.py main_app.py requirements.txt tests/
-git commit -m "$(cat <<'EOF'
-feat(nba): integrate BallDontLie API for real NBA games schedule
-
-Replace The Odds API dependency with BallDontLie API to provide
-official NBA schedule data instead of betting odds only.
-
-Implementation Details:
-- Created NBABallDontLieClient with PyrateLimiter rate limiting
-- Updated data_provider.py to use BallDontLie as primary source
-- Enhanced main_app.py with date range selection (1-5 days)
-- Maintained backward compatibility with existing UI
-
-Quality Validation:
-- ✅ Tests: 12 tests passing, 97% coverage
-- ✅ Type safety: mypy --strict passed
-- ✅ Performance: < 2s initialization, proper rate limiting
-
-Task ID: nba-real-games-balldontlie
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-```
-
-**Note**: @code-reviewer validation automatic on commit
-
----
-
-## 🔍 DEVSTREAM MEMORY ACCESS
-
-Search for relevant context anytime:
+**Stacked Ensemble Implementation**:
 ```python
-mcp__devstream__devstream_search_memory(
-    query="NBA data provider BallDontLie API integration",
-    content_type="code",
-    limit=10
-)
+def create_stacked_ensemble_model(self) -> StackingRegressor:
+    """INTEGRATE research pipeline's advanced ensemble"""
+    base_models = [
+        ('xgboost', xgb.XGBRegressor(**self.xgb_params)),
+        ('lightgbm', lgb.LGBMRegressor(**self.lgb_params)),
+        ('random_forest', RandomForestRegressor(**self.rf_params)),
+        ('ridge', Ridge(**self.ridge_params))
+    ]
+
+    meta_learner = xgb.XGBRegressor(**self.meta_params)
+
+    return StackingRegressor(
+        estimators=base_models,
+        final_estimator=meta_learner,
+        cv=TimeSeriesSplit(n_splits=5)
+    )
+```
+
+### 4. SHAP Explainability (INTEGRATE from Research)
+
+```python
+def create_shap_explainer(self, model: Any, X_background: pd.DataFrame):
+    """INTEGRATE research pipeline's explainability"""
+    self.shap_explainer = shap.TreeExplainer(
+        model,
+        data=X_background,
+        model_output="raw",
+        feature_perturbation="interventional"
+    )
+
+def explain_prediction(self, game_features: Dict) -> Dict[str, Any]:
+    """Generate SHAP explanations for predictions"""
+    # Convert to DataFrame
+    X = pd.DataFrame([game_features])
+
+    # Calculate SHAP values
+    shap_values = self.shap_explainer(X)
+
+    # Extract feature importance
+    feature_importance = self._extract_feature_importance(shap_values)
+
+    return {
+        'shap_values': shap_values,
+        'feature_importance': feature_importance,
+        'base_value': shap_values.base_values[0]
+    }
 ```
 
 ---
 
-## 📊 SUCCESS CRITERIA
+## 📋 Critical Implementation Requirements
 
-- [ ] All TodoWrite tasks completed
-- [ ] Tests pass 100%
-- [ ] Coverage ≥ 95%
-- [ ] mypy --strict passes (zero errors)
-- [ ] Performance meets target: API calls < 2s, rate limiting working
-- [ ] @code-reviewer validation passed
-- [ ] Real NBA games displayed in dashboard (not mock data)
-- [ ] Date range selection functional (1-5 days)
-- [ ] All acceptance criteria met
+### 1. NO HARDCODED VALUES - ZERO TOLERANCE
+```python
+# ❌ FORBIDDEN - Never use hardcoded values
+team1_score = 110.0  # FORBIDDEN
+line = 225.5         # FORBIDDEN
+
+# ✅ REQUIRED - Use real NBA data
+team1_score = self._get_real_team_average_score(team_name)
+line = self._get_current_betting_line(team1, team2)
+```
+
+### 2. REALISTIC PREDICTIONS VALIDATION
+```python
+def validate_prediction_realism(self, predicted_total: float) -> bool:
+    """Validate predictions are in realistic NBA ranges"""
+    NBA_TOTAL_RANGE = (180, 320)  # Based on real NBA data analysis
+    return NBA_TOTAL_RANGE[0] <= predicted_total <= NBA_TOTAL_RANGE[1]
+```
+
+### 3. COMPREHENSIVE ERROR HANDLING
+```python
+def predict_with_safety_checks(self, team1: str, team2: str, line: float) -> Dict[str, Any]:
+    """Prediction with comprehensive error handling"""
+    try:
+        # Validate inputs
+        self._validate_prediction_inputs(team1, team2, line)
+
+        # Load real data
+        data = self.load_all_integrated_data()
+
+        # Generate prediction
+        prediction = self._generate_prediction(team1, team2, line, data)
+
+        # Validate realism
+        if not self.validate_prediction_realism(prediction['total']):
+            raise ValueError(f"Unrealistic prediction: {prediction['total']}")
+
+        return prediction
+
+    except Exception as e:
+        logger.error(f"Prediction failed: {e}")
+        raise PredictionError(f"Failed to generate prediction: {e}")
+```
 
 ---
 
-## 🚀 EXECUTION CHECKLIST
+## 🧪 Testing Requirements (95%+ Coverage Mandatory)
 
-1. [ ] **READ** the complete plan: `cat /Users/fulvioventura/nba-predictor-streamlit/docs/implementation-plan-glm46-nba-real-games.md`
-2. [ ] **VERIFY** environment: `.venv/bin/python --version`
-3. [ ] **SEARCH** DevStream memory for context
-4. [ ] **START** first TodoWrite task (mark "in_progress")
-5. [ ] **IMPLEMENT** according to plan specifications
-6. [ ] **TEST** after each micro-task
-7. [ ] **COMPLETE** task when all criteria met
-8. [ ] **REPEAT** steps 4-7 for remaining tasks
-9. [ ] **VALIDATE** complete implementation (all quality gates)
-10. [ ] **COMMIT** if all tests pass
+### 1. Unit Tests
+```python
+class TestUnifiedHybridPipeline:
+    def test_feature_engineering_accuracy(self):
+        """Test Four Factors calculations match NBA standards"""
+
+    def test_prediction_realism(self):
+        """Test all predictions are in realistic NBA ranges"""
+
+    def test_shap_explainability(self):
+        """Test SHAP explanations are generated correctly"""
+
+    def test_data_integration(self):
+        """Test all 6 data sources load correctly"""
+```
+
+### 2. Integration Tests
+```python
+def test_end_to_end_prediction_pipeline(self):
+    """Test complete pipeline from data loading to explanation"""
+
+def test_real_nba_game_prediction(self):
+    """Test with actual NBA games from today"""
+```
+
+### 3. Performance Tests
+```python
+def test_prediction_performance(self):
+    """Test predictions complete within 5 seconds"""
+
+def test_memory_usage(self):
+    """Test memory usage stays within limits"""
+```
 
 ---
 
-**READY TO IMPLEMENT?**
+## 🎯 Success Metrics
 
-Start with the first TodoWrite task. Execute precisely. Test thoroughly. Complete fully. 🚀
+### Functional Requirements
+- [ ] Realistic NBA predictions (220-280 point range)
+- [ ] Complete data integration (6 sources functional)
+- [ ] SHAP explainability for all predictions
+- [ ] 95%+ test coverage
+- [ ] Sub-5-second prediction times
+- [ ] Zero hardcoded values
 
-**Remember**: You are GLM-4.6 - your strength is **precise execution** of well-defined tasks. The strategic thinking is done. Now execute flawlessly. 💪
+### Quality Requirements
+- [ ] Context7 best practices compliance
+- [ ] Type hints for all functions
+- [ ] Comprehensive docstrings
+- [ ] Error handling for all failure modes
+- [ ] Performance monitoring
 
-**Current Working Directory**: `/Users/fulvioventura/nba-predictor-streamlit`
+### Integration Requirements
+- [ ] Seamless Streamlit dashboard integration
+- [ ] CLI interface compatibility
+- [ ] Real NBA API integration
+- [ ] Live betting odds integration
+
+---
+
+## 🚀 Implementation Phases
+
+### Phase 1: Core Architecture (Days 1-2)
+1. Create unified pipeline class structure
+2. Integrate enhanced data loading capabilities
+3. Integrate research feature engineering methods
+4. Implement basic prediction functionality
+
+### Phase 2: Advanced Features (Days 3-4)
+1. Integrate stacked ensemble model
+2. Implement SHAP explainability system
+3. Add time series validation
+4. Implement comprehensive error handling
+
+### Phase 3: Testing & Validation (Day 5)
+1. Implement comprehensive test suite
+2. Validate prediction realism
+3. Performance optimization
+4. Integration testing with Streamlit
+
+### Phase 4: Documentation & Deployment (Day 6)
+1. Complete API documentation
+2. User guide creation
+3. Deployment verification
+4. Performance benchmarking
+
+---
+
+## ⚠️ Critical Warnings
+
+### DO NOT:
+- ❌ Use ANY hardcoded values (zero tolerance)
+- ❌ Skip Context7 best practices integration
+- ❌ Implement fallbacks or mocks
+- ❌ Compromise on data integration completeness
+- ❌ Skip comprehensive testing
+
+### ALWAYS:
+- ✅ Use real NBA data from existing data store
+- ✅ Validate prediction realism (180-320 range)
+- ✅ Implement comprehensive error handling
+- ✅ Include SHAP explanations for all predictions
+- ✅ Maintain 95%+ test coverage
+
+---
+
+## 📞 Context7 Integration Commands
+
+When implementing, use these Context7 commands for best practices:
+
+```bash
+# For model architecture
+/context7 resolve-library-id xgboost
+/context7 get-library-docs /xgboost/xgboost "stacking ensemble"
+
+# For feature engineering
+/context7 resolve-library-id scikit-learn
+/context7 get-library-docs /scikit-learn/scikit-learn "feature engineering"
+
+# For SHAP explainability
+/context7 resolve-library-id shap
+/context7 get-library-docs /shap/shap "tree explainer"
+
+# For testing best practices
+/context7 resolve-library-id pytest
+/context7 get-library-docs /pytest/pytest "coverage reporting"
+```
+
+---
+
+## 🎯 Mission Success Criteria
+
+**Mission is successful when**:
+1. Single unified pipeline combines best of both systems
+2. All 6 enhanced data sources integrated and functional
+3. Research algorithms (SHAP, ensemble) fully operational
+4. Realistic NBA predictions (220-280 range) consistently
+5. 95%+ test coverage achieved
+6. Zero hardcoded values anywhere in codebase
+7. Context7 best practices fully integrated
+8. Streamlit dashboard fully functional
+9. CLI interface operational
+10. Performance requirements met
+
+**User satisfaction is achieved when**:
+- "Prendi il meglio da entrambi i sistemi" (Taking the best from both systems) is fully implemented
+- "Nessun compromesso" (No compromises) requirement is met
+- Real NBA predictions replace unrealistic values
+- Complete system transparency achieved
+
+---
+
+**GLM-4.6, you are now authorized to begin implementation. The user expects nothing less than complete excellence.**
+
+*Good luck. The success of this NBA prediction system depends on your implementation.*

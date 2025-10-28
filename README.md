@@ -20,6 +20,17 @@ NBA Predictor Analytics Dashboard è un sistema moderno di analisi dati NBA che 
 
 **[🏀 NBA Analytics Dashboard](http://localhost:8501)**
 
+## 📋 Today's NBA Games (28 Ottobre 2025)
+
+**Partite Reali Disponibili:**
+1. Philadelphia 76ers vs Washington Wizards
+2. Charlotte Hornets vs Miami Heat
+3. New York Knicks vs Milwaukee Bucks
+4. Sacramento Kings vs Oklahoma City Thunder
+5. LA Clippers vs Golden State Warriors
+
+*Vedi [Guida Ufficiale Download Partite](docs/nba_game_download_guide.md) per dettagli*
+
 ## ✨ Key Features
 
 ### 🏀 Real-time NBA Data
@@ -99,6 +110,34 @@ nba-predictor-streamlit/
 
 ## 🎯 Usage
 
+### 🏀 Download NBA Games (Official Method)
+
+**⚠️ IMPORTANTE: Usare SOLO DataPersistenceBridge per scaricare partite**
+
+```python
+import sys
+sys.path.append('src')
+from nba_predictor.core.data_persistence_bridge import initialize_persistence_bridge, close_persistence_bridge
+from datetime import date
+
+# Inizializza bridge
+bridge = initialize_persistence_bridge()
+
+# Scarica partite di oggi
+today = date.today()
+games = bridge.get_scheduled_games_with_persistence(
+    days_ahead=1,
+    specific_date=today.strftime('%Y-%m-%d'),
+    force_api=True
+)
+
+# Chiudi bridge
+close_persistence_bridge()
+```
+
+*Dati salvati in: `data/persistent/games/games_YYYY-MM-DD.parquet`*
+*Vedi [Guida Completa](docs/nba_game_download_guide.md) per dettagli*
+
 ### 1. Launch Dashboard
 
 ```bash
@@ -120,6 +159,18 @@ Access at **http://localhost:8501**
 - **Timezone Display**: See game times in all relevant timezones
 - **Real-time Data**: Live updates from official NBA sources
 - **API Fallback**: Automatic switching when sources are unavailable
+
+## ⚠️ Avviso Importante - Script Deprecati
+
+**NON utilizzare questi script per scaricare partite NBA:**
+- `get_todays_nba_games_simple.py` ❌
+- `get_todays_nba_games_test.py` ❌
+- `nba_timezone_utils.py` (funzioni di download) ❌
+- Tutti gli script in `deprecated/` ❌
+
+Questi script contengono **dati falsi** o implementazioni errate.
+
+**Usare SEMPRE DataPersistenceBridge** come mostrato sopra.
 
 ## 🔧 Technical Details
 
