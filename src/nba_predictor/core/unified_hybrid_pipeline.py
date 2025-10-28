@@ -1023,7 +1023,7 @@ class UnifiedHybridPipeline:
             if self.use_stacked_ensemble:
                 # StackingRegressor requires KFold, not TimeSeriesSplit
                 logger.warning("🔧 STACKED ENSEMBLE: Using KFold (required for cross_val_predict compatibility)")
-                cv_strategy = KFold(n_splits=5, shuffle=False, random_state=42)  # shuffle=False preserves order
+                cv_strategy = KFold(n_splits=5, shuffle=False)  # shuffle=False preserves order, no random_state needed
                 logger.info(f"✅ KFold CV for StackingRegressor: preserves temporal order (no shuffle)")
             else:
                 # For single models, we can use TimeSeriesSplit
@@ -1240,10 +1240,28 @@ class UnifiedHybridPipeline:
                     )
 
             # 7. Calculate confidence intervals
-            prediction_std = np.sqrt(self.metrics.get('mse', 100))
+            # Use realistic minimum confidence interval width for NBA totals
+            raw_mse = self.metrics.get('mse', 100)
+
+            # NBA totals typically have variance of 50-100 points (std dev ~7-10 points)
+            # Ensure minimum realistic standard deviation for NBA totals
+            min_realistic_std = 8.0  # Minimum realistic standard deviation for NBA totals
+            max_realistic_std = 15.0  # Maximum realistic standard deviation
+
+            prediction_std = np.sqrt(max(raw_mse, min_realistic_std ** 2))
+            prediction_std = min(prediction_std, max_realistic_std)
+
+            # Calculate 95% confidence interval (1.96 * std)
             confidence_interval = (
                 predicted_total - 1.96 * prediction_std,
                 predicted_total + 1.96 * prediction_std
+            )
+
+            # Ensure confidence interval stays within NBA realistic bounds
+            min_total, max_total = self.NBA_REALISTIC_RANGES['total_score']
+            confidence_interval = (
+                max(confidence_interval[0], min_total),
+                min(confidence_interval[1], max_total)
             )
 
             # 8. Determine recommendation and probabilities
