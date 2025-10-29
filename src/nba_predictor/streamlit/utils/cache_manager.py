@@ -187,11 +187,7 @@ class CacheManager:
                 "under_probability": 0.35,
                 "confidence": 0.78,
                 "recommendation": "OVER",
-                "model_weights": {
-                    "unified_hybrid": 0.7,
-                    "enhanced": 0.2,
-                    "research": 0.1
-                },
+                "model_weights": {},
                 "generated_at": datetime.now().isoformat()
             }
 

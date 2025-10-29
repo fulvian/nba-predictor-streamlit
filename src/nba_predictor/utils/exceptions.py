@@ -211,3 +211,59 @@ class StreamlitError(NBAPredictorError):
             context['component'] = component
         kwargs['context'] = context
         super().__init__(message, error_code="STREAMLIT_ERROR", **kwargs)
+
+
+class PredictionError(NBAPredictorError):
+    """Exception raised for prediction-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        prediction_type: Optional[str] = None,
+        model_name: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        """
+        Initialize prediction error.
+
+        Args:
+            message: Error message
+            prediction_type: Type of prediction that failed
+            model_name: Name of the model that failed
+            **kwargs: Additional context
+        """
+        context = kwargs.get('context', {})
+        if prediction_type:
+            context['prediction_type'] = prediction_type
+        if model_name:
+            context['model_name'] = model_name
+        kwargs['context'] = context
+        super().__init__(message, error_code="PREDICTION_ERROR", **kwargs)
+
+
+class CacheError(NBAPredictorError):
+    """Exception raised for cache-related errors."""
+
+    def __init__(
+        self,
+        message: str,
+        cache_key: Optional[str] = None,
+        operation: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        """
+        Initialize cache error.
+
+        Args:
+            message: Error message
+            cache_key: Cache key that caused the error
+            operation: Cache operation that failed
+            **kwargs: Additional context
+        """
+        context = kwargs.get('context', {})
+        if cache_key:
+            context['cache_key'] = cache_key
+        if operation:
+            context['operation'] = operation
+        kwargs['context'] = context
+        super().__init__(message, error_code="CACHE_ERROR", **kwargs)

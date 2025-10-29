@@ -77,7 +77,8 @@ from nba_api.stats.static import players as nba_players
 from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 
 # Import BallDontLie API client
-from ball_dont_lie_client import NBABallDontLieClient, RateLimitException, APIException
+from .ball_dont_lie_client import NBABallDontLieClient
+from balldontlie.exceptions import BallDontLieException
 
 # Import Data Persistence Bridge
 try:
@@ -107,7 +108,7 @@ class NBADataProvider:
         try:
             ball_dont_lie_api_key = os.getenv('BALLDONTLIE_API_KEY')
             if ball_dont_lie_api_key:
-                self.bdl_client = NBABallDontLieClient(ball_dont_lie_api_key)
+                self.bdl_client = NBABallDontLieClient(api_key=ball_dont_lie_api_key)
                 self.bdl_available = True
             else:
                 self.bdl_client = None
@@ -266,9 +267,9 @@ class NBADataProvider:
             print(f"   ❌ The Odds API exception: {e}")
             return []
 
-    def _get_ball_dont_lie_games(self, days_ahead: int = 7, specific_date: Optional[str] = None) -> List[Dict[str, Any]]:
+    def _get_nba_official_games(self, days_ahead: int = 7, specific_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Get NBA games using BallDontLie API with real schedule data.
+        Get NBA games using official NBA.com API with real schedule data.
 
         Args:
             days_ahead: Number of days ahead to fetch games for
@@ -276,58 +277,86 @@ class NBADataProvider:
 
         Returns:
             List of NBA games with real schedule information
-
-        Raises:
-            RateLimitException: When API rate limit is exceeded
-            APIException: When BallDontLie API call fails
         """
-        if not self.bdl_available or not self.bdl_client:
-            return []
-
         try:
-            # Calculate date range for cache key
+            # Import the official NBA API function
+            from ..utils.nba_timezone_utils import get_nba_games_official_api
+
+            # Calculate target date
             if specific_date:
-                cache_key = f"bdl_{specific_date}"
                 target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
-                start_date = target_date
-                end_date = target_date
             else:
-                start_date = date.today()
-                end_date = date.today() + timedelta(days=days_ahead - 1)
-                cache_key = f"bdl_{start_date}_to_{end_date}"
+                target_date = date.today()
 
             # Check cache first
+            cache_key = f"nba_official_{target_date.strftime('%Y-%m-%d')}"
             cached_games = game_cache.get(cache_key)
             if cached_games:
                 return cached_games
 
-            print(f"   🏀 BallDontLie API: Richiesta partite ufficiali NBA (cache miss)...")
+            print(f"   🏀 NBA Official API: Richiesta partite ufficiali NBA.com (cache miss)...")
 
-            # Get games from BallDontLie API
-            games = self.bdl_client.get_games_for_date_range(start_date, end_date)
+            # Get games from official NBA API
+            games = get_nba_games_official_api(target_date)
 
-            print(f"   ✅ BallDontLie API: {len(games)} partite ufficiali trovate")
+            print(f"   ✅ NBA Official API: {len(games)} partite ufficiali trovate")
 
-            # Cache ottimizzato in base al range di date
-            if specific_date:
-                # Per singola data: cache più lungo (120 secondi)
-                cache_duration = 120
-            else:
-                # Per range di date: cache più breve per dati più freschi (72 secondi)
-                cache_duration = 72
-
-            game_cache.set(cache_key, games, duration_seconds=cache_duration)
+            # Cache for 30 seconds (NBA data changes frequently)
+            game_cache.set(cache_key, games, duration_seconds=30)
 
             return games
 
-        except RateLimitException as e:
-            print(f"   🚦 BallDontLie API rate limit exceeded: {e}")
-            return []
-        except APIException as e:
-            print(f"   ❌ BallDontLie API failed: {e}")
-            return []
         except Exception as e:
-            print(f"   ❌ BallDontLie API unexpected error: {e}")
+            print(f"   ❌ NBA Official API failed: {e}")
+            return []
+
+    def _get_ball_dont_lie_games(self, days_ahead: int = 7, specific_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get NBA games using BallDontLie API client with real schedule data.
+
+        Args:
+            days_ahead: Number of days ahead to fetch games for
+            specific_date: Specific date string (YYYY-MM-DD) if provided
+
+        Returns:
+            List of NBA games with real schedule information from BallDontLie
+        """
+        if not self.bdl_available or not self.bdl_client:
+            print(f"   ⚠️ BallDontLie API not available")
+            return []
+
+        try:
+            # Calculate target date range
+            if specific_date:
+                start_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                end_date = start_date
+            else:
+                start_date = date.today()
+                end_date = start_date + timedelta(days=days_ahead)
+
+            # Check cache first
+            cache_key = f"bdl_{start_date.strftime('%Y-%m-%d')}_{end_date.strftime('%Y-%m-%d')}"
+            cached_games = game_cache.get(cache_key)
+            if cached_games:
+                return cached_games
+
+            print(f"   🏀 BallDontLie API: Richiesta partite ufficiali da {start_date} a {end_date}...")
+
+            # Get games from BallDontLie API (already returns formatted data)
+            games = self.bdl_client.get_games_for_date_range(start_date, end_date)
+
+            # The client already returns games in the correct format
+            formatted_games = games
+
+            print(f"   ✅ BallDontLie API: {len(formatted_games)} partite ufficiali trovate")
+
+            # Cache for 60 seconds (BallDontLie has rate limits)
+            game_cache.set(cache_key, formatted_games, duration_seconds=60)
+
+            return formatted_games
+
+        except Exception as e:
+            print(f"   ❌ BallDontLie API failed: {e}")
             return []
 
     def _extract_main_odds(self, game):
@@ -531,19 +560,19 @@ class NBADataProvider:
         # 1. Primario: BallDontLie API (official NBA schedule)
         if self.bdl_available:
             print(f"\n📅 FASE 1: Partite Ufficiali NBA (BallDontLie API)")
-            bdl_games = self._get_ball_dont_lie_games(days_ahead=days_ahead, specific_date=specific_date)
+            nba_games = self._get_ball_dont_lie_games(days_ahead=days_ahead, specific_date=specific_date)
 
-            if bdl_games:
-                all_games.extend(bdl_games)
-                primary_source = "BallDontLie API (Official NBA Schedule)"
-                print(f"   ✅ BallDontLie API: {len(bdl_games)} partite ufficiali caricate")
+            if nba_games:
+                all_games.extend(nba_games)
+                primary_source = "BallDontLie API"
+                print(f"   ✅ BallDontLie API: {len(nba_games)} partite ufficiali caricate")
             else:
                 print(f"   ⚠️ BallDontLie API: Nessuna partita trovata, procedo con fallback")
         else:
             print(f"\n📅 FASE 1: BallDontLie API non disponibile")
 
-        # 2. Fallback 1: The Odds API (se BallDontLie fallisce)
-        if not all_games:  # Solo se non abbiamo partite da BallDontLie
+        # 2. Fallback 1: The Odds API (se NBA Official API fallisce)
+        if not all_games:  # Solo se non abbiamo partite da NBA Official API
             print(f"\n📅 FASE 2: Partite con Quote (The Odds API - Fallback)")
             odds_games = self._get_odds_api_games(days_ahead=days_ahead)
 

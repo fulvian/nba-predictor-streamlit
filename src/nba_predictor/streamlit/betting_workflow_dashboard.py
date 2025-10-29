@@ -105,23 +105,20 @@ def reset_workflow():
 
 
 def load_games_callback():
-    """Callback function for loading games - Context7 compliant."""
+    """Callback function for loading games with intelligent caching - Context7 compliant."""
     if st.session_state.debug_mode:
         logger.info("Loading games callback triggered")
 
     try:
-        # Get data provider instance
-        data_provider = NBADataProvider()
-
         # Convert selected date to string format for API
         date_str = st.session_state.selected_date.strftime('%Y-%m-%d')
         days_ahead = st.session_state.days_ahead
 
         if st.session_state.debug_mode:
-            logger.info(f"Fetching games for date: {date_str}, days ahead: {days_ahead}")
+            logger.info(f"Loading games for date: {date_str}, days ahead: {days_ahead}")
 
-        # Get games using NBA Official API
-        games = data_provider.get_scheduled_games(days_ahead=days_ahead, specific_date=date_str)
+        # Context7 Best Practice: Intelligent multi-level caching strategy
+        games = _load_games_with_intelligent_caching(date_str, days_ahead)
 
         # Store games in session state
         st.session_state.available_games = games
@@ -138,6 +135,231 @@ def load_games_callback():
         logger.error(f"Error loading games: {e}")
         if st.session_state.debug_mode:
             logger.error(f"Full error details: {str(e)}")
+
+
+def _load_games_with_intelligent_caching(date_str: str, days_ahead: int) -> list:
+    """
+    Context7 Best Practice: Intelligent multi-level caching for NBA games.
+
+    Strategy:
+    1. Check UnifiedDataStore first (persistent storage)
+    2. If missing or outdated, use NBADataProvider APIs
+    3. Update data store with fresh data for future use
+
+    Args:
+        date_str: Target date in YYYY-MM-DD format
+        days_ahead: Number of days to look ahead
+
+    Returns:
+        List of NBA games data
+    """
+    if st.session_state.debug_mode:
+        logger.info("🔍 Context7 Intelligent Caching: Checking data availability...")
+
+    # Initialize data store for checking existing data
+    try:
+        data_store = UnifiedDataStore(base_path="data")
+        data_store.initialize()
+
+        # Check if we already have games for this date in persistent storage
+        cached_games = _check_data_store_for_games(data_store, date_str, days_ahead)
+
+        if cached_games:
+            if st.session_state.debug_mode:
+                logger.info(f"✅ Data Store HIT: Found {len(cached_games)} games in persistent storage")
+                for game in cached_games[:2]:
+                    logger.info(f"   📦 Cached: {game.get('away_team', 'Unknown')} @ {game.get('home_team', 'Unknown')}")
+            return cached_games
+        else:
+            if st.session_state.debug_mode:
+                logger.info("📝 Data Store MISS: No games found, fetching from APIs...")
+
+    except Exception as e:
+        if st.session_state.debug_mode:
+            logger.warning(f"⚠️ Data store check failed: {e}, proceeding with APIs...")
+
+    # Fetch from APIs with caching strategy
+    games = _fetch_games_from_apis_with_caching(date_str, days_ahead)
+
+    # Update persistent storage with fresh data
+    if games:
+        try:
+            _update_data_store_with_games(data_store, games, date_str)
+            if st.session_state.debug_mode:
+                logger.info(f"💾 Updated persistent storage with {len(games)} games")
+        except Exception as e:
+            if st.session_state.debug_mode:
+                logger.warning(f"⚠️ Failed to update persistent storage: {e}")
+
+    return games
+
+
+def _check_data_store_for_games(data_store: UnifiedDataStore, date_str: str, days_ahead: int) -> Optional[list]:
+    """
+    Check if games are available in the persistent data store.
+
+    Args:
+        data_store: UnifiedDataStore instance
+        date_str: Target date in YYYY-MM-DD format
+        days_ahead: Number of days to look ahead
+
+    Returns:
+        List of games if found and valid, None otherwise
+    """
+    try:
+        # Calculate date range for the query
+        from datetime import datetime, timedelta
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        end_date = target_date + timedelta(days=days_ahead)
+
+        start_date_str = target_date.strftime('%Y-%m-%d')
+        end_date_str = end_date.strftime('%Y-%m-%d')
+
+        if st.session_state.debug_mode:
+            logger.info(f"   🔍 Querying data store for games between {start_date_str} and {end_date_str}")
+
+        # Query the data store for games in the date range
+        query = f"""
+        SELECT
+            game_date,
+            home_team,
+            away_team,
+            home_score,
+            away_score,
+            season,
+            'Scheduled' as status,
+            '' as time,
+            '{{}}' as odds
+        FROM read_parquet('{data_store.games_dir}/*.parquet')
+        WHERE game_date BETWEEN '{start_date_str}' AND '{end_date_str}'
+        ORDER BY game_date
+        """
+
+        result = data_store.query_analytics(query)
+
+        if result and result.height > 0:
+            # Convert to expected format
+            games = []
+            for row in result.iter_rows():
+                games.append({
+                    'date': row[0].strftime('%Y-%m-%d') if hasattr(row[0], 'strftime') else str(row[0]),
+                    'home_team': row[1] or 'Unknown',
+                    'away_team': row[2] or 'Unknown',
+                    'home_score': row[3],
+                    'away_score': row[4],
+                    'season': row[5],
+                    'status': row[6],
+                    'time': row[7],
+                    'odds': row[8] or {},
+                    'source': 'Data Store Cache'
+                })
+
+            if st.session_state.debug_mode:
+                logger.info(f"   ✅ Found {len(games)} games in data store")
+
+            return games
+        else:
+            if st.session_state.debug_mode:
+                logger.info("   📝 No games found in data store for this date range")
+            return None
+
+    except Exception as e:
+        if st.session_state.debug_mode:
+            logger.error(f"   ❌ Error checking data store: {e}")
+        return None
+
+
+def _fetch_games_from_apis_with_caching(date_str: str, days_ahead: int) -> list:
+    """
+    Fetch games from APIs with built-in caching optimization.
+
+    Args:
+        date_str: Target date in YYYY-MM-DD format
+        days_ahead: Number of days to look ahead
+
+    Returns:
+        List of games from APIs
+    """
+    if st.session_state.debug_mode:
+        logger.info("🌐 Fetching games from APIs with caching...")
+
+    try:
+        # Get data provider instance
+        data_provider = NBADataProvider()
+
+        # Get games using the existing API method (which has its own caching)
+        games = data_provider.get_scheduled_games(days_ahead=days_ahead, specific_date=date_str)
+
+        if st.session_state.debug_mode:
+            logger.info(f"   📡 API returned {len(games)} games")
+            # Log source distribution
+            sources = {}
+            for game in games:
+                source = game.get('source', 'Unknown')
+                sources[source] = sources.get(source, 0) + 1
+
+            for source, count in sources.items():
+                logger.info(f"   📊 {source}: {count} games")
+
+        return games
+
+    except Exception as e:
+        if st.session_state.debug_mode:
+            logger.error(f"   ❌ Error fetching from APIs: {e}")
+        return []
+
+
+def _update_data_store_with_games(data_store: UnifiedDataStore, games: list, date_str: str):
+    """
+    Update the persistent data store with fresh games data.
+
+    Args:
+        data_store: UnifiedDataStore instance
+        games: List of games to store
+        date_str: Target date for reference
+    """
+    try:
+        if not games:
+            return
+
+        # Convert games to DataFrame format for storage
+        from datetime import datetime
+        import polars as pl
+
+        game_records = []
+        for game in games:
+            # Parse game date
+            game_date = datetime.strptime(game.get('date', date_str), '%Y-%m-%d').date()
+
+            record = {
+                'game_date': game_date,
+                'home_team': game.get('home_team', 'Unknown'),
+                'away_team': game.get('away_team', 'Unknown'),
+                'home_score': game.get('home_score', None),
+                'away_score': game.get('away_score', None),
+                'season': game.get('season', 2024),
+                'status': game.get('status', 'Scheduled'),
+                'time': game.get('time', ''),
+                'odds': str(game.get('odds', {})),
+                'source': game.get('source', 'API'),
+                'updated_at': datetime.now()
+            }
+            game_records.append(record)
+
+        # Create DataFrame
+        df = pl.DataFrame(game_records)
+
+        # Save to data store
+        output_path = data_store.games_dir / f"games_{date_str.replace('-', '_')}.parquet"
+        df.write_parquet(output_path)
+
+        if st.session_state.debug_mode:
+            logger.info(f"   💾 Saved {len(game_records)} games to {output_path}")
+
+    except Exception as e:
+        if st.session_state.debug_mode:
+            logger.error(f"   ❌ Error updating data store: {e}")
+        # Don't raise - this is a non-critical operation
 
 
 def select_game_callback(game_index):

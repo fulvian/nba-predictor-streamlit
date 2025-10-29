@@ -234,130 +234,9 @@ class NBATimezoneManager:
 def get_nba_games_official_api(target_date) -> List[Dict]:
     """
     Get NBA games using the official NBA.com API that actually works.
-    Uses the CDN endpoint that returns today's games correctly.
 
     Args:
         target_date: Date to get games for
-
-    Returns:
-        List of games with complete information
-    """
-    import requests
-    from datetime import datetime, timezone
-
-    manager = NBATimezoneManager()
-
-    try:
-        print("   🔄 Trying official NBA Scoreboard API...")
-
-        # For today's games, use the CDN endpoint that works
-        today = datetime.now(timezone.utc).date()
-
-        if target_date == today:
-            # Use the working CDN endpoint for today's games
-            url = 'https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json'
-
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Referer': 'https://www.nba.com/',
-                'Origin': 'https://www.nba.com'
-            }
-
-            response = requests.get(url, headers=headers, timeout=20)
-
-            if response.status_code == 200:
-                data = response.json()
-                processed_games = []
-
-                if 'scoreboard' in data and 'games' in data['scoreboard']:
-                    games = data['scoreboard']['games']
-
-                    for game in games:
-                        # Extract game info
-                        game_id = game.get('gameId', '')
-                        game_status = game.get('gameStatusText', '')
-                        game_time_utc = game.get('gameTimeUTC', '')
-
-                        # For today's games, include recently completed games from the same NBA day
-                        # NBA "day" runs until early morning, so games from yesterday that finished
-                        # early today are still considered "today's games"
-                        # Only skip really old completed games
-
-                        # Parse UTC time
-                        if game_time_utc:
-                            game_date = datetime.fromisoformat(game_time_utc.replace('Z', '+00:00'))
-                        else:
-                            # Fallback to current time
-                            game_date = datetime.now(timezone.utc)
-
-                        # Get team info
-                        home_team_info = game.get('homeTeam', {})
-                        away_team_info = game.get('awayTeam', {})
-
-                        home_team_id = str(home_team_info.get('teamId', ''))
-                        away_team_id = str(away_team_info.get('teamId', ''))
-                        home_team = home_team_info.get('teamName', f'Team {home_team_id}')
-                        away_team = away_team_info.get('teamName', f'Team {away_team_id}')
-
-                        # Get timezone info
-                        home_local, home_tz = manager.convert_utc_to_local(game_date, home_team)
-                        away_local, away_tz = manager.convert_utc_to_local(game_date, away_team)
-
-                        processed_game = {
-                            'game_id': f"NBA_{game_id}",
-                            'date': home_local.strftime('%Y-%m-%d'),
-                            'time': home_local.strftime('%H:%M'),
-                            'time_utc': game_date.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                            'away_team': away_team,
-                            'home_team': home_team,
-                            'status': game_status,
-                            'score': '',
-                            'season': '2025-26',
-                            'home_timezone': home_tz,
-                            'away_timezone': away_tz,
-                            'home_local_time': home_local.strftime('%Y-%m-%d %H:%M %Z'),
-                            'away_local_time': away_local.strftime('%Y-%m-%d %H:%M %Z'),
-                            'utc_datetime_iso': game_date.isoformat(),
-                            'source': 'NBA Official API - Scoreboard CDN (Working)',
-                            'api_endpoint': 'cdn.nba.com/static/json/liveData/scoreboard',
-                            'bookmakers_count': 0,
-                            'odds': {},
-                            'game_time': game_status
-                        }
-                        processed_games.append(processed_game)
-
-                    if processed_games:
-                        print(f"✅ Found {len(processed_games)} games from official NBA API")
-                        return processed_games
-                    else:
-                        print("   No scheduled games found for today")
-                else:
-                    print("   No games data in API response")
-            else:
-                print(f"   ⚠️ NBA CDN API returned status {response.status_code}")
-        else:
-            print(f"   ⚠️ Requested date {target_date} is not today ({today})")
-
-            # Try the old stats.nba.com endpoint for non-today dates
-            return _get_nba_games_stats_endpoint(target_date, manager)
-
-    except Exception as e:
-        print(f"   ⚠️ Official NBA API failed: {e}")
-        # Fallback to stats endpoint
-        return _get_nba_games_stats_endpoint(target_date, manager)
-
-    return []
-
-
-def _get_nba_games_stats_endpoint(target_date, manager) -> List[Dict]:
-    """
-    Fallback function using the stats.nba.com endpoint for non-today dates.
-
-    Args:
-        target_date: Date to get games for
-        manager: NBATimezoneManager instance
 
     Returns:
         List of games with complete information
@@ -365,8 +244,10 @@ def _get_nba_games_stats_endpoint(target_date, manager) -> List[Dict]:
     import requests
     from datetime import datetime
 
+    manager = NBATimezoneManager()
+
     try:
-        print("   🔄 Trying stats.nba.com endpoint as fallback...")
+        print("   🔄 Trying official NBA ScoreboardV2 API...")
 
         url = 'https://stats.nba.com/stats/scoreboardv2'
         params = {
@@ -438,7 +319,7 @@ def _get_nba_games_stats_endpoint(target_date, manager) -> List[Dict]:
                                 'home_local_time': home_local.strftime('%Y-%m-%d %H:%M %Z'),
                                 'away_local_time': away_local.strftime('%Y-%m-%d %H:%M %Z'),
                                 'utc_datetime_iso': game_date.isoformat(),
-                                'source': 'NBA Official API - ScoreboardV2 (Fallback)',
+                                'source': 'NBA Official API - ScoreboardV2 (Direct)',
                                 'api_endpoint': 'stats.nba.com/stats/scoreboardv2',
                                 'bookmakers_count': 0,
                                 'odds': {},
@@ -447,16 +328,16 @@ def _get_nba_games_stats_endpoint(target_date, manager) -> List[Dict]:
                             processed_games.append(processed_game)
 
                         if processed_games:
-                            print(f"✅ Found {len(processed_games)} games from stats.nba.com fallback")
+                            print(f"✅ Found {len(processed_games)} games from official NBA API")
                             return processed_games
                         else:
-                            print("   No scheduled games found in fallback")
+                            print("   No scheduled games found")
 
         else:
-            print(f"   ⚠️ NBA stats API returned status {response.status_code}")
+            print(f"   ⚠️ NBA API returned status {response.status_code}")
 
     except Exception as e:
-        print(f"   ⚠️ NBA stats API fallback failed: {e}")
+        print(f"   ⚠️ Official NBA API failed: {e}")
 
     return []
 

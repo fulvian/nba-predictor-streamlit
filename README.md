@@ -16,20 +16,49 @@ NBA Predictor Analytics Dashboard è un sistema moderno di analisi dati NBA che 
 - **Modern Architecture**: Streamlit + Polars + DuckDB + Context7 compliance
 - **Professional UI**: Dashboard responsive e interattivo
 
-## 🚀 Live Demo
+## 🚀 Official Dashboard
 
-**[🏀 NBA Analytics Dashboard](http://localhost:8501)**
+**[🏀 NBA Betting Workflow Dashboard](http://localhost:8504)** - **OFFICIAL SYSTEM**
 
-## 📋 Today's NBA Games (28 Ottobre 2025)
+## 📋 Today's NBA Games (29 Ottobre 2025)
 
-**Partite Reali Disponibili:**
-1. Philadelphia 76ers vs Washington Wizards
-2. Charlotte Hornets vs Miami Heat
-3. New York Knicks vs Milwaukee Bucks
-4. Sacramento Kings vs Oklahoma City Thunder
-5. LA Clippers vs Golden State Warriors
+**✅ All 10 Games Found via Official BallDontLie API:**
+1. Cleveland Cavaliers @ Boston Celtics
+2. Orlando Magic @ Detroit Pistons
+3. Atlanta Hawks @ Brooklyn Nets
+4. **Houston Rockets @ Toronto Raptors** ✅
+5. Sacramento Kings @ Chicago Bulls
+6. Indiana Pacers @ Dallas Mavericks
+7. New Orleans Pelicans @ Denver Nuggets
+8. Portland Trail Blazers @ Utah Jazz
+9. Los Angeles Lakers @ Minnesota Timberwolves
+10. Memphis Grizzlies @ Phoenix Suns
 
-*Vedi [Guida Ufficiale Download Partite](docs/nba_game_download_guide.md) per dettagli*
+## ✅ **OFFICIAL NBA DATA SYSTEM**
+
+### 🎯 **Single Source of Truth**
+```python
+from src.nba_predictor.api.data_provider import NBADataProvider
+
+# Create official provider
+provider = NBADataProvider()
+
+# Get games with intelligent caching (Data Store → BallDontLie API → Persistent Storage)
+games = provider.get_scheduled_games(days_ahead=7, specific_date='2025-10-29')
+```
+
+### 🏗️ **System Architecture**
+- **🥇 Primary API**: BallDontLie API (Official NBA Schedule)
+- **🥈 Fallback API**: The Odds API (Betting odds)
+- **💾 Persistent Storage**: Automatic data caching in Data Store
+- **🧠 Intelligent Caching**: Data Store → API → Cache workflow
+- **🎯 Official Dashboard**: `run_betting_workflow.py`
+
+### 🚫 **DEPRECATED SYSTEMS**
+All other scripts have been moved to `deprecated/` folder.
+**DO NOT USE** any other data download or prediction scripts.
+
+*See [Deprecated Systems Documentation](deprecated/README.md) for details*
 
 ## ✨ Key Features
 

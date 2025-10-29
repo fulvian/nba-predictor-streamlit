@@ -1,0 +1,118 @@
+# NBA Predictor - Development Environment
+# Context7-compliant development Docker Compose configuration
+
+version: '3.8'
+
+services:
+  nba-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: nba-predictor-dev
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    environment:
+      # Environment settings
+      - ENV=development
+      - DEBUG=true
+
+      # Streamlit configuration
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+      # API Keys (set in .env file)
+      - NBA_API_KEY=${NBA_API_KEY:-}
+      - ODDS_API_KEY=${ODDS_API_KEY:-}
+
+      # Database settings
+      - DATABASE_URL=sqlite:///data/nba_predictor_dev.db
+
+      # Cache settings
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+
+      # Performance settings
+      - CACHE_ENABLED=true
+      - BACKGROUND_SYNC_ENABLED=true
+      - SYNC_INTERVAL_MINUTES=30
+      - MAX_CONCURRENT_USERS=50
+
+    volumes:
+      # Mount source code for development
+      - ./src:/app/src:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+      # Mount configuration
+      - ./.env:/app/.env:ro
+
+    depends_on:
+      - redis
+
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Development-specific settings
+    stdin_open: true
+    tty: true
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: nba-predictor-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Optional: PostgreSQL for production-like development
+  postgres:
+    image: postgres:15-alpine
+    container_name: nba-predictor-postgres
+    environment:
+      - POSTGRES_DB=nba_predictor_dev
+      - POSTGRES_USER=nba_user
+      - POSTGRES_PASSWORD=nba_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nba_user -d nba_predictor_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: nba-predictor-network
+    driver: bridge
