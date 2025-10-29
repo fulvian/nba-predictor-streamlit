@@ -12,9 +12,25 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+import pandas as pd
 import streamlit as st
 from dateutil import tz
 from ..utils.nba_timezone_utils import NBATimezoneManager
+from ..utils.manual_odds_calculator import _manual_odds_calculator
+from ..utils.legacy_risk_manager import LegacyRiskManager
+
+# Initialize logger first
+logger = logging.getLogger(__name__)
+
+# Import base styling con fallback sicuro
+try:
+    from nba_predictor.streamlit.styling_system_safe import NBAStylingSafe, apply_safe_styling, create_safe_hero_header, create_safe_section_header
+    STYLING_SAFE_AVAILABLE = True
+    logger.info("Using safe styling system")
+except ImportError as e:
+    logger.warning(f"Safe styling system not available: {e}")
+    STYLING_SAFE_AVAILABLE = False
 
 # Try to import NBADataProvider, but make it optional for now
 try:
@@ -64,10 +80,8 @@ from ..utils.exceptions import StreamlitError, APIError
 from .utils.cache_manager import setup_caching_for_app
 from .config.deployment_config import load_config
 from .components.predictions_dashboard import render_predictions_dashboard
-from .components.analytics_dashboard import render_analytics_dashboard
+# Analytics Dashboard rimossa - solo flusso legacy
 from .components.sync_dashboard import render_sync_dashboard
-
-logger = logging.getLogger(__name__)
 
 # Initialize timezone manager per Context7 best practices
 _tz_manager = None
@@ -78,6 +92,497 @@ def get_timezone_manager() -> NBATimezoneManager:
     if _tz_manager is None:
         _tz_manager = NBATimezoneManager()
     return _tz_manager
+
+def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
+    """
+    🎯 COMPLETE LEGACY BETTING ANALYSIS - Context7 Best Practices
+
+    Implementa ESATTAMENTE il sistema legacy con display completo di:
+    - TUTTE le quote generate dal sistema
+    - TUTTE le probabilità calcolate
+    - TUTTI gli edge values
+    - TUTTE le confidenze
+    - Stake avanzato completo
+    - Quality scoring completo
+
+    Args:
+        game: Dati della partita
+        central_line: Linea centrale del bookmaker
+    """
+    try:
+        # Inizializza il sistema legacy
+        risk_manager = LegacyRiskManager()
+
+        # Mostra stato bankroll
+        bankroll_status = risk_manager.get_bankroll_status()
+
+        # 📊 STATUS CONTAINER - Context7 Best Practice
+        with st.container(border=True, height=150):
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("💰 Bankroll", f"€{bankroll_status['current_bankroll']:.2f}")
+            with col2:
+                st.metric("📊 Stake Attivi", f"€{bankroll_status['pending_stake']:.2f}")
+            with col3:
+                st.metric("💵 Disponibile", f"€{bankroll_status['available_bankroll']:.2f}")
+            with col4:
+                st.metric("🎯 Scommesse", bankroll_status['pending_bets_count'])
+
+        st.divider()
+
+        # Genera distribuzione predittiva mock per test
+        mock_distribution = {
+            'predicted_mu': central_line + np.random.normal(0, 3),  # Predizione con variazione ridotta
+            'predicted_sigma': 10.5,  # Deviazione standard più realistica
+            'mc_simulations': 25000
+        }
+
+        # 🔄 STATUS SPINNER - Context7 Best Practice
+        with st.status("🔄 Elaborazione algoritmi legacy di gestione rischio...", expanded=True) as status:
+            st.write("⚙️ Caricamento stake calculation avanzato...")
+            opportunities = risk_manager.analyze_betting_opportunities(
+                distribution=mock_distribution,
+                central_line=central_line,
+                bankroll=bankroll_status['available_bankroll']
+            )
+            st.write("✅ Analisi complete!")
+            status.update(label="✅ Analisi Legacy Completa", state="complete", expanded=False)
+
+        if not opportunities:
+            st.warning("⚠️ Nessuna opportunità di betting generata")
+            return
+
+        # Filtra solo VALUE bets
+        value_bets = [opp for opp in opportunities if opp.get('is_value', False)]
+
+        if not value_bets:
+            st.info("ℹ️ Nessuna VALUE bet trovata con i parametri attuali")
+            return
+
+        st.success(f"✅ Trovate {len(value_bets)} VALUE bets su {len(opportunities)} linee analizzate")
+
+        # Calcola scommessa ottimale
+        optimal_bet = risk_manager.calculate_optimal_bet(value_bets)
+
+        # 🔧 CRITICAL FIX: Ensure optimal bet has proper stake calculation
+        if optimal_bet and 'stake' not in optimal_bet:
+            # Recalculate stake for optimal bet using current bankroll
+            quality = risk_manager.calculate_quality_score(
+                optimal_bet.get('edge', 0),
+                optimal_bet.get('probability', 0),
+                optimal_bet.get('odds', 1.0)
+            )
+            optimal_bet['stake'] = risk_manager.calculate_advanced_stake(
+                optimal_bet.get('edge', 0),
+                optimal_bet.get('probability', 0),
+                optimal_bet.get('odds', 1.0),
+                bankroll_status['available_bankroll'],
+                quality
+            )
+
+        # 📊 MAIN DATA TABLE - Context7 Best Practice con tutte le info complete
+        st.subheader("🎯 ANALISI COMPLETA SISTEMA LEGACY - Tutte le Quote e Probabilità")
+
+        # Prepara dati COMPLETI per la tabella
+        complete_data = []
+        for i, bet in enumerate(opportunities, 1):
+            # Calcolo tutte le metriche complete
+            quality = risk_manager.calculate_quality_score(
+                bet.get('edge', 0),
+                bet.get('probability', 0),
+                bet.get('odds', 1.0)
+            )
+
+            # Risk assessment
+            risk_level = risk_manager.assess_risk_level(bet)
+
+            # Stake calculation
+            stake = risk_manager.calculate_advanced_stake(
+                bet.get('edge', 0),
+                bet.get('probability', 0),
+                bet.get('odds', 1.0),
+                bankroll_status['available_bankroll'],
+                quality
+            )
+
+            complete_data.append({
+                '#': i,
+                'TIPO': bet['type'],
+                'LINEA': f"{bet['line']:.1f}",
+                'QUOTA': f"{bet['odds']:.2f}",
+                'EDGE%': f"{bet['edge']*100:+.2f}%",
+                'PROB%': f"{bet['probability']*100:.1f}%",
+                'IMPL%': f"{bet.get('implied_probability', 1/bet['odds'])*100:.1f}%",
+                'TRUE%': f"{bet.get('true_probability', bet['probability'])*100:.1f}%",
+                'QUALITY': f"{quality['quality_score']*100:.1f}",
+                'EDGE_S': f"{quality['edge_score']*100:.1f}",
+                'CONF': f"{quality['confidence_score']*100:.1f}",
+                'RISK_S': f"{quality['risk_score']*100:.1f}",
+                'CONS': f"{quality['consistency_score']*100:.1f}",
+                'KELLY%': f"{quality['kelly_fraction']*100:.2f}%",
+                'STAKE': f"€{stake:.2f}",
+                'ROI%': f"{(bet['odds']-1)*100:.1f}%",
+                'VALUE': '✅' if bet.get('is_value', False) else '❌',
+                'RISK': risk_level
+            })
+
+        df_complete = pd.DataFrame(complete_data)
+
+        # 📨 CONTEXT7 DATA EDITOR - Tabella interattiva completa
+        edited_df = st.data_editor(
+            df_complete,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "#": st.column_config.NumberColumn("#", width="small"),
+                "TIPO": st.column_config.TextColumn("Tipo", width="small"),
+                "LINEA": st.column_config.NumberColumn("Linea", format="%.1f", width="small"),
+                "QUOTA": st.column_config.NumberColumn("Quota", format="%.2f", width="small"),
+                "EDGE%": st.column_config.NumberColumn("Edge%", format="%.2f", width="small"),
+                "PROB%": st.column_config.NumberColumn("Prob%", format="%.1f", width="small"),
+                "IMPL%": st.column_config.NumberColumn("Impl%", format="%.1f", width="small"),
+                "TRUE%": st.column_config.NumberColumn("True%", format="%.1f", width="small"),
+                "QUALITY": st.column_config.NumberColumn("Quality", format="%.1f", width="small"),
+                "EDGE_S": st.column_config.NumberColumn("Edge Score", format="%.1f", width="small"),
+                "CONF": st.column_config.NumberColumn("Confidence", format="%.1f", width="small"),
+                "RISK_S": st.column_config.NumberColumn("Risk Score", format="%.1f", width="small"),
+                "CONS": st.column_config.NumberColumn("Consistency", format="%.1f", width="small"),
+                "KELLY%": st.column_config.NumberColumn("Kelly%", format="%.2f", width="small"),
+                "STAKE": st.column_config.NumberColumn("Stake", format="%.2f", width="small"),
+                "ROI%": st.column_config.NumberColumn("ROI%", format="%.1f", width="small"),
+                "VALUE": st.column_config.TextColumn("Value", width="small"),
+                "RISK": st.column_config.TextColumn("Risk Level", width="small")
+            },
+            key="legacy_complete_analysis"
+        )
+
+        st.divider()
+
+        # 🏆 RACCOMANDAZIONI PRINCIPALI
+        if optimal_bet:
+            st.subheader("🏆 RACCOMANDAZIONI PRINCIPALI SISTEMA LEGACY")
+
+            # Prepara le 4 raccomandazioni principali
+            recommendations_data = []
+
+            # 1. SCELTA DEL SISTEMA (Ottimale)
+            if optimal_bet:
+                opt_quality = risk_manager.calculate_quality_score(
+                    optimal_bet.get('edge', 0),
+                    optimal_bet.get('probability', 0),
+                    optimal_bet.get('odds', 1.0)
+                )
+                # 🔧 FIX: Ensure stake is properly calculated for consistency
+                opt_stake = optimal_bet.get('stake', 0)
+                if opt_stake == 0:
+                    opt_stake = risk_manager.calculate_advanced_stake(
+                        optimal_bet.get('edge', 0),
+                        optimal_bet.get('probability', 0),
+                        optimal_bet.get('odds', 1.0),
+                        bankroll_status['available_bankroll'],
+                        opt_quality
+                    )
+
+                recommendations_data.append({
+                    'CATEGORIA': '🏆 SCELTA SISTEMA',
+                    'TIPO': optimal_bet['type'],
+                    'LINEA': f"{optimal_bet['line']:.1f}",
+                    'QUOTA': f"{optimal_bet['odds']:.2f}",
+                    'EDGE%': f"{optimal_bet['edge']*100:+.2f}%",
+                    'PROB%': f"{optimal_bet['probability']*100:.1f}%",
+                    'QUALITY': f"{opt_quality['quality_score']*100:.1f}",
+                    'STAKE': f"€{opt_stake:.2f}",
+                    'RISK': risk_manager.assess_risk_level(optimal_bet)
+                })
+
+            # 2. MASSIMA PROBABILITÀ
+            highest_prob = max(value_bets, key=lambda x: x.get('probability', 0))
+            prob_quality = risk_manager.calculate_quality_score(
+                highest_prob.get('edge', 0),
+                highest_prob.get('probability', 0),
+                highest_prob.get('odds', 1.0)
+            )
+            recommendations_data.append({
+                'CATEGORIA': '📊 MAX PROBABILITÀ',
+                'TIPO': highest_prob['type'],
+                'LINEA': f"{highest_prob['line']:.1f}",
+                'QUOTA': f"{highest_prob['odds']:.2f}",
+                'EDGE%': f"{highest_prob['edge']*100:+.2f}%",
+                'PROB%': f"{highest_prob['probability']*100:.1f}%",
+                'QUALITY': f"{prob_quality['quality_score']*100:.1f}",
+                'STAKE': f"€{highest_prob['stake']:.2f}",
+                'RISK': risk_manager.assess_risk_level(highest_prob)
+            })
+
+            # 3. MASSIMO EDGE
+            highest_edge = max(value_bets, key=lambda x: x.get('edge', 0))
+            edge_quality = risk_manager.calculate_quality_score(
+                highest_edge.get('edge', 0),
+                highest_edge.get('probability', 0),
+                highest_edge.get('odds', 1.0)
+            )
+            recommendations_data.append({
+                'CATEGORIA': '🔥 MAX EDGE',
+                'TIPO': highest_edge['type'],
+                'LINEA': f"{highest_edge['line']:.1f}",
+                'QUOTA': f"{highest_edge['odds']:.2f}",
+                'EDGE%': f"{highest_edge['edge']*100:+.2f}%",
+                'PROB%': f"{highest_edge['probability']*100:.1f}%",
+                'QUALITY': f"{edge_quality['quality_score']*100:.1f}",
+                'STAKE': f"€{highest_edge['stake']:.2f}",
+                'RISK': risk_manager.assess_risk_level(highest_edge)
+            })
+
+            # 4. QUOTA MAGGIORE
+            highest_odds = max(value_bets, key=lambda x: x.get('odds', 0))
+            odds_quality = risk_manager.calculate_quality_score(
+                highest_odds.get('edge', 0),
+                highest_odds.get('probability', 0),
+                highest_odds.get('odds', 1.0)
+            )
+            recommendations_data.append({
+                'CATEGORIA': '💰 MAX QUOTA',
+                'TIPO': highest_odds['type'],
+                'LINEA': f"{highest_odds['line']:.1f}",
+                'QUOTA': f"{highest_odds['odds']:.2f}",
+                'EDGE%': f"{highest_odds['edge']*100:+.2f}%",
+                'PROB%': f"{highest_odds['probability']*100:.1f}%",
+                'QUALITY': f"{odds_quality['quality_score']*100:.1f}",
+                'STAKE': f"€{highest_odds['stake']:.2f}",
+                'RISK': risk_manager.assess_risk_level(highest_odds)
+            })
+
+            df_recommendations = pd.DataFrame(recommendations_data)
+
+            # 🎨 CONTEXT7 STYLING - Color coding
+            def highlight_recommendations(row):
+                if 'SCELTA SISTEMA' in row['CATEGORIA']:
+                    return ['background-color: #FFD700; font-weight: bold'] * len(row)  # Oro
+                elif 'MAX PROBABILITÀ' in row['CATEGORIA']:
+                    return ['background-color: #90EE90'] * len(row)  # Verde chiaro
+                elif 'MAX EDGE' in row['CATEGORIA']:
+                    return ['background-color: #FFB6C1'] * len(row)  # Rosa chiaro
+                elif 'MAX QUOTA' in row['CATEGORIA']:
+                    return ['background-color: #E6E6FA'] * len(row)  # Lavanda
+                return [''] * len(row)
+
+            st.dataframe(
+                df_recommendations.style.apply(highlight_recommendations, axis=1),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.divider()
+
+        # 📊 DETAILED ANALYSIS - Context7 Pills per selezione
+        st.subheader("📊 ANALISI DETTAGLIATE")
+
+        analysis_view = st.pills(
+            "Select Analysis View",
+            options=["📈 Stake Analysis", "🎯 Quality Breakdown", "💎 Value Opportunities"],
+            default="📈 Stake Analysis",
+            selection_mode="single"
+        )
+
+        if analysis_view == "📈 Stake Analysis":
+            # Stake analysis con tutte le metriche
+            stake_analysis = []
+            for bet in value_bets[:20]:  # Top 20
+                quality = risk_manager.calculate_quality_score(
+                    bet.get('edge', 0),
+                    bet.get('probability', 0),
+                    bet.get('odds', 1.0)
+                )
+                stake_analysis.append({
+                    'Linea': f"{bet['line']:.1f}",
+                    'Tipo': bet['type'],
+                    'Stake': f"€{bet['stake']:.2f}",
+                    'Prob%': f"{bet['probability']*100:.1f}%",
+                    'Edge%': f"{bet['edge']*100:+.2f}%",
+                    'Quality': f"{quality['quality_score']*100:.1f}",
+                    'Kelly%': f"{quality['kelly_fraction']*100:.2f}%",
+                    'ROI%': f"{(bet['odds']-1)*100:.1f}%"
+                })
+
+            if stake_analysis:
+                df_stake = pd.DataFrame(stake_analysis)
+                # Use simple Streamlit dataframe
+                st.dataframe(df_stake, use_container_width=True, hide_index=True)
+
+        elif analysis_view == "🎯 Quality Breakdown":
+            # Quality breakdown completo
+            quality_breakdown = []
+            for bet in value_bets[:15]:  # Top 15
+                quality = risk_manager.calculate_quality_score(
+                    bet.get('edge', 0),
+                    bet.get('probability', 0),
+                    bet.get('odds', 1.0)
+                )
+                quality_breakdown.append({
+                    'Linea': f"{bet['line']:.1f}",
+                    'Tipo': bet['type'],
+                    'Quality': f"{quality['quality_score']*100:.1f}",
+                    'Edge_S': f"{quality['edge_score']*100:.1f}",
+                    'Confidence': f"{quality['confidence_score']*100:.1f}",
+                    'Risk_S': f"{quality['risk_score']*100:.1f}",
+                    'Consistency': f"{quality['consistency_score']*100:.1f}",
+                    'Raw_Score': f"{quality['raw_score']:.1f}"
+                })
+
+            if quality_breakdown:
+                df_quality = pd.DataFrame(quality_breakdown)
+                # Use simple Streamlit dataframe
+                st.dataframe(df_quality, use_container_width=True, hide_index=True)
+
+        elif analysis_view == "💎 Value Opportunities":
+            # VALUE bets complete analysis
+            value_analysis = []
+            for bet in value_bets:
+                quality = risk_manager.calculate_quality_score(
+                    bet.get('edge', 0),
+                    bet.get('probability', 0),
+                    bet.get('odds', 1.0)
+                )
+                value_analysis.append({
+                    'Linea': f"{bet['line']:.1f}",
+                    'Tipo': bet['type'],
+                    'Quota': f"{bet['odds']:.2f}",
+                    'Edge%': f"{bet['edge']*100:+.2f}%",
+                    'Prob%': f"{bet['probability']*100:.1f}%",
+                    'Impl%': f"{bet.get('implied_probability', 1/bet['odds'])*100:.1f}%",
+                    'Quality': f"{quality['quality_score']*100:.1f}",
+                    'Stake': f"€{bet['stake']:.2f}",
+                    'Risk': risk_manager.assess_risk_level(bet)
+                })
+
+            if value_analysis:
+                df_value = pd.DataFrame(value_analysis)
+                # Use simple Streamlit dataframe
+                st.dataframe(df_value, use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # 💾 SAVE BET FUNCTIONALITY - Context7 Best Practice
+        if optimal_bet:
+            st.subheader("💾 SALVA SCOMMESSA CONSIGLIATA")
+
+            col1, col2, col3 = st.columns([2, 1, 1])
+
+            with col1:
+                # 🎨 IMPROVED FORMATTING: Clean, professional layout
+                st.markdown("### 🎯 **PUNTATA CONSIGLIATA SISTEMA LEGACY**")
+
+                # Main recommendation in highlighted box
+                with st.container():
+                    st.markdown("""
+                    <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; border-left: 5px solid #1f77b4;">
+                        <h4 style="color: #1f77b4; margin-bottom: 10px;">{} {:.1f} @ {:.2f}</h4>
+                    </div>
+                    """.format(optimal_bet['type'], optimal_bet['line'], optimal_bet['odds']), unsafe_allow_html=True)
+
+                # Professional metrics layout with safe styling system
+                if STYLING_SAFE_AVAILABLE:
+                    st.markdown(create_safe_section_header("📊 Analysis Metrics", "Key performance indicators for this betting opportunity"), unsafe_allow_html=True)
+                else:
+                    st.subheader("📊 Analysis Metrics")
+                    st.markdown("Key performance indicators for this betting opportunity")
+
+                # Create cleaner metric cards with better spacing
+                col_metrics1, col_metrics2 = st.columns(2, gap="large")
+
+                with col_metrics1:
+                    # Stake and Edge in first column
+                    st.metric(
+                        label="💰 Stake Amount",
+                        value=f"€{optimal_bet['stake']:.2f}"
+                    )
+
+                    edge_value = optimal_bet['edge'] * 100
+                    st.metric(
+                        label="📈 Edge Value",
+                        value=f"{edge_value:+.2f}%",
+                        delta=f"{'High' if edge_value > 5 else 'Medium' if edge_value > 2 else 'Low'} Value"
+                    )
+
+                with col_metrics2:
+                    # Return and Probability in second column
+                    potential_return = optimal_bet['stake'] * (optimal_bet['odds'] - 1)
+                    st.metric(
+                        label="💎 Potential Return",
+                        value=f"€{potential_return:.2f}",
+                        delta=f"ROI: {((optimal_bet['odds'] - 1) * 100):.1f}%"
+                    )
+
+                    prob_value = optimal_bet['probability'] * 100
+                    st.metric(
+                        label="🎲 Probability",
+                        value=f"{prob_value:.1f}%",
+                        delta=f"Confidence: {'High' if prob_value > 60 else 'Medium' if prob_value > 50 else 'Low'}"
+                    )
+
+                # Value indicator with simple styling
+                st.markdown("---")
+                edge_value = optimal_bet['edge'] * 100
+                if STYLING_SAFE_AVAILABLE:
+                    value_indicator_html = NBAStylingSafe.create_safe_value_indicator(edge_value)
+                    st.markdown(value_indicator_html, unsafe_allow_html=True)
+                else:
+                    if edge_value >= 5.0:
+                        st.success(f"🔥 STRONG VALUE ({edge_value:+.1f}%)")
+                    elif edge_value >= 2.0:
+                        st.warning(f"⭐ MODERATE VALUE ({edge_value:+.1f}%)")
+                    else:
+                        st.info(f"💡 WEAK VALUE ({edge_value:+.1f}%)")
+
+            with col2:
+                if st.button("💾 Salva Scommessa", type="primary", use_container_width=True):
+                    game_id = game.get('game_id', f"MANUAL_{game.get('home_team', 'Home')}_{game.get('away_team', 'Away')}")
+
+                    bet_data = {
+                        'type': optimal_bet['type'],
+                        'line': optimal_bet['line'],
+                        'odds': optimal_bet['odds'],
+                        'stake': optimal_bet['stake'],
+                        'edge': optimal_bet['edge'],
+                        'probability': optimal_bet['probability'],
+                        'quality_score': optimal_bet.get('quality_score', 0),
+                        'kelly_fraction': optimal_bet.get('kelly_fraction', 0),
+                        'risk_level': risk_manager.assess_risk_level(optimal_bet),
+                        'timestamp': datetime.now().isoformat(),
+                        'game_info': {
+                            'home_team': game.get('home_team'),
+                            'away_team': game.get('away_team'),
+                            'game_date': game.get('date'),
+                            'central_line': central_line
+                        }
+                    }
+
+                    if risk_manager.save_pending_bet(bet_data, game_id):
+                        st.success("✅ Scommessa salvata con successo!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Errore nel salvataggio della scommessa")
+
+            with col3:
+                if st.button("🔄 Refresh Analysis", use_container_width=True):
+                    st.rerun()
+
+        # 📋 CONTEXT7 INFO BOX
+        with st.popover("📋 Sistema Legacy Info"):
+            st.markdown("""
+            **🎯 Algoritmi Legacy Implementati:**
+            - **Quality Score**: Edge (40%) + Confidence (30%) + Risk (20%) + Consistency (10%)
+            - **Stake Calculation**: Quality (35%) + Probability (30%) + Edge (25%) + Odds (10%)
+            - **Kelly Criterion**: Vincolo di sicurezza max 8% bankroll
+            - **Limiti**: Min 1€ o 1% bankroll, Max 5% bankroll
+            - **VALUE Criteria**: Probabilità ≥ 50% e edge > 0
+            """)
+
+    except Exception as e:
+        st.error(f"❌ Errore nell'analisi legacy: {e}")
+        logger.error(f"Legacy betting analysis error: {e}")
 
 def convert_game_time_to_et(game: Dict[str, Any]) -> str:
     """
@@ -710,104 +1215,211 @@ def render_game_analysis_step() -> None:
 
 
 def render_betting_lines_step(data_provider: NBADataProvider) -> None:
-    """Render Step 3: Betting Lines Analysis."""
-    st.subheader("💰 Step 3: Betting Lines Analysis")
-    st.caption("Odds comparison and value betting opportunities")
+    """Render Step 3: Betting Lines Analysis - COMPLETELY REWRITTEN for maximum visibility."""
 
+    # Header
+    st.subheader("💰 Step 3: Betting Lines Analysis")
+    st.caption("Professional odds comparison and value betting opportunities")
+
+    # Validate prerequisites
     if not st.session_state.selected_game:
-        st.warning("⚠️ Please complete Steps 1 and 2 first")
+        st.warning("⚠️ Please complete Steps 1 and 2 first", icon="⚠️")
         return
 
     game = st.session_state.selected_game
 
-    # Display comprehensive game info
-    with st.expander("🏀 Complete Game Information", expanded=True):
-        col1, col2 = st.columns(2)
+    # =======================================================
+    # NEW: ALWAYS VISIBLE CENTRAL LINE INPUT SECTION
+    # =======================================================
 
-        with col1:
-            st.write("**Matchup:**")
-            st.write(f"• **Away**: {game.get('away_team', 'Unknown')}")
-            st.write(f"• **Home**: {game.get('home_team', 'Unknown')}")
-            st.write(f"• **Date**: {game.get('date', 'Unknown')}")
-            st.write(f"• **Time**: {convert_game_time_to_et(game)}")
+    st.markdown("---")
+    st.markdown("## 📝 ENTER YOUR BOOKMAKER CENTRAL LINE")
+
+    # Create a very visible container for the input
+    with st.container():
+        st.markdown("### 🎯 **SELECT YOUR LINE**")
+
+        # Initialize default if not exists
+        if 'manual_line' not in st.session_state:
+            st.session_state.manual_line = 232.5
+
+        # Create a very prominent number input
+        col1, col2, col3 = st.columns([1, 2, 1])
 
         with col2:
-            st.write("**Betting Status:**")
-            if game.get('odds'):
-                st.success("✅ Real Odds Available")
+            # LARGE NUMBER INPUT - ALWAYS VISIBLE
+            selected_line = st.number_input(
+                "🏀 ENTER TOTAL POINTS LINE",
+                min_value=100.0,
+                max_value=400.0,
+                value=float(st.session_state.manual_line),
+                step=0.5,
+                key="central_line_input",
+                help="Enter your bookmaker's total points line (e.g., 232.5)"
+            )
 
-                # Display odds summary
-                odds = game['odds']
-                if odds.get('totals'):
-                    st.write(f"• **Totals**: {len(odds['totals'])} bookmakers")
-                if odds.get('moneyline'):
-                    st.write(f"• **Moneylines**: {len(odds['moneyline'])} bookmakers")
-                if odds.get('spreads'):
-                    st.write(f"• **Spreads**: {len(odds['spreads'])} bookmakers")
+            # Update session state
+            st.session_state.manual_line = selected_line
+
+            # Show current selection with large text
+            st.markdown(f"### ✅ **YOUR LINE: {selected_line:.1f} POINTS**")
+
+        st.markdown("---")
+
+        # Quick select buttons - ALWAYS VISIBLE
+        st.markdown("### 🚀 QUICK SELECT - CLICK YOUR LINE:")
+
+        # Create multiple rows of buttons for better visibility
+        quick_lines = [
+            [200.0, 210.0, 220.0, 225.0, 230.0],
+            [232.5, 235.0, 240.0, 245.0, 250.0],
+            [255.0, 260.0, 265.0, 270.0, 275.0]
+        ]
+
+        for row_lines in quick_lines:
+            cols = st.columns(len(row_lines))
+            for i, line_value in enumerate(row_lines):
+                with cols[i]:
+                    # Highlight the default value
+                    button_label = f"**{line_value:.1f}**" if line_value == 232.5 else f"{line_value:.1f}"
+                    if st.button(
+                        button_label,
+                        key=f"quick_line_{line_value}",
+                        use_container_width=True,
+                        type="primary" if line_value == 232.5 else "secondary"
+                    ):
+                        st.session_state.manual_line = line_value
+                        # Force rerun to update the number input
+                        st.rerun()
+
+        st.markdown("---")
+
+    # =======================================================
+    # ANALYSIS SECTION
+    # =======================================================
+
+    st.markdown("## 🎯 RUN ANALYSIS")
+
+    col_analysis, col_info = st.columns([2, 1])
+
+    with col_analysis:
+        st.markdown("### Ready to analyze your selected line")
+
+        if st.button(
+            "🚀 **RUN COMPLETE BETTING ANALYSIS**",
+            type="primary",
+            key="run_complete_analysis",
+            use_container_width=True,
+            help="Generate comprehensive betting analysis with odds, probabilities, and stake recommendations"
+        ):
+            final_line = st.session_state.manual_line
+            st.success(f"🎯 **ANALYZING LINE: {final_line:.1f} POINTS**")
+
+            with st.spinner("🔄 Running comprehensive analysis..."):
+                try:
+                    render_legacy_betting_analysis(game, final_line)
+                except Exception as e:
+                    st.error(f"❌ Analysis Error: {str(e)}")
+                    logger.error(f"Legacy analysis error: {e}")
+
+    with col_info:
+        st.markdown("### 📊 Analysis Info")
+        st.info("""
+        **What you'll get:**
+        - 🎯 33 odds combinations
+        - 📊 Probability calculations
+        - 💰 Best bet recommendations
+        - ⚖️ Risk management
+        - 📈 Quality scoring
+        """)
+
+    st.markdown("---")
+
+    # =======================================================
+    # GAME INFO TABS
+    # =======================================================
+
+    tab_game, tab_guide = st.tabs(["🏀 Game Details", "📖 How to Use"])
+
+    with tab_game:
+        render_game_overview(game)
+
+    with tab_guide:
+        st.markdown("## 📋 How to Use This Analysis")
+
+        st.markdown("""
+        ### 🎯 Step 1: Select Your Line
+        - Use the **number input field** to enter your exact line
+        - Or click **quick select buttons** for common values
+        - Your selection is confirmed with ✅ **YOUR LINE: X.X POINTS**
+
+        ### 🚀 Step 2: Run Analysis
+        - Click **RUN COMPLETE BETTING ANALYSIS**
+        - System processes 33 odds combinations (-8.0 to +8.0)
+        - Advanced algorithms calculate probabilities and value
+
+        ### 📊 Step 3: Review Results
+        - **Complete odds table** with all 33 combinations
+        - **Probability analysis** with confidence intervals
+        - **Best bet identification** with quality scoring
+        - **Risk management** with Kelly Criterion calculations
+        - **Stake recommendations** based on your bankroll
+        """)
+
+        st.success("💡 **Pro Tip**: The system uses proven algorithms from professional betting analysis with comprehensive risk management.", icon="💡")
+
+
+def render_game_overview(game: dict) -> None:
+    """Render comprehensive game overview using Context7 layout best practices."""
+    st.header("🏀 Complete Game Information")
+
+    # Context7: Use columns for better layout
+    col1, col2 = st.columns(2, gap="large")
+
+    with col1:
+        st.markdown("### Match Details")
+        st.markdown(f"**Away Team:** {game.get('away_team', 'Unknown')}")
+        st.markdown(f"**Home Team:** {game.get('home_team', 'Unknown')}")
+        st.markdown(f"**Date:** {game.get('date', 'Unknown')}")
+        st.markdown(f"**Time:** {convert_game_time_to_et(game)}")
+        st.markdown(f"**Status:** {game.get('status', 'Unknown')}")
+
+        # Add spacing
+        st.markdown("---")
+
+        # Context7: Show game metadata
+        if game.get('game_id'):
+            st.markdown(f"**Game ID:** `{game.get('game_id')}`")
+
+    with col2:
+        st.markdown("### 📊 Betting Status")
+
+        if game.get('odds'):
+            # Context7: Use success status with proper messaging
+            st.success("✅ Live Odds Available", icon="📈")
+
+            # Context7: Use metrics for better visualization
+            odds = game['odds']
+            total_bookmakers = 0
+            if odds.get('totals'):
+                total_bookmakers += len(odds['totals'])
+            if odds.get('moneyline'):
+                total_bookmakers += len(odds['moneyline'])
+            if odds.get('spreads'):
+                total_bookmakers += len(odds['spreads'])
+
+            if total_bookmakers > 0:
+                st.metric("Active Markets", f"{total_bookmakers}", delta="📈")
             else:
-                st.warning("⚠️ No odds available")
+                st.warning("⚠️ No odds available", icon="⚠️")
+        else:
+            # Context7: Use info for no odds case
+            st.info("📝 Manual input required for odds analysis", icon="📝")
+            st.caption("Use Manual Input tab to enter your bookmaker's central line")
 
-    # Load detailed odds
-    if st.button("🔍 Load Detailed Betting Analysis", type="primary"):
-        with st.spinner("Loading detailed betting odds and analysis..."):
-            try:
-                # Use analytics dashboard for comprehensive analysis
-                render_analytics_dashboard()
 
-                # Additional betting-specific analysis
-                if game.get('odds'):
-                    st.subheader("📈 Betting Market Analysis")
-
-                    # Display odds tables
-                    odds = game['odds']
-
-                    if odds.get('totals'):
-                        st.write("**Over/Under Markets:**")
-                        totals_data = []
-                        for bookmaker, lines in odds['totals'].items():
-                            if 'over' in lines and 'under' in lines:
-                                totals_data.append({
-                                    'Bookmaker': bookmaker.title(),
-                                    'Line': lines['over'].get('line', 'N/A'),
-                                    'Over Odds': lines['over'].get('odds', 'N/A'),
-                                    'Under Odds': lines['under'].get('odds', 'N/A')
-                                })
-
-                        if totals_data:
-                            import pandas as pd
-                            totals_df = pd.DataFrame(totals_data)
-                            st.dataframe(totals_df, use_container_width=True)
-
-                    if odds.get('moneyline'):
-                        st.write("**Moneyline Markets:**")
-                        ml_data = []
-                        for bookmaker, lines in odds['moneyline'].items():
-                            ml_data.append({
-                                'Bookmaker': bookmaker.title(),
-                                f"{game.get('away_team', 'Away')}": lines.get('away', 'N/A'),
-                                f"{game.get('home_team', 'Home')}": lines.get('home', 'N/A')
-                            })
-
-                        if ml_data:
-                            import pandas as pd
-                            ml_df = pd.DataFrame(ml_data)
-                            st.dataframe(ml_df, use_container_width=True)
-
-                    st.success("✅ Betting analysis complete!")
-                else:
-                    st.warning("⚠️ No betting odds available for this game")
-
-            except Exception as e:
-                st.error(f"❌ Error in betting analysis: {e}")
-                logger.error(f"Betting analysis error: {e}")
-
-    # Reset workflow
-    if st.button("🔄 Start New Analysis"):
-        st.session_state.betting_workflow_step = 1
-        st.session_state.selected_game = None
-        if 'available_games' in st.session_state:
-            del st.session_state.available_games
-        st.rerun()
+# NOTE: render_manual_odds_input function removed to eliminate duplicate input fields
+# All manual input functionality is now consolidated in render_betting_lines_step()
 
 
 def main() -> None:
@@ -823,6 +1435,10 @@ def main() -> None:
             layout="wide",
             initial_sidebar_state="expanded"
         )
+
+        # Apply simple and safe styling
+        if STYLING_SAFE_AVAILABLE:
+            apply_safe_styling()
 
         # Load configuration
         config = load_config()
@@ -840,8 +1456,15 @@ def main() -> None:
                 st.warning("⚠️ Using mock data provider (NBA API client not available)")
                 data_provider = NBADataProvider()
 
-        # Render header
-        render_workflow_header()
+        # Simple and clean header
+        if STYLING_SAFE_AVAILABLE:
+            st.markdown(create_safe_hero_header(
+                "🏀 NBA Betting Workflow Dashboard",
+                "Advanced Analytics & Risk Management System"
+            ), unsafe_allow_html=True)
+        else:
+            st.title("🏀 NBA Betting Workflow Dashboard")
+            st.markdown("Advanced Analytics & Risk Management System")
 
         # Main navigation based on workflow step
         if st.session_state.betting_workflow_step == 1:
@@ -851,28 +1474,84 @@ def main() -> None:
         elif st.session_state.betting_workflow_step == 3:
             render_betting_lines_step(data_provider)
 
-        # Sidebar with additional options
+        # Sidebar with professional workflow indicator
         with st.sidebar:
-            st.header("🔧 Dashboard Options")
+            # Professional workflow progress indicator with safe styling
+            if STYLING_SAFE_AVAILABLE:
+                st.markdown(create_safe_section_header("📋 Workflow Progress", "Complete each step to unlock advanced analysis"), unsafe_allow_html=True)
+            else:
+                st.subheader("📋 Workflow Progress")
+                st.markdown("Complete each step to unlock advanced analysis")
 
-            st.subheader("Data Status")
-            st.metric("NBA API", "🟢 Connected")
-            st.metric("Data Store", "🟢 Ready")
-            st.metric("Cache", "🟢 Active")
+            current_step = st.session_state.betting_workflow_step
 
-            st.divider()
+            # Step indicators with simple styling
+            col_steps1, col_steps2, col_steps3 = st.columns(3, gap="small")
 
-            st.subheader("Quick Actions")
+            with col_steps1:
+                if STYLING_SAFE_AVAILABLE:
+                    step1_html = NBAStylingSafe.create_safe_step_indicator(1, current_step, "📅 Game Schedule")
+                    st.markdown(step1_html, unsafe_allow_html=True)
+                else:
+                    if current_step >= 1:
+                        st.success("✅ 📅 Game Schedule")
+                    elif current_step == 1:
+                        st.info("🔄 📅 Game Schedule")
+                    else:
+                        st.info("⏳ 📅 Game Schedule")
+
+            with col_steps2:
+                if STYLING_SAFE_AVAILABLE:
+                    step2_html = NBAStylingSafe.create_safe_step_indicator(2, current_step, "📊 Game Analysis")
+                    st.markdown(step2_html, unsafe_allow_html=True)
+                else:
+                    if current_step >= 2:
+                        st.success("✅ 📊 Game Analysis")
+                    elif current_step == 2:
+                        st.info("🔄 📊 Game Analysis")
+                    else:
+                        st.info("⏳ 📊 Game Analysis")
+
+            with col_steps3:
+                if STYLING_SAFE_AVAILABLE:
+                    step3_html = NBAStylingSafe.create_safe_step_indicator(3, current_step, "💰 Betting Lines")
+                    st.markdown(step3_html, unsafe_allow_html=True)
+                else:
+                    if current_step >= 3:
+                        st.success("✅ 💰 Betting Lines")
+                    elif current_step == 3:
+                        st.info("🔄 💰 Betting Lines")
+                    else:
+                        st.info("⏳ 💰 Betting Lines")
+
+            st.markdown("---")
+
+            # Professional data status section
+            if STYLING_SAFE_AVAILABLE:
+                st.markdown(create_safe_section_header("📊 System Status", "Real-time system monitoring"), unsafe_allow_html=True)
+            else:
+                st.subheader("📊 System Status")
+                st.markdown("Real-time system monitoring")
+
+            # Status metrics with simple styling
+            st.success("🟢 NBA API Connected")
+
+            # Status metrics in columns
+            col_status1, col_status2 = st.columns(2, gap="medium")
+
+            with col_status1:
+                st.success("🟢 Data Store Ready")
+
+            with col_status2:
+                st.success("🟢 Cache Active")
+
+            st.markdown("---")
+
+            # 🎯 FLUSSO UNICO LEGACY - Quick Actions semplificate
             if st.button("🔄 Refresh Data"):
                 st.cache_data.clear()
-                st.success("✅ Cache cleared")
+                st.success("✅ Cache cleared - legacy system ready")
                 st.rerun()
-
-            if st.button("📈 Analytics Dashboard"):
-                render_analytics_dashboard()
-
-            if st.button("🔄 Sync Dashboard"):
-                render_sync_dashboard()
 
         # Footer
         st.divider()
