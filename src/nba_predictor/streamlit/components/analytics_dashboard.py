@@ -164,7 +164,7 @@ def _render_performance_charts(data_store: UnifiedDataStore, date_range: Tuple[d
         if scoring_data is not None and len(scoring_data) > 0:
             st.line_chart(
                 scoring_data.to_dict(),
-                x="date",
+                x="game_date",
                 y=["avg_home_score", "avg_away_score"],
                 color=["#FF6B6B", "#4ECDC4"]
             )
@@ -178,7 +178,7 @@ def _render_performance_charts(data_store: UnifiedDataStore, date_range: Tuple[d
         if distribution_data is not None and len(distribution_data) > 0:
             st.bar_chart(
                 distribution_data.to_dict(),
-                x="date",
+                x="game_date",
                 y="games_count"
             )
         else:

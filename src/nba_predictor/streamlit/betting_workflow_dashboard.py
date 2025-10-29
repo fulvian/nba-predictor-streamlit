@@ -9,6 +9,7 @@ Workflow: Games Schedule → Game Analysis → Betting Lines
 """
 
 import logging
+import time
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +20,7 @@ from dateutil import tz
 from ..utils.nba_timezone_utils import NBATimezoneManager
 from ..utils.manual_odds_calculator import _manual_odds_calculator
 from ..utils.legacy_risk_manager import LegacyRiskManager
+from ..utils.betting_database_manager import BettingDatabaseManager, BetAnalysis, PlacedBet
 
 # Initialize logger first
 logger = logging.getLogger(__name__)
@@ -537,36 +539,161 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                         st.info(f"💡 WEAK VALUE ({edge_value:+.1f}%)")
 
             with col2:
-                if st.button("💾 Salva Scommessa", type="primary", use_container_width=True):
-                    game_id = game.get('game_id', f"MANUAL_{game.get('home_team', 'Home')}_{game.get('away_team', 'Away')}")
+                # Professional bet placement with DuckDB + Context7
+                stake_override = st.number_input(
+                    "💰 Stake Override (€)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(optimal_bet['stake']),
+                    step=0.5,
+                    help="Override automatic stake calculation"
+                )
 
-                    bet_data = {
-                        'type': optimal_bet['type'],
-                        'line': optimal_bet['line'],
-                        'odds': optimal_bet['odds'],
-                        'stake': optimal_bet['stake'],
-                        'edge': optimal_bet['edge'],
-                        'probability': optimal_bet['probability'],
-                        'quality_score': optimal_bet.get('quality_score', 0),
-                        'kelly_fraction': optimal_bet.get('kelly_fraction', 0),
-                        'risk_level': risk_manager.assess_risk_level(optimal_bet),
-                        'timestamp': datetime.now().isoformat(),
-                        'game_info': {
-                            'home_team': game.get('home_team'),
-                            'away_team': game.get('away_team'),
-                            'game_date': game.get('date'),
-                            'central_line': central_line
-                        }
-                    }
+                # Add form context to prevent data clearing (Context7 best practice)
+                with st.form("bet_placement_form", clear_on_submit=False):
+                    bet_notes = st.text_area(
+                        "📝 Note Scommessa",
+                        placeholder="Inserisci note per questa scommessa...",
+                        help="Aggiungi note personali per riferimento futuro",
+                        key="bet_notes_input"
+                    )
 
-                    if risk_manager.save_pending_bet(bet_data, game_id):
-                        st.success("✅ Scommessa salvata con successo!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Errore nel salvataggio della scommessa")
+                    # Context7-compliant callback function for bet placement
+                    def place_bet_callback():
+                        """Callback function for bet placement - prevents race conditions."""
+                        with st.spinner("🔄 Salvataggio in DuckDB..."):
+                            try:
+                                # Input validation before database operations
+                                if not optimal_bet or not game:
+                                    st.error("❌ Dati della scommessa non disponibili")
+                                    return
+
+                                if stake_override <= 0:
+                                    st.error("❌ Stake deve essere maggiore di 0")
+                                    return
+
+                                # Create professional BetAnalysis object
+                                game_id = game.get('game_id', f"MANUAL_{game.get('home_team', 'Home')}_{game.get('away_team', 'Away')}")
+
+                                bet_analysis = BetAnalysis(
+                                    bet_type=optimal_bet['type'],
+                                    line=optimal_bet['line'],
+                                    odds=optimal_bet['odds'],
+                                    edge=optimal_bet['edge'],
+                                    probability=optimal_bet['probability'],
+                                    implied_probability=1/optimal_bet['odds'],
+                                    true_probability=optimal_bet['probability'],
+                                    quality_score=optimal_bet.get('quality_score', 0),
+                                    edge_score=optimal_bet.get('edge_score', optimal_bet['edge']),
+                                    confidence_score=optimal_bet.get('confidence_score', optimal_bet['probability']),
+                                    risk_score=optimal_bet.get('risk_score', 0.5),
+                                    consistency_score=optimal_bet.get('consistency_score', 0.8),
+                                    kelly_fraction=optimal_bet.get('kelly_fraction', 0.25),
+                                    stake=optimal_bet['stake'],
+                                    roi=(optimal_bet['odds'] - 1) * 100,
+                                    is_value=optimal_bet.get('is_value', optimal_bet['edge'] > 0.02),
+                                    risk_level=risk_manager.assess_risk_level(optimal_bet),
+                                    game_id=game_id,
+                                    central_line=central_line,
+                                    timestamp=datetime.now()
+                                )
+
+                                # Use professional betting database manager
+                                with BettingDatabaseManager() as db_manager:
+                                    # First save the analysis (required for foreign key constraint)
+                                    analysis_id = db_manager.save_bet_analysis(bet_analysis)
+
+                                    # Then place the bet with the saved analysis
+                                    bet_id = db_manager.place_bet(
+                                        analysis=bet_analysis,
+                                        selected_stake=stake_override,
+                                        notes=st.session_state.get('bet_notes_input', '') if st.session_state.get('bet_notes_input') else None
+                                    )
+
+                                    if bet_id:
+                                        # Store bet placement success in session state
+                                        st.session_state.bet_placed = 'success'
+                                        st.session_state.last_bet_details = {
+                                            'bet_id': bet_id,
+                                            'stake': stake_override,
+                                            'potential_return': stake_override * optimal_bet['odds'],
+                                            'game': game,
+                                            'bet_type': optimal_bet['type'],
+                                            'line': optimal_bet['line'],
+                                            'odds': optimal_bet['odds']
+                                        }
+
+                                        st.success(f"✅ **SCOMMESSA PIAZZATA CON SUCCESSO!**")
+                                        st.info(f"📋 Bet ID: `{bet_id}`")
+                                        st.info(f"💰 Importo: €{stake_override:.2f}")
+                                        st.info(f"📊 Potenziale vincita: €{stake_override * optimal_bet['odds']:.2f}")
+
+                                        # Show bankroll status
+                                        bankroll_status = db_manager.get_bankroll_status()
+                                        st.info(f"💵 Bankroll attuale: €{bankroll_status['current_bankroll']:.2f}")
+                                        st.info(f"📊 Scommesse attive: {bankroll_status['pending_bets_count']}")
+                                    else:
+                                        # Store bet placement error in session state
+                                        st.session_state.bet_placed = 'error'
+                                        st.session_state.last_bet_details = None
+
+                                        st.error("❌ **ERRORE nel piazzamento della scommessa**")
+                                        st.error("Controlla i log per dettagli tecnici")
+
+                            except Exception as e:
+                                st.error(f"❌ **ERRORE SISTEMA**: {str(e)}")
+                                logger.error(f"Bet placement error: {e}")
+                                st.session_state.bet_placed = 'error'
+
+                    # Context7-compliant submit button with callback
+                    st.form_submit_button(
+                        "💎 PIAZZA SCOMMESSA",
+                        type="primary",
+                        use_container_width=True,
+                        on_click=place_bet_callback
+                    )
 
             with col3:
-                if st.button("🔄 Refresh Analysis", use_container_width=True):
+                # Show current bankroll status in real-time
+                try:
+                    with BettingDatabaseManager() as db_manager:
+                        bankroll_status = db_manager.get_bankroll_status()
+
+                        st.markdown("### 💰 **BANKROLL STATUS**")
+
+                        st.metric(
+                            "💵 Bankroll Attuale",
+                            f"€{bankroll_status['current_bankroll']:.2f}",
+                            delta=f"ROI: {bankroll_status['roi']:+.1f}%"
+                        )
+
+                        st.metric(
+                            "📊 Scommesse Attive",
+                            bankroll_status['pending_bets_count']
+                        )
+
+                        st.metric(
+                            "💸 Stake Impegnato",
+                            f"€{bankroll_status['pending_stakes']:.2f}"
+                        )
+
+                        st.metric(
+                            "📈 Profit/Loss Totale",
+                            f"€{bankroll_status['total_profit_loss']:+.2f}"
+                        )
+
+                        # Additional info
+                        if bankroll_status['total_bets'] > 0:
+                            st.markdown("---")
+                            st.info(f"📈 Win Rate: {bankroll_status['win_rate']:.1f}%")
+                            st.info(f"🎯 Total Bets: {bankroll_status['total_bets']}")
+
+                except Exception as e:
+                    st.error(f"❌ Errore bankroll: {e}")
+                    logger.error(f"Bankroll status error: {e}")
+
+                # Refresh button
+                if st.button("🔄 Refresh", use_container_width=True):
                     st.rerun()
 
         # 📋 CONTEXT7 INFO BOX
@@ -676,7 +803,9 @@ def setup_session_state() -> None:
         'available_games': None,
         'days_ahead': 1,
         'games_loaded': False,
-        'debug_mode': True
+        'debug_mode': True,
+        'bet_placed': None,  # Track successful bet placement: None, 'success', or 'error'
+        'last_bet_details': None  # Store details of last placed bet
     }
 
     for key, default_value in session_defaults.items():
@@ -1220,6 +1349,52 @@ def render_betting_lines_step(data_provider: NBADataProvider) -> None:
     # Header
     st.subheader("💰 Step 3: Betting Lines Analysis")
     st.caption("Professional odds comparison and value betting opportunities")
+
+    # =======================================================
+    # BET PLACEMENT CONFIRMATION SECTION
+    # =======================================================
+    if st.session_state.bet_placed == 'success' and st.session_state.last_bet_details:
+        st.markdown("---")
+        st.markdown("## ✅ **SCOMMESSA PIAZZATA CON SUCCESSO**")
+
+        bet_details = st.session_state.last_bet_details
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("📋 Bet ID", bet_details['bet_id'])
+            st.metric("💰 Importo", f"€{bet_details['stake']:.2f}")
+
+        with col2:
+            st.metric("🎯 Tipo", f"{bet_details['bet_type']} {bet_details['line']}")
+            st.metric("📊 Quota", f"@{bet_details['odds']:.2f}")
+
+        with col3:
+            st.metric("🏆 Potenziale Vincita", f"€{bet_details['potential_return']:.2f}")
+            st.metric("📈 ROI", f"{(bet_details['odds']-1)*100:.1f}%")
+
+        # Show game info
+        game = bet_details['game']
+        st.info(f"🏀 **Partita**: {game.get('away_team', 'Unknown')} @ {game.get('home_team', 'Unknown')} - {game.get('date', 'Unknown')}")
+
+        # Add a button to clear the bet placement status and allow new bets
+        if st.button("🔄 Piazz un'altra scommessa", type="secondary"):
+            st.session_state.bet_placed = None
+            st.session_state.last_bet_details = None
+            st.rerun()
+
+        st.markdown("---")
+
+    elif st.session_state.bet_placed == 'error':
+        st.markdown("---")
+        st.markdown("## ❌ **ERRORE NEL PIAZZAMENTO**")
+        st.error("La scommessa non è stata piazzata correttamente. Per favore riprova.")
+
+        if st.button("🔄 Riprova", type="secondary"):
+            st.session_state.bet_placed = None
+            st.session_state.last_bet_details = None
+            st.rerun()
+
+        st.markdown("---")
 
     # Validate prerequisites
     if not st.session_state.selected_game:
