@@ -10,9 +10,11 @@ Workflow: Games Schedule → Game Analysis → Betting Lines
 
 import logging
 from datetime import datetime, date, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
+from dateutil import tz
+from ..utils.nba_timezone_utils import NBATimezoneManager
 
 # Try to import NBADataProvider, but make it optional for now
 try:
@@ -66,6 +68,96 @@ from .components.analytics_dashboard import render_analytics_dashboard
 from .components.sync_dashboard import render_sync_dashboard
 
 logger = logging.getLogger(__name__)
+
+# Initialize timezone manager per Context7 best practices
+_tz_manager = None
+
+def get_timezone_manager() -> NBATimezoneManager:
+    """Get singleton timezone manager instance."""
+    global _tz_manager
+    if _tz_manager is None:
+        _tz_manager = NBATimezoneManager()
+    return _tz_manager
+
+def convert_game_time_to_et(game: Dict[str, Any]) -> str:
+    """
+    Convert game UTC time to Eastern Time (US standard timezone).
+
+    Based on Context7 best practices and user request to standardize
+    all NBA game times to US timezone.
+
+    Args:
+        game: Game dictionary with UTC time information
+
+    Returns:
+        Eastern Time formatted as HH:MM
+    """
+    try:
+        # Get UTC time from game data
+        utc_time_str = game.get('time_utc', '')
+        if not utc_time_str:
+            return game.get('time', 'N/A')
+
+        # Parse UTC datetime using dateutil (Context7 best practice)
+        if 'T' in utc_time_str:
+            # Handle ISO format like "2025-10-29T23:00:00Z"
+            from dateutil.parser import parse
+            utc_dt = parse(utc_time_str.replace('Z', '+00:00'))
+        else:
+            # Handle time only like "23:00"
+            game_date = game.get('date', '')
+            if game_date:
+                datetime_str = f"{game_date}T{utc_time_str}:00Z"
+                from dateutil.parser import parse
+                utc_dt = parse(datetime_str.replace('Z', '+00:00'))
+            else:
+                return game.get('time', 'N/A')
+
+        # Convert to Eastern Time using Context7 best practice
+        tz_manager = get_timezone_manager()
+        eastern_tz = tz_manager._timezone_cache['America/New_York']
+        eastern_dt = utc_dt.astimezone(eastern_tz)
+
+        # Return formatted time
+        return eastern_dt.strftime('%H:%M')
+
+    except Exception as e:
+        logger.warning(f"⚠️ Error converting time for game: {e}")
+        # Fallback to original time
+        return game.get('time', 'N/A')
+
+
+def sort_games_by_time(games: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Sort NBA games chronologically by Eastern Time.
+
+    Args:
+        games: List of game dictionaries
+
+    Returns:
+        Games sorted by time (earliest to latest)
+    """
+    try:
+        def get_game_time_sort_key(game: Dict[str, Any]) -> int:
+            """Get sort key for game based on ET time."""
+            et_time = convert_game_time_to_et(game)
+
+            # Convert HH:MM to minutes for sorting
+            if et_time != 'N/A' and ':' in et_time:
+                try:
+                    hour, minute = map(int, et_time.split(':'))
+                    return hour * 60 + minute  # Total minutes from midnight
+                except (ValueError, TypeError):
+                    return 24 * 60  # Put invalid times at the end
+            return 24 * 60  # Put N/A times at the end
+
+        # Sort games by ET time
+        sorted_games = sorted(games, key=get_game_time_sort_key)
+        return sorted_games
+
+    except Exception as e:
+        logger.warning(f"⚠️ Error sorting games by time: {e}")
+        return games  # Return unsorted if error
 
 
 def setup_session_state() -> None:
@@ -339,7 +431,7 @@ def _update_data_store_with_games(data_store: UnifiedDataStore, games: list, dat
                 'away_score': game.get('away_score', None),
                 'season': game.get('season', 2024),
                 'status': game.get('status', 'Scheduled'),
-                'time': game.get('time', ''),
+                'time': convert_game_time_to_et(game),
                 'odds': str(game.get('odds', {})),
                 'source': game.get('source', 'API'),
                 'updated_at': datetime.now()
@@ -493,12 +585,15 @@ def render_games_schedule_step(data_provider: NBADataProvider) -> None:
         selected_date_str = st.session_state.selected_date.strftime('%Y-%m-%d')
         exact_date_games = [game for game in games if game.get('date') == selected_date_str]
 
+        # Sort games chronologically by Eastern Time
+        exact_date_games = sort_games_by_time(exact_date_games)
+
         if exact_date_games:
             st.success(f"✅ Found {len(exact_date_games)} games for {selected_date_str}")
 
             for i, game in enumerate(exact_date_games):
                 with st.expander(
-                    f"🏀 {game.get('away_team', 'Unknown')} @ {game.get('home_team', 'Unknown')} - {game.get('time', 'N/A')}",
+                    f"🏀 {game.get('away_team', 'Unknown')} @ {game.get('home_team', 'Unknown')} - {convert_game_time_to_et(game)}",
                     expanded=False
                 ):
                     col1, col2 = st.columns(2)
@@ -506,7 +601,7 @@ def render_games_schedule_step(data_provider: NBADataProvider) -> None:
                     with col1:
                         st.write("**Game Details:**")
                         st.write(f"• **Date**: {game.get('date', 'N/A')}")
-                        st.write(f"• **Time**: {game.get('time', 'N/A')}")
+                        st.write(f"• **Time**: {convert_game_time_to_et(game)}")
                         st.write(f"• **Status**: {game.get('status', 'Scheduled')}")
 
                     with col2:
@@ -546,7 +641,7 @@ def render_games_schedule_step(data_provider: NBADataProvider) -> None:
                             col1, col2 = st.columns([3, 1])
                             with col1:
                                 st.write(f"🏀 {game.get('away_team', 'Unknown')} @ {game.get('home_team', 'Unknown')}")
-                                st.write(f"🕐 {game.get('time', 'N/A')} | 📊 {game.get('status', 'Scheduled')}")
+                                st.write(f"🕐 {convert_game_time_to_et(game)} | 📊 {game.get('status', 'Scheduled')}")
                             with col2:
                                 # Context7 compliant callback for nearby date selection
                                 st.button(
@@ -634,7 +729,7 @@ def render_betting_lines_step(data_provider: NBADataProvider) -> None:
             st.write(f"• **Away**: {game.get('away_team', 'Unknown')}")
             st.write(f"• **Home**: {game.get('home_team', 'Unknown')}")
             st.write(f"• **Date**: {game.get('date', 'Unknown')}")
-            st.write(f"• **Time**: {game.get('time', 'Unknown')}")
+            st.write(f"• **Time**: {convert_game_time_to_et(game)}")
 
         with col2:
             st.write("**Betting Status:**")
