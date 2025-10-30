@@ -600,15 +600,94 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
 
                                 # Use professional betting database manager
                                 with BettingDatabaseManager() as db_manager:
+                                    # Check if game has already been played
+                                    game_info = db_manager.get_game_from_database(game_id)
+                                    is_played_game = game_info and game_info.get('is_played', False)
+
+                                    # Check for existing bets on this game
+                                    existing_bets = db_manager.check_existing_bets_for_game(game_id)
+
+                                    # Handle different scenarios
+                                    if is_played_game:
+                                        st.warning("⚠️ **ATTENZIONE: Questo incontro è già stato concluso!**")
+                                        st.info(f"📊 Risultato finale: {game_info.get('final_home_score', '?')}-{game_info.get('final_away_score', '?')}")
+
+                                        # Auto-settle any existing pending bets
+                                        pending_count = len([b for b in existing_bets if b.status == 'pending'])
+                                        if pending_count > 0:
+                                            st.info(f"🔄 Auto-settling {pending_count} scommesse pendenti...")
+                                            settled_count = db_manager.update_game_results_from_scores(
+                                                game_id,
+                                                game_info['final_home_score'],
+                                                game_info['final_away_score']
+                                            )
+                                            if settled_count > 0:
+                                                st.success(f"✅ {settled_count} scommesse settle automaticamente")
+                                            else:
+                                                st.warning("⚠️ Errore nell'auto-settlement")
+
+                                        # For played games, still allow bet placement but with clear warning
+                                        if st.checkbox("🎲 Procedi comunque (scommessa post-game)", help="Permette di piazzare scommesse su giochi già conclusi per testing"):
+                                            st.warning("⚠️ Stai piazzando una scommessa su un incontro già concluso!")
+
+                                    elif existing_bets:
+                                        # Game not played but has existing bets
+                                        st.warning(f"⚠️ **Esistono già {len(existing_bets)} scommesse per questo incontro!**")
+
+                                        # Show existing bets
+                                        for bet in existing_bets:
+                                            status_color = {
+                                                'pending': '🟡',
+                                                'won': '🟢',
+                                                'lost': '🔴',
+                                                'void': '🟡',
+                                                'cancelled': '⚫'
+                                            }.get(bet.status, '⚪')
+                                            st.write(f"{status_color} {bet.bet_type} {bet.line} @ {bet.odds:.2f} - {bet.status.upper()} - €{bet.stake:.2f}")
+
+                                        # Ask user what to do
+                                        action = st.radio(
+                                            "Cosa vuoi fare?",
+                                            options=["Mantieni tutte le scommesse", "Sovrascrivi scommesse esistenti"],
+                                            index=0,
+                                            help="Scegli se mantenere le scommesse esistenti o sovrascriverle"
+                                        )
+
+                                        if action == "Sovrascrivi scommesse esistenti":
+                                            if not st.checkbox("🔒 Conferma sovrascrittura", help="Seleziona per confermare la sovrascrittura"):
+                                                st.stop()
+                                            st.warning("⚠️ Tutte le scommesse esistenti verranno cancellate e rimborsate!")
+                                    else:
+                                        # Normal case - no existing bets
+                                        pass
+
                                     # First save the analysis (required for foreign key constraint)
                                     analysis_id = db_manager.save_bet_analysis(bet_analysis)
 
                                     # Then place the bet with the saved analysis
-                                    bet_id = db_manager.place_bet(
-                                        analysis=bet_analysis,
-                                        selected_stake=stake_override,
-                                        notes=st.session_state.get('bet_notes_input', '') if st.session_state.get('bet_notes_input') else None
-                                    )
+                                    if existing_bets and not is_played_game:
+                                        # Handle overwrite case
+                                        if st.session_state.get('bet_action_choice') == "Sovrascrivi scommesse esistenti":
+                                            bet_id = db_manager.overwrite_game_bets(
+                                                game_id=game_id,
+                                                new_analysis=bet_analysis,
+                                                stake_override=stake_override,
+                                                notes=st.session_state.get('bet_notes_input', '') if st.session_state.get('bet_notes_input') else None
+                                            )
+                                        else:
+                                            # Normal placement
+                                            bet_id = db_manager.place_bet(
+                                                analysis=bet_analysis,
+                                                selected_stake=stake_override,
+                                                notes=st.session_state.get('bet_notes_input', '') if st.session_state.get('bet_notes_input') else None
+                                            )
+                                    else:
+                                        # Normal placement or played game
+                                        bet_id = db_manager.place_bet(
+                                            analysis=bet_analysis,
+                                            selected_stake=stake_override,
+                                            notes=st.session_state.get('bet_notes_input', '') if st.session_state.get('bet_notes_input') else None
+                                        )
 
                                     if bet_id:
                                         # Store bet placement success in session state
@@ -953,9 +1032,9 @@ def _check_data_store_for_games(data_store: UnifiedDataStore, date_str: str, day
             home_score,
             away_score,
             season,
-            'Scheduled' as status,
-            '' as time,
-            '{{}}' as odds
+            COALESCE(status, 'Scheduled') as status,
+            COALESCE(time, '') as time,
+            COALESCE(odds, '{{}}') as odds
         FROM read_parquet('{data_store.games_dir}/*.parquet')
         WHERE game_date BETWEEN '{start_date_str}' AND '{end_date_str}'
         ORDER BY game_date
@@ -963,7 +1042,7 @@ def _check_data_store_for_games(data_store: UnifiedDataStore, date_str: str, day
 
         result = data_store.query_analytics(query)
 
-        if result and result.height > 0:
+        if result is not None and hasattr(result, 'height') and result.height > 0:
             # Convert to expected format
             games = []
             for row in result.iter_rows():
@@ -1574,14 +1653,29 @@ def render_game_overview(game: dict) -> None:
             st.success("✅ Live Odds Available", icon="📈")
 
             # Context7: Use metrics for better visualization
-            odds = game['odds']
-            total_bookmakers = 0
-            if odds.get('totals'):
-                total_bookmakers += len(odds['totals'])
-            if odds.get('moneyline'):
-                total_bookmakers += len(odds['moneyline'])
-            if odds.get('spreads'):
-                total_bookmakers += len(odds['spreads'])
+            # Parse odds from string to dictionary if needed
+            try:
+                if isinstance(game['odds'], str):
+                    import json
+                    odds = json.loads(game['odds'])
+                else:
+                    odds = game['odds']
+
+                # Ensure odds is a dictionary
+                if not isinstance(odds, dict):
+                    odds = {}
+
+                total_bookmakers = 0
+                if odds.get('totals'):
+                    total_bookmakers += len(odds['totals'])
+                if odds.get('moneyline'):
+                    total_bookmakers += len(odds['moneyline'])
+                if odds.get('spreads'):
+                    total_bookmakers += len(odds['spreads'])
+            except (json.JSONDecodeError, Exception):
+                # If parsing fails, treat as empty odds
+                odds = {}
+                total_bookmakers = 0
 
             if total_bookmakers > 0:
                 st.metric("Active Markets", f"{total_bookmakers}", delta="📈")
@@ -1597,19 +1691,484 @@ def render_game_overview(game: dict) -> None:
 # All manual input functionality is now consolidated in render_betting_lines_step()
 
 
+def render_comprehensive_bets_view():
+    """
+    🎯 COMPREHENSIVE BETS VIEW - Visualizzazione completa scommesse
+
+    Mostra tutte le scommesse (pendenti + concluse) con opzioni di gestione.
+    """
+    try:
+        # Initialize database manager
+        db_manager = BettingDatabaseManager()
+
+        try:
+            # Get comprehensive bets data
+            all_bets = db_manager.get_all_bets_comprehensive()
+            bankroll_status = db_manager.get_bankroll_status()
+
+        except Exception as e:
+            st.error(f"❌ Errore nel caricamento dati: {e}")
+            return
+
+        # Header
+        if STYLING_SAFE_AVAILABLE:
+            st.markdown(create_safe_section_header(
+                "💰 Gestione Completa Scommesse",
+                "Visualizza e gestisci tutte le scommesse"
+            ), unsafe_allow_html=True)
+        else:
+            st.subheader("💰 Gestione Completa Scommesse")
+            st.markdown("Visualizza e gestisci tutte le scommesse")
+
+        # Bankroll Status Summary
+        col_bank1, col_bank2, col_bank3, col_bank4 = st.columns(4)
+
+        with col_bank1:
+            st.metric("Bankroll Attuale", f"€{bankroll_status.get('current_bankroll', 0):.2f}")
+
+        with col_bank2:
+            st.metric("Scommesse Pendenti", bankroll_status.get('pending_bets_count', 0))
+
+        with col_bank3:
+            st.metric("Tasso Vittoria", f"{bankroll_status.get('win_rate', 0):.1f}%")
+
+        with col_bank4:
+            st.metric("ROI Totale", f"{bankroll_status.get('roi', 0):.1f}%")
+
+        st.markdown("---")
+
+        # Auto-update section
+        st.markdown("### 🔄 Aggiornamento Automatico Risultati")
+        col_update1, col_update2, col_update3 = st.columns(3)
+
+        with col_update1:
+            if st.button("🔄 Aggiorna Tutti i Risultati", help="Auto-settle tutte le scommesse per giochi conclusi"):
+                with st.spinner("Aggiornamento risultati in corso..."):
+                    try:
+                        # Get all games with final scores
+                        # Use parquet files instead of non-existent games table
+                        games_result = db_manager.conn.execute("""
+                            SELECT game_date, home_team, away_team, home_score, away_score
+                            FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
+                            WHERE home_score IS NOT NULL
+                              AND away_score IS NOT NULL
+                              AND home_score > 0
+                              AND away_score > 0
+                              AND status = 'Final'
+                            ORDER BY game_date DESC
+                            LIMIT 50
+                        """).fetchall()
+
+                        total_settled = 0
+                        for game_row in games_result:
+                            game_date, home_team, away_team, home_score, away_score = game_row
+
+                            # Create game identifier
+                            game_id = f"{game_date}_{home_team}_{away_team}"
+
+                            # Update results for this game
+                            settled_count = db_manager.update_game_results_from_scores(
+                                game_id, int(home_score), int(away_score)
+                            )
+                            total_settled += settled_count
+
+                        if total_settled > 0:
+                            st.success(f"✅ {total_settled} scommesse auto-settled con successo!")
+                            st.rerun()
+                        else:
+                            st.info("📝 Nessuna nuova scommessa da settlare")
+                    except Exception as e:
+                        st.error(f"❌ Errore nell'aggiornamento: {e}")
+
+        with col_update2:
+            # Show pending games that might have concluded
+            # Use parquet files instead of non-existent games table
+            pending_games = db_manager.conn.execute("""
+                SELECT DISTINCT pb.game_id, COUNT(*) as bet_count
+                FROM placed_bets pb
+                LEFT JOIN read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet') g ON (
+                    pb.game_id LIKE '%' || g.home_team || '%'
+                    OR pb.game_id LIKE '%' || g.away_team || '%'
+                )
+                WHERE pb.status = 'pending'
+                  AND g.status = 'Final'
+                  AND g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                GROUP BY pb.game_id
+                LIMIT 5
+            """).fetchall()
+
+            if pending_games:
+                st.warning(f"⚠️ {len(pending_games)} giochi conclusi con scommesse pendenti")
+                for game_id, count in pending_games:
+                    st.write(f"• {game_id}: {count} scommesse")
+            else:
+                st.success("✅ Nessuna scommessa pendente per giochi conclusi")
+
+        with col_update3:
+            # Show today's games status
+            # Use parquet files instead of non-existent games table
+            today_games = db_manager.conn.execute("""
+                SELECT COUNT(*) as total,
+                       SUM(CASE WHEN status = 'Final' THEN 1 ELSE 0 END) as final
+                FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
+                WHERE game_date = CURRENT_DATE
+            """).fetchone()
+
+            if today_games and today_games[0] > 0:
+                st.info(f"📅 Giochi di oggi: {today_games[1]}/{today_games[0]} conclusi")
+            else:
+                st.info("📅 Nessun gioco programmato per oggi")
+
+        st.markdown("---")
+
+        # Tabs for different views
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Scommesse Pendenti", "✅ Scommesse Concluse", "📊 Tutte le Scommesse", "🗄️ Data Store"])
+
+        with tab1:
+            render_pending_bets_table(all_bets['pending'], db_manager)
+
+        with tab2:
+            render_settled_bets_table(all_bets['settled'], db_manager)
+
+        with tab3:
+            render_all_bets_table(all_bets['all'], db_manager)
+
+        with tab4:
+            render_data_store_management(db_manager)
+
+    except Exception as e:
+        st.error(f"❌ Errore nel caricamento delle scommesse: {e}")
+        logger.error(f"Error loading comprehensive bets view: {e}")
+
+
+def render_pending_bets_table(pending_bets: List[PlacedBet], db_manager: BettingDatabaseManager):
+    """Render table for pending bets with management options."""
+
+    if not pending_bets:
+        st.info("📝 Nessuna scommessa pendente trovata")
+        return
+
+    st.subheader(f"📋 Scommesse Pendenti ({len(pending_bets)})")
+
+    for i, bet in enumerate(pending_bets):
+        with st.expander(f"💎 {bet.bet_type} {bet.line} @ {bet.odds:.2f} - €{bet.stake:.2f}"):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("**📊 Dettagli Scommessa**")
+                st.write(f"**Bet ID:** `{bet.bet_id}`")
+                st.write(f"**Game ID:** `{bet.game_id}`")
+                st.write(f"**Tipo:** {bet.bet_type}")
+                st.write(f"**Linea:** {bet.line}")
+                st.write(f"**Quota:** {bet.odds:.2f}")
+                st.write(f"**Stake:** €{bet.stake:.2f}")
+                st.write(f"**Potenziale:** €{bet.potential_return:.2f}")
+                st.write(f"**Rischio:** {bet.risk_level}")
+
+            with col2:
+                st.markdown("**📈 Analisi**")
+                st.write(f"**Edge:** {bet.edge:.2f}%")
+                st.write(f"**Probabilità:** {bet.probability:.2f}")
+                st.write(f"**Qualità:** {bet.quality_score:.2f}")
+                st.write(f"**Piazzata:** {bet.placed_at.strftime('%Y-%m-%d %H:%M')}")
+
+                # Check if game has been played
+                game_info = db_manager.get_game_from_database(bet.game_id)
+                if game_info:
+                    if game_info.get('is_played', False):
+                        st.warning(f"🏀 Gioco concluso! Score: {game_info.get('final_home_score', '?')}-{game_info.get('final_away_score', '?')}")
+
+                        if st.button(f"🔄 Auto-settle {bet.bet_id}", key=f"settle_{bet.bet_id}"):
+                            with st.spinner("Auto-settling bet..."):
+                                settled_count = db_manager.update_game_results_from_scores(
+                                    bet.game_id,
+                                    game_info['final_home_score'],
+                                    game_info['final_away_score']
+                                )
+                                if settled_count > 0:
+                                    st.success(f"✅ Scommessa auto-settled con successo!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Errore nell'auto-settlement")
+                    else:
+                        st.info("📅 Gioco ancora da disputare")
+
+            with col3:
+                st.markdown("**⚙️ Azioni**")
+
+                # Cancel bet option
+                if st.button(f"❌ Cancella", key=f"cancel_{bet.bet_id}"):
+                    if st.session_state.get(f'confirm_cancel_{bet.bet_id}', False):
+                        with st.spinner("Cancellazione scommessa..."):
+                            if db_manager.settle_bet(bet.bet_id, 'cancelled'):
+                                st.success("✅ Scommessa cancellata con successo")
+                                st.rerun()
+                            else:
+                                st.error("❌ Errore nella cancellazione")
+                    else:
+                        st.session_state[f'confirm_cancel_{bet.bet_id}'] = True
+                        st.warning("⚠️ Clicca di nuovo per confermare la cancellazione")
+
+                # Edit notes option
+                current_notes = bet.notes or ""
+                new_notes = st.text_area(
+                    "📝 Note",
+                    value=current_notes,
+                    key=f"notes_{bet.bet_id}",
+                    height=80
+                )
+
+                if new_notes != current_notes:
+                    # Update notes in database
+                    conn = db_manager.conn
+                    conn.execute("""
+                        UPDATE placed_bets
+                        SET notes = ?
+                        WHERE bet_id = ?
+                    """, [new_notes, bet.bet_id])
+                    st.success("✅ Note aggiornate")
+                    st.rerun()
+
+
+def render_settled_bets_table(settled_bets: List[PlacedBet], db_manager: BettingDatabaseManager):
+    """Render table for settled bets with results."""
+
+    if not settled_bets:
+        st.info("📝 Nessuna scommessa conclusa trovata")
+        return
+
+    st.subheader(f"✅ Scommesse Concluse ({len(settled_bets)})")
+
+    # Calculate statistics
+    total_won = sum(1 for bet in settled_bets if bet.status == 'won')
+    total_lost = sum(1 for bet in settled_bets if bet.status == 'lost')
+    total_profit = sum(bet.profit_loss or 0 for bet in settled_bets)
+
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    with col_stat1:
+        st.metric("Vinte", total_won, delta=f"{total_won}/{len(settled_bets)}")
+    with col_stat2:
+        st.metric("Perse", total_lost)
+    with col_stat3:
+        profit_color = "normal" if total_profit >= 0 else "inverse"
+        st.metric("Profit/Loss", f"€{total_profit:.2f}", delta=profit_color)
+
+    st.markdown("---")
+
+    for bet in settled_bets:
+        status_color = {
+            'won': '🟢',
+            'lost': '🔴',
+            'void': '🟡',
+            'cancelled': '⚫'
+        }.get(bet.status, '⚪')
+
+        with st.expander(f"{status_color} {bet.bet_type} {bet.line} @ {bet.odds:.2f} - {bet.status.upper()}"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**📊 Dettagli Scommessa**")
+                st.write(f"**Bet ID:** `{bet.bet_id}`")
+                st.write(f"**Game ID:** `{bet.game_id}`")
+                st.write(f"**Tipo:** {bet.bet_type}")
+                st.write(f"**Linea:** {bet.line}")
+                st.write(f"**Quota:** {bet.odds:.2f}")
+                st.write(f"**Stake:** €{bet.stake:.2f}")
+                st.write(f"**Risultato:** €{bet.result_amount:.2f}" if bet.result_amount else "**Risultato:** N/A")
+
+                profit_color = "🟢" if (bet.profit_loss or 0) > 0 else "🔴" if (bet.profit_loss or 0) < 0 else "⚪"
+                st.write(f"**P/L:** {profit_color} €{bet.profit_loss:.2f}" if bet.profit_loss else "**P/L:** N/A")
+
+            with col2:
+                st.markdown("**📅 Timestamp**")
+                st.write(f"**Piazzata:** {bet.placed_at.strftime('%Y-%m-%d %H:%M')}")
+                if bet.settled_at:
+                    st.write(f"**Conclusa:** {bet.settled_at.strftime('%Y-%m-%d %H:%M')}")
+
+                if bet.notes:
+                    st.markdown("**📝 Note:**")
+                    st.write(bet.notes)
+
+
+def render_all_bets_table(all_bets: List[PlacedBet], db_manager: BettingDatabaseManager):
+    """Render table with all bets combined."""
+
+    if not all_bets:
+        st.info("📝 Nessuna scommessa trovata")
+        return
+
+    st.subheader(f"📊 Tutte le Scommesse ({len(all_bets)})")
+
+    # Create DataFrame for better visualization
+    bets_data = []
+    for bet in all_bets:
+        bets_data.append({
+            'Bet ID': bet.bet_id,
+            'Game ID': bet.game_id,
+            'Tipo': bet.bet_type,
+            'Linea': bet.line,
+            'Quota': bet.odds,
+            'Stake': f"€{bet.stake:.2f}",
+            'Stato': bet.status,
+            'P/L': f"€{bet.profit_loss:.2f}" if bet.profit_loss else "N/A",
+            'Data': bet.placed_at.strftime('%Y-%m-%d'),
+            'Rischio': bet.risk_level
+        })
+
+    df = pd.DataFrame(bets_data)
+
+    # Display with formatting
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Export option
+    if st.button("📥 Esporta Dati"):
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="💾 Download CSV",
+            data=csv,
+            file_name=f"bets_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+
+
+def render_data_store_management(db_manager: BettingDatabaseManager):
+    """Render data store management and monitoring interface."""
+
+    st.subheader("🗄️ Data Store Management & Monitoring")
+
+    # Get current data store status
+    status = db_manager.get_data_store_status()
+
+    # Database Overview
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Database Size", f"{status.get('database_size_mb', 0):.2f} MB")
+        st.metric("Total Records",
+                sum(table.get('count', 0) for table in status.get('tables', {}).values()))
+
+    with col2:
+        st.metric("Recent Activity (7 days)", status.get('recent_activity_7_days', 0))
+        st.metric("Last Sync", status.get('last_sync', 'Never'))
+
+    with col3:
+        bankroll = status.get('bankroll_status', {})
+        st.metric("Bankroll", f"€{bankroll.get('current_bankroll', 0):.2f}")
+        st.metric("Total Bets", bankroll.get('total_bets', 0))
+
+    st.markdown("---")
+
+    # Table Statistics
+    st.markdown("### 📊 Table Statistics")
+    tables_data = []
+    for table_name, table_info in status.get('tables', {}).items():
+        tables_data.append({
+            'Table': table_name,
+            'Records': table_info.get('count', 0),
+            'Latest Record': table_info.get('latest_record', 'N/A') or 'N/A'
+        })
+
+    if tables_data:
+        df_tables = pd.DataFrame(tables_data)
+        st.dataframe(df_tables, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # Data Operations
+    st.markdown("### 🔧 Data Operations")
+
+    col_op1, col_op2, col_op3 = st.columns(3)
+
+    with col_op1:
+        if st.button("🔄 Sync Data Store", help="Synchronize and validate data integrity"):
+            with st.spinner("Synchronizing data store..."):
+                sync_result = db_manager.sync_data_store()
+
+                if sync_result.get('data_integrity_check', False):
+                    st.success("✅ Data store synchronized successfully!")
+                    st.json(sync_result)
+                else:
+                    st.error("❌ Data integrity issues found!")
+                    for error in sync_result.get('errors', []):
+                        st.error(f"• {error}")
+
+    with col_op2:
+        if st.button("📈 Refresh Statistics", help="Refresh all statistics and counts"):
+            st.rerun()
+
+    with col_op3:
+        if st.button("💾 Create Backup", help="Create a backup of current data"):
+            st.info("💾 Backup functionality coming soon!")
+
+    st.markdown("---")
+
+    # Data Integrity Status
+    st.markdown("### 🔍 Data Integrity Status")
+
+    # Perform integrity check
+    integrity_issues = []
+
+    try:
+        # Check for orphaned records
+        orphaned_bets = db_manager.conn.execute("""
+            SELECT COUNT(*) FROM placed_bets pb
+            LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+            WHERE pb.analysis_id IS NOT NULL AND ba.analysis_id IS NULL
+        """).fetchone()[0]
+
+        if orphaned_bets > 0:
+            integrity_issues.append(f"🔴 {orphaned_bets} orphaned bet records")
+
+        # Check for invalid statuses
+        invalid_statuses = db_manager.conn.execute("""
+            SELECT COUNT(*) FROM placed_bets
+            WHERE status NOT IN ('pending', 'won', 'lost', 'void', 'cancelled')
+        """).fetchone()[0]
+
+        if invalid_statuses > 0:
+            integrity_issues.append(f"🔴 {invalid_statuses} invalid bet statuses")
+
+        # Check for negative balances
+        negative_balances = db_manager.conn.execute("""
+            SELECT COUNT(*) FROM bankroll_history WHERE balance_after < 0
+        """).fetchone()[0]
+
+        if negative_balances > 0:
+            integrity_issues.append(f"🔴 {negative_balances} negative balance records")
+
+        if not integrity_issues:
+            st.success("✅ All data integrity checks passed!")
+        else:
+            st.error("❌ Data integrity issues detected:")
+            for issue in integrity_issues:
+                st.error(issue)
+
+    except Exception as e:
+        st.error(f"❌ Error performing integrity check: {e}")
+
+    # Database Path Info
+    st.markdown("### 📁 Database Information")
+    st.code(f"""
+Database Path: {status.get('database_path', 'Unknown')}
+File Size: {status.get('database_size_mb', 0):.2f} MB
+Tables: {', '.join(status.get('tables', {}).keys())}
+    """)
+
+
 def main() -> None:
     """Main entry point for the betting workflow dashboard."""
     try:
-        # Setup
-        setup_session_state()
-
-        # Page configuration
+        # Page configuration MUST be first
         st.set_page_config(
             page_title="NBA Betting Workflow Dashboard",
             page_icon="🏀",
             layout="wide",
             initial_sidebar_state="expanded"
         )
+
+        # Setup
+        setup_session_state()
 
         # Apply simple and safe styling
         if STYLING_SAFE_AVAILABLE:
@@ -1648,6 +2207,8 @@ def main() -> None:
             render_game_analysis_step()
         elif st.session_state.betting_workflow_step == 3:
             render_betting_lines_step(data_provider)
+        elif st.session_state.betting_workflow_step == 4:
+            render_comprehensive_bets_view()
 
         # Sidebar with professional workflow indicator
         with st.sidebar:
@@ -1661,7 +2222,7 @@ def main() -> None:
             current_step = st.session_state.betting_workflow_step
 
             # Step indicators with simple styling
-            col_steps1, col_steps2, col_steps3 = st.columns(3, gap="small")
+            col_steps1, col_steps2, col_steps3, col_steps4 = st.columns(4, gap="small")
 
             with col_steps1:
                 if STYLING_SAFE_AVAILABLE:
@@ -1699,6 +2260,18 @@ def main() -> None:
                     else:
                         st.info("⏳ 💰 Betting Lines")
 
+            with col_steps4:
+                if STYLING_SAFE_AVAILABLE:
+                    step4_html = NBAStylingSafe.create_safe_step_indicator(4, current_step, "💎 Gestione Scommesse")
+                    st.markdown(step4_html, unsafe_allow_html=True)
+                else:
+                    if current_step >= 4:
+                        st.success("✅ 💎 Gestione Scommesse")
+                    elif current_step == 4:
+                        st.info("🔄 💎 Gestione Scommesse")
+                    else:
+                        st.info("⏳ 💎 Gestione Scommesse")
+
             st.markdown("---")
 
             # Professional data status section
@@ -1728,13 +2301,19 @@ def main() -> None:
                 st.success("✅ Cache cleared - legacy system ready")
                 st.rerun()
 
+            if st.button("💎 Gestione Scommesse", help="Visualizza e gestisci tutte le scommesse"):
+                st.session_state.betting_workflow_step = 4
+                st.rerun()
+
         # Footer
         st.divider()
         st.caption("NBA Betting Workflow Dashboard | Real-time NBA Data & ML Analysis | Context7 Best Practices")
 
     except Exception as e:
+        import traceback
         st.error(f"❌ Dashboard error: {e}")
         logger.error(f"Dashboard error: {e}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
 
 
 if __name__ == "__main__":

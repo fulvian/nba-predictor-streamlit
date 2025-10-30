@@ -364,7 +364,7 @@ def _generate_predictions(
                 try:
                     game_datetime = datetime.combine(game_date, datetime.min.time())
                     cached_prediction = cache_manager.get_predictions_cached(
-                        home_team, away_team, game_datetime
+                        cache_manager, home_team, away_team, game_datetime
                     )
                     if cached_prediction:
                         # Cache in session state for faster access
@@ -860,8 +860,8 @@ def _render_historical_performance(
             home_team, away_team = selected_teams[0], selected_teams[1]
 
             # Get historical data for both teams
-            home_data = cache_manager.get_team_analytics_cached(home_team, 30)
-            away_data = cache_manager.get_team_analytics_cached(away_team, 30)
+            home_data = cache_manager.get_team_analytics_cached(cache_manager, home_team, 30)
+            away_data = cache_manager.get_team_analytics_cached(cache_manager, away_team, 30)
 
             if home_data and away_data:
                 st.write("**Recent Team Performance (Last 30 days):**")

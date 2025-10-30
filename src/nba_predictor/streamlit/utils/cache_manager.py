@@ -158,7 +158,7 @@ class CacheManager:
 
     @st.cache_data(ttl=900, show_spinner="Loading predictions...")
     def get_predictions_cached(
-        self,
+        _self,  # Add underscore to exclude from hashing
         home_team: str,
         away_team: str,
         game_date: datetime
@@ -203,7 +203,7 @@ class CacheManager:
 
     @st.cache_data(ttl=3600, show_spinner="Loading team analytics...")
     def get_team_analytics_cached(
-        self,
+        _self,  # Add underscore to exclude from hashing
         team_name: str,
         days_back: int = 30
     ) -> Optional[pl.DataFrame]:

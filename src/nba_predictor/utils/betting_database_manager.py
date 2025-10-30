@@ -136,9 +136,9 @@ class BettingDatabaseManager:
 
             # Create indexes for betting_analysis table
             self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_game_created ON betting_analysis(game_id, created_at)")
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_value_edge ON betting_analysis(is_value, edge)")
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_risk ON betting_analysis(risk_level)")
-            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_created ON betting_analysis(created_at)")
+            # self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_value_edge ON betting_analysis(is_value, edge)")
+            # self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_risk ON betting_analysis(risk_level)")
+            # self.conn.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_created ON betting_analysis(created_at)")
 
             # Create placed_bets table - tracks actual placed bets
             self.conn.execute("""
@@ -332,6 +332,12 @@ class BettingDatabaseManager:
             Bet ID if successful, None otherwise
         """
         try:
+            # First, save the analysis to get the analysis_id
+            analysis_id = self.save_bet_analysis(analysis)
+            if not analysis_id:
+                logger.error("Failed to save bet analysis")
+                return None
+
             # Generate unique bet ID
             bet_id = f"bet_{analysis.game_id}_{analysis.bet_type}_{analysis.line}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -362,7 +368,7 @@ class BettingDatabaseManager:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, [
                     bet_id,
-                    f"{analysis.game_id}_{analysis.bet_type}_{analysis.line}_{analysis.timestamp.strftime('%Y%m%d_%H%M%S')}",
+                    analysis_id,  # Use the analysis_id from save_bet_analysis
                     analysis.game_id, analysis.bet_type, analysis.line, analysis.odds, stake,
                     potential_return, analysis.edge, analysis.probability, analysis.quality_score,
                     analysis.risk_level, notes
@@ -671,6 +677,432 @@ class BettingDatabaseManager:
     def __enter__(self):
         """Context manager entry."""
         return self
+
+    def check_existing_bets_for_game(self, game_id: str) -> List[PlacedBet]:
+        """
+        Check for existing bets on a specific game.
+
+        Args:
+            game_id: Game ID to check
+
+        Returns:
+            List of existing bets for this game
+        """
+        try:
+            result = self.conn.execute("""
+                SELECT * FROM placed_bets
+                WHERE game_id = ?
+                ORDER BY placed_at DESC
+            """, [game_id]).fetchall()
+
+            bets = []
+            for row in result:
+                bet = PlacedBet(
+                    bet_id=row[0], game_id=row[2], bet_type=row[3],
+                    line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
+                    edge=row[8], probability=row[9], quality_score=row[10],
+                    risk_level=row[11], status=row[12], placed_at=row[13],
+                    settled_at=row[14], result_amount=row[15], profit_loss=row[16],
+                    bookmaker=row[17], notes=row[18]
+                )
+                bets.append(bet)
+
+            return bets
+
+        except Exception as e:
+            logger.error(f"Failed to check existing bets for game {game_id}: {e}")
+            return []
+
+    def get_all_bets_comprehensive(self) -> Dict[str, List[PlacedBet]]:
+        """
+        Get comprehensive view of all bets separated by status.
+
+        Returns:
+            Dictionary with 'pending', 'settled', and 'all' bet lists
+        """
+        try:
+            # Get pending bets
+            pending_result = self.conn.execute("""
+                SELECT * FROM placed_bets
+                WHERE status = 'pending'
+                ORDER BY placed_at DESC
+            """).fetchall()
+
+            # Get settled bets
+            settled_result = self.conn.execute("""
+                SELECT * FROM placed_bets
+                WHERE status IN ('won', 'lost', 'void', 'cancelled')
+                ORDER BY placed_at DESC
+            """).fetchall()
+
+            # Get all bets
+            all_result = self.conn.execute("""
+                SELECT * FROM placed_bets
+                ORDER BY placed_at DESC
+            """).fetchall()
+
+            def convert_rows_to_bets(rows):
+                bets = []
+                for row in rows:
+                    bet = PlacedBet(
+                        bet_id=row[0], game_id=row[2], bet_type=row[3],
+                        line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
+                        edge=row[8], probability=row[9], quality_score=row[10],
+                        risk_level=row[11], status=row[12], placed_at=row[13],
+                        settled_at=row[14], result_amount=row[15], profit_loss=row[16],
+                        bookmaker=row[17], notes=row[18]
+                    )
+                    bets.append(bet)
+                return bets
+
+            return {
+                'pending': convert_rows_to_bets(pending_result),
+                'settled': convert_rows_to_bets(settled_result),
+                'all': convert_rows_to_bets(all_result)
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get comprehensive bets: {e}")
+            return {'pending': [], 'settled': [], 'all': []}
+
+    def update_game_results_from_scores(self, game_id: str, final_home_score: int, final_away_score: int) -> int:
+        """
+        Auto-settle pending bets for a game based on final scores.
+
+        Args:
+            game_id: Game ID to update
+            final_home_score: Final home team score
+            final_away_score: Final away team score
+
+        Returns:
+            Number of bets settled
+        """
+        try:
+            # Get pending bets for this game
+            pending_bets = self.conn.execute("""
+                SELECT bet_id, bet_type, line, odds, stake, potential_return
+                FROM placed_bets
+                WHERE game_id = ? AND status = 'pending'
+            """, [game_id]).fetchall()
+
+            settled_count = 0
+
+            for bet_row in pending_bets:
+                bet_id, bet_type, line, odds, stake, potential_return = bet_row
+
+                # Determine bet outcome based on type and scores
+                result = self._determine_bet_outcome(bet_type, line, final_home_score, final_away_score)
+
+                if result and result != 'pending':
+                    # Settle the bet
+                    if self.settle_bet(bet_id, result):
+                        settled_count += 1
+                        logger.info(f"Auto-settled bet {bet_id}: {result} (Score: {final_home_score}-{final_away_score})")
+
+            return settled_count
+
+        except Exception as e:
+            logger.error(f"Failed to update game results for {game_id}: {e}")
+            return 0
+
+    def _determine_bet_outcome(self, bet_type: str, line: float, home_score: int, away_score: int) -> Optional[str]:
+        """
+        Determine the outcome of a bet based on final scores.
+
+        Args:
+            bet_type: Type of bet ('Over', 'Under', etc.)
+            line: Betting line
+            home_score: Final home team score
+            away_score: Final away team score
+
+        Returns:
+            'won', 'lost', 'void', or None if can't determine
+        """
+        try:
+            total_points = home_score + away_score
+
+            if bet_type.lower() == 'over':
+                if total_points > line:
+                    return 'won'
+                elif total_points < line:
+                    return 'lost'
+                else:  # Exactly on the line
+                    return 'void'
+            elif bet_type.lower() == 'under':
+                if total_points < line:
+                    return 'won'
+                elif total_points > line:
+                    return 'lost'
+                else:  # Exactly on the line
+                    return 'void'
+            else:
+                logger.warning(f"Unsupported bet type for auto-settlement: {bet_type}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error determining bet outcome: {e}")
+            return None
+
+    def overwrite_game_bets(self, game_id: str, new_analysis: BetAnalysis, stake_override: float = None, notes: str = None) -> Optional[str]:
+        """
+        Overwrite all existing bets for a game with a new bet.
+
+        Args:
+            game_id: Game ID
+            new_analysis: New bet analysis
+            stake_override: Optional stake override
+            notes: Optional notes
+
+        Returns:
+            New bet ID if successful
+        """
+        try:
+            # Start transaction
+            self.conn.execute("BEGIN TRANSACTION")
+
+            try:
+                # Cancel all existing bets for this game
+                existing_bets = self.conn.execute("""
+                    SELECT bet_id FROM placed_bets
+                    WHERE game_id = ? AND status = 'pending'
+                """, [game_id]).fetchall()
+
+                for bet_row in existing_bets:
+                    bet_id = bet_row[0]
+                    # Refund stake for cancelled bets
+                    bet_info = self.conn.execute("""
+                        SELECT stake FROM placed_bets WHERE bet_id = ?
+                    """, [bet_id]).fetchone()
+
+                    if bet_info:
+                        stake_to_refund = bet_info[0]
+                        current_bankroll = float(self.get_setting('current_bankroll'))
+                        new_bankroll = current_bankroll + stake_to_refund
+
+                        # Update bankroll
+                        self.update_setting('current_bankroll', str(new_bankroll))
+
+                        # Get next history_id
+                        next_id_result = self.conn.execute("SELECT COALESCE(MAX(history_id), 0) + 1 FROM bankroll_history").fetchone()
+                        next_history_id = next_id_result[0] if next_id_result else 1
+
+                        # Record refund
+                        self.conn.execute("""
+                            INSERT INTO bankroll_history (history_id, bet_id, change_type, amount, balance_before, balance_after, notes)
+                            VALUES (?, ?, 'bet_cancelled', ?, ?, ?, ?)
+                        """, [next_history_id, bet_id, stake_to_refund, current_bankroll, new_bankroll, f"Cancelled bet: {bet_id}"])
+
+                    # Update bet status
+                    self.conn.execute("""
+                        UPDATE placed_bets
+                        SET status = 'cancelled', settled_at = CURRENT_TIMESTAMP
+                        WHERE bet_id = ?
+                    """, [bet_id])
+
+                # Place new bet
+                new_bet_id = self.place_bet(new_analysis, stake_override, notes)
+
+                # Commit transaction
+                self.conn.execute("COMMIT")
+
+                logger.info(f"Overwrote {len(existing_bets)} bets for game {game_id} with new bet {new_bet_id}")
+                return new_bet_id
+
+            except Exception as e:
+                self.conn.execute("ROLLBACK")
+                raise e
+
+        except Exception as e:
+            logger.error(f"Failed to overwrite bets for game {game_id}: {e}")
+            return None
+
+    def get_game_from_database(self, game_id: str) -> Optional[Dict]:
+        """
+        Get game information from the games table.
+
+        Args:
+            game_id: Game ID to search for
+
+        Returns:
+            Game information dictionary or None
+        """
+        try:
+            # Try to find game in games table by various identifiers
+            game_patterns = [
+                f"%{game_id}%",  # Contains game_id
+                game_id,         # Exact match
+            ]
+
+            for pattern in game_patterns:
+                result = self.conn.execute("""
+                    SELECT game_date, home_team, away_team, home_score, away_score, status, time
+                    FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
+                    WHERE game_id LIKE ? OR
+                          (home_team || ' vs ' || away_team) LIKE ? OR
+                          (away_team || ' @ ' || home_team) LIKE ?
+                    LIMIT 1
+                """, [pattern, pattern, pattern]).fetchone()
+
+                if result:
+                    columns = ['game_date', 'home_team', 'away_team', 'home_score', 'away_score', 'status', 'time']
+                    game_dict = dict(zip(columns, result))
+
+                    # Check if game has been played
+                    if (game_dict.get('home_score') is not None and
+                        game_dict.get('away_score') is not None and
+                        game_dict.get('home_score') > 0 and
+                        game_dict.get('away_score') > 0):
+                        game_dict['is_played'] = True
+                        game_dict['final_home_score'] = game_dict['home_score']
+                        game_dict['final_away_score'] = game_dict['away_score']
+                    else:
+                        game_dict['is_played'] = False
+
+                    return game_dict
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to get game from database: {e}")
+            return None
+
+    def sync_data_store(self) -> Dict[str, Any]:
+        """
+        Synchronize and backup the unified data store.
+
+        Returns:
+            Dictionary with sync status and statistics
+        """
+        try:
+            sync_stats = {
+                'timestamp': datetime.now(),
+                'games_count': 0,
+                'bets_count': 0,
+                'analysis_count': 0,
+                'history_count': 0,
+                'data_integrity_check': True,
+                'errors': []
+            }
+
+            # Get table counts
+            sync_stats['games_count'] = self.conn.execute("SELECT COUNT(*) FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')").fetchone()[0]
+            sync_stats['bets_count'] = self.conn.execute("SELECT COUNT(*) FROM placed_bets").fetchone()[0]
+            sync_stats['analysis_count'] = self.conn.execute("SELECT COUNT(*) FROM betting_analysis").fetchone()[0]
+            sync_stats['history_count'] = self.conn.execute("SELECT COUNT(*) FROM bankroll_history").fetchone()[0]
+
+            # Data integrity checks
+            try:
+                # Check for orphaned bets (without analysis)
+                orphaned_bets = self.conn.execute("""
+                    SELECT COUNT(*) FROM placed_bets pb
+                    LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+                    WHERE pb.analysis_id IS NOT NULL AND ba.analysis_id IS NULL
+                """).fetchone()[0]
+
+                if orphaned_bets > 0:
+                    sync_stats['data_integrity_check'] = False
+                    sync_stats['errors'].append(f"Found {orphaned_bets} orphaned bets")
+
+                # Check for negative bankroll history
+                negative_balance = self.conn.execute("""
+                    SELECT COUNT(*) FROM bankroll_history WHERE balance_after < 0
+                """).fetchone()[0]
+
+                if negative_balance > 0:
+                    sync_stats['data_integrity_check'] = False
+                    sync_stats['errors'].append(f"Found {negative_balance} negative balance records")
+
+                # Check for invalid bet statuses
+                invalid_status = self.conn.execute("""
+                    SELECT COUNT(*) FROM placed_bets
+                    WHERE status NOT IN ('pending', 'won', 'lost', 'void', 'cancelled')
+                """).fetchone()[0]
+
+                if invalid_status > 0:
+                    sync_stats['data_integrity_check'] = False
+                    sync_stats['errors'].append(f"Found {invalid_status} invalid bet statuses")
+
+            except Exception as e:
+                sync_stats['data_integrity_check'] = False
+                sync_stats['errors'].append(f"Integrity check error: {str(e)}")
+
+            # Optional: Create backup timestamp
+            try:
+                self.conn.execute("CREATE TABLE IF NOT EXISTS sync_log (timestamp TIMESTAMP, stats JSON)")
+                import json
+                self.conn.execute(
+                    "INSERT INTO sync_log (timestamp, stats) VALUES (?, ?)",
+                    [datetime.now(), json.dumps(sync_stats, default=str)]
+                )
+            except Exception as e:
+                sync_stats['errors'].append(f"Backup log error: {str(e)}")
+
+            logger.info(f"Data store sync completed: {sync_stats}")
+            return sync_stats
+
+        except Exception as e:
+            logger.error(f"Data store sync failed: {e}")
+            return {
+                'timestamp': datetime.now(),
+                'error': str(e),
+                'data_integrity_check': False
+            }
+
+    def get_data_store_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive status of the unified data store.
+
+        Returns:
+            Dictionary with data store statistics and health
+        """
+        try:
+            # Database size and file info
+            db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
+
+            # Table statistics
+            tables_info = {}
+            tables = ['games', 'placed_bets', 'betting_analysis', 'bankroll_history', 'betting_settings']
+
+            for table in tables:
+                try:
+                    count = self.conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                    latest_date = None
+
+                    if table == 'games':
+                        latest_date = self.conn.execute("SELECT MAX(game_date) FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')").fetchone()[0]
+                    elif table in ['placed_bets', 'betting_analysis']:
+                        latest_date = self.conn.execute(f"SELECT MAX(created_at) FROM {table}").fetchone()[0]
+                    elif table == 'bankroll_history':
+                        latest_date = self.conn.execute("SELECT MAX(created_at) FROM bankroll_history").fetchone()[0]
+
+                    tables_info[table] = {
+                        'count': count,
+                        'latest_record': latest_date
+                    }
+                except Exception as e:
+                    tables_info[table] = {'error': str(e)}
+
+            # Bankroll status
+            bankroll_status = self.get_bankroll_status()
+
+            # Recent activity
+            recent_bets = self.conn.execute("""
+                SELECT COUNT(*) FROM placed_bets
+                WHERE placed_at >= datetime('now', '-7 days')
+            """).fetchone()[0]
+
+            return {
+                'database_path': str(self.db_path),
+                'database_size_mb': round(db_size / (1024 * 1024), 2),
+                'tables': tables_info,
+                'bankroll_status': bankroll_status,
+                'recent_activity_7_days': recent_bets,
+                'last_sync': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get data store status: {e}")
+            return {'error': str(e)}
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
