@@ -8,6 +8,7 @@ Follows Context7 best practices for database design and error handling.
 
 import logging
 import os
+import time
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, asdict
@@ -101,13 +102,27 @@ class BettingDatabaseManager:
         self._create_schema()
 
     def _initialize_connection(self):
-        """Initialize DuckDB connection with error handling."""
-        try:
-            self.conn = duckdb.connect(str(self.db_path))
-            logger.info(f"Connected to DuckDB database: {self.db_path}")
-        except Exception as e:
-            logger.error(f"Failed to connect to database {self.db_path}: {e}")
-            raise
+        """Initialize DuckDB connection with error handling and retry logic."""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # If connection exists, close it first
+                if self.conn is not None:
+                    try:
+                        self.conn.close()
+                    except:
+                        pass
+
+                self.conn = duckdb.connect(str(self.db_path), read_only=False)
+                logger.info(f"Connected to DuckDB database: {self.db_path} (attempt {attempt + 1})")
+                return
+
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to connect to database {self.db_path} after {max_retries} attempts")
+                    raise
+                time.sleep(1)  # Wait 1 second before retry
 
     def _create_schema(self):
         """Create betting tables schema following Context7 best practices."""
@@ -180,14 +195,14 @@ class BettingDatabaseManager:
             # Create bankroll_history table - tracks bankroll changes
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS bankroll_history (
-                    history_id INTEGER PRIMARY KEY,
-                    bet_id VARCHAR,
+                    id INTEGER PRIMARY KEY,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     change_type VARCHAR NOT NULL, -- 'bet_placed', 'bet_settled', 'deposit', 'withdrawal'
                     amount DOUBLE NOT NULL,
-                    balance_before DOUBLE NOT NULL,
                     balance_after DOUBLE NOT NULL,
+                    description VARCHAR,
+                    bet_id VARCHAR,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    notes VARCHAR,
                     FOREIGN KEY (bet_id) REFERENCES placed_bets(bet_id)
                 )
             """)
@@ -272,21 +287,23 @@ class BettingDatabaseManager:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Add bet_id column to DataFrame for compatibility with table schema
-            df['bet_id'] = df['analysis_id']  # Use analysis_id as bet_id for compatibility
+            # Add created_at column for compatibility
+            df['created_at'] = datetime.now()
 
             # Use DuckDB's efficient bulk insert with explicit column mapping
             insert_query = """
                 INSERT OR REPLACE INTO betting_analysis (
-                    analysis_id, bet_id, game_id, bet_type, line, odds, edge, probability,
+                    analysis_id, game_id, bet_type, line, odds, edge, probability,
                     implied_probability, true_probability, quality_score, edge_score,
                     confidence_score, risk_score, consistency_score, kelly_fraction,
-                    stake, roi, is_value, risk_level, central_line, created_at
+                    stake, roi, is_value, risk_level, central_line, timestamp,
+                    home_team, away_team, created_at
                 ) SELECT
-                    analysis_id, bet_id, game_id, bet_type, line, odds, edge, probability,
+                    analysis_id, game_id, bet_type, line, odds, edge, probability,
                     implied_probability, true_probability, quality_score, edge_score,
                     confidence_score, risk_score, consistency_score, kelly_fraction,
-                    stake, roi, is_value, risk_level, central_line, timestamp
+                    stake, roi, is_value, risk_level, central_line, timestamp,
+                    home_team, away_team, created_at
                 FROM df
             """
             self.conn.execute(insert_query)
@@ -389,14 +406,14 @@ class BettingDatabaseManager:
                 self.conn.execute("""
                     INSERT INTO placed_bets (
                         bet_id, analysis_id, game_id, bet_type, line, odds, stake,
-                        potential_return, edge, probability, quality_score, risk_level, notes,
+                        potential_return, risk_level, notes,
                         home_team, away_team, status, placed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, [
                     bet_id,
                     analysis_id,  # Use the analysis_id from save_bet_analysis
                     analysis.game_id, analysis.bet_type, analysis.line, analysis.odds, stake,
-                    potential_return, analysis.edge, analysis.probability, analysis.quality_score,
+                    potential_return,
                     analysis.risk_level, notes,
                     home_team, away_team, 'pending', datetime.now()
                 ])
@@ -405,15 +422,15 @@ class BettingDatabaseManager:
                 new_bankroll = current_bankroll - stake
                 self.update_setting('current_bankroll', str(new_bankroll))
 
-                # Get next history_id
-                next_id_result = self.conn.execute("SELECT COALESCE(MAX(history_id), 0) + 1 FROM bankroll_history").fetchone()
-                next_history_id = next_id_result[0] if next_id_result else 1
+                # Get next id
+                next_id_result = self.conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM bankroll_history").fetchone()
+                next_id = next_id_result[0] if next_id_result else 1
 
                 # Record bankroll change
                 self.conn.execute("""
-                    INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
-                    VALUES (?, ?, 'bet_placed', ?, ?, ?, ?)
-                """, [next_history_id, bet_id, -stake, current_bankroll, new_bankroll, f"Bet placed: {analysis.bet_type} {analysis.line}"])
+                    INSERT INTO bankroll_history (id, bet_id, change_type, amount, balance_after, description)
+                    VALUES (?, ?, 'bet_placed', ?, ?, ?)
+                """, [next_id, bet_id, -stake, new_bankroll, f"Bet placed: {analysis.bet_type} {analysis.line}"])
 
                 # Commit transaction
                 self.conn.execute("COMMIT")
@@ -488,15 +505,15 @@ class BettingDatabaseManager:
                 new_bankroll = current_bankroll + result_amount
                 self.update_setting('current_bankroll', str(new_bankroll))
 
-                # Get next history_id
-                next_id_result = self.conn.execute("SELECT COALESCE(MAX(history_id), 0) + 1 FROM bankroll_history").fetchone()
-                next_history_id = next_id_result[0] if next_id_result else 1
+                # Get next id
+                next_id_result = self.conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM bankroll_history").fetchone()
+                next_id = next_id_result[0] if next_id_result else 1
 
                 # Record bankroll change
                 self.conn.execute("""
-                    INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
-                    VALUES (?, ?, 'bet_settled', ?, ?, ?, ?)
-                """, [next_history_id, bet_id, result_amount, current_bankroll, new_bankroll, f"Bet settled: {result}"])
+                    INSERT INTO bankroll_history (id, bet_id, change_type, amount, balance_after, description)
+                    VALUES (?, ?, 'bet_settled', ?, ?, ?)
+                """, [next_id, bet_id, result_amount, new_bankroll, f"Bet settled: {result}"])
 
                 # Commit transaction
                 self.conn.execute("COMMIT")
@@ -735,13 +752,14 @@ class BettingDatabaseManager:
         """
         try:
             result = self.conn.execute("""
-                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
-                       edge, probability, quality_score, risk_level, status, placed_at,
-                       settled_at, result_amount, profit_loss, bookmaker, notes,
-                       home_team, away_team, analysis_id
-                FROM placed_bets
-                WHERE game_id = ?
-                ORDER BY placed_at DESC
+                SELECT pb.bet_id, pb.game_id, pb.bet_type, pb.line, pb.odds, pb.stake, pb.potential_return,
+                       ba.edge, ba.probability, ba.quality_score, pb.risk_level, pb.status, pb.placed_at,
+                       pb.settled_at, pb.result_amount, pb.profit_loss, pb.bookmaker, pb.notes,
+                       pb.home_team, pb.away_team, pb.analysis_id
+                FROM placed_bets pb
+                LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+                WHERE pb.game_id = ?
+                ORDER BY pb.placed_at DESC
             """, [game_id]).fetchall()
 
             bets = []
@@ -771,36 +789,39 @@ class BettingDatabaseManager:
             Dictionary with 'pending', 'settled', and 'all' bet lists
         """
         try:
-            # Get pending bets
+            # Get pending bets with JOIN to betting_analysis
             pending_result = self.conn.execute("""
-                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
-                       edge, probability, quality_score, risk_level, status, placed_at,
-                       settled_at, result_amount, profit_loss, bookmaker, notes,
-                       home_team, away_team, analysis_id
-                FROM placed_bets
-                WHERE status = 'pending'
-                ORDER BY placed_at DESC
+                SELECT pb.bet_id, pb.game_id, pb.bet_type, pb.line, pb.odds, pb.stake, pb.potential_return,
+                       ba.edge, ba.probability, ba.quality_score, pb.risk_level, pb.status, pb.placed_at,
+                       pb.settled_at, pb.result_amount, pb.profit_loss, pb.bookmaker, pb.notes,
+                       pb.home_team, pb.away_team, pb.analysis_id
+                FROM placed_bets pb
+                LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+                WHERE pb.status = 'pending'
+                ORDER BY pb.placed_at DESC
             """).fetchall()
 
-            # Get settled bets
+            # Get settled bets with JOIN to betting_analysis
             settled_result = self.conn.execute("""
-                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
-                       edge, probability, quality_score, risk_level, status, placed_at,
-                       settled_at, result_amount, profit_loss, bookmaker, notes,
-                       home_team, away_team, analysis_id
-                FROM placed_bets
-                WHERE status IN ('won', 'lost', 'void', 'cancelled')
-                ORDER BY placed_at DESC
+                SELECT pb.bet_id, pb.game_id, pb.bet_type, pb.line, pb.odds, pb.stake, pb.potential_return,
+                       ba.edge, ba.probability, ba.quality_score, pb.risk_level, pb.status, pb.placed_at,
+                       pb.settled_at, pb.result_amount, pb.profit_loss, pb.bookmaker, pb.notes,
+                       pb.home_team, pb.away_team, pb.analysis_id
+                FROM placed_bets pb
+                LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+                WHERE pb.status IN ('won', 'lost', 'void', 'cancelled')
+                ORDER BY pb.placed_at DESC
             """).fetchall()
 
-            # Get all bets
+            # Get all bets with JOIN to betting_analysis
             all_result = self.conn.execute("""
-                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
-                       edge, probability, quality_score, risk_level, status, placed_at,
-                       settled_at, result_amount, profit_loss, bookmaker, notes,
-                       home_team, away_team, analysis_id
-                FROM placed_bets
-                ORDER BY placed_at DESC
+                SELECT pb.bet_id, pb.game_id, pb.bet_type, pb.line, pb.odds, pb.stake, pb.potential_return,
+                       ba.edge, ba.probability, ba.quality_score, pb.risk_level, pb.status, pb.placed_at,
+                       pb.settled_at, pb.result_amount, pb.profit_loss, pb.bookmaker, pb.notes,
+                       pb.home_team, pb.away_team, pb.analysis_id
+                FROM placed_bets pb
+                LEFT JOIN betting_analysis ba ON pb.analysis_id = ba.analysis_id
+                ORDER BY pb.placed_at DESC
             """).fetchall()
 
             def convert_rows_to_bets(rows):
@@ -945,15 +966,15 @@ class BettingDatabaseManager:
                         # Update bankroll
                         self.update_setting('current_bankroll', str(new_bankroll))
 
-                        # Get next history_id
-                        next_id_result = self.conn.execute("SELECT COALESCE(MAX(history_id), 0) + 1 FROM bankroll_history").fetchone()
-                        next_history_id = next_id_result[0] if next_id_result else 1
+                        # Get next id
+                        next_id_result = self.conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM bankroll_history").fetchone()
+                        next_id = next_id_result[0] if next_id_result else 1
 
                         # Record refund
                         self.conn.execute("""
-                            INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
-                            VALUES (?, ?, 'bet_cancelled', ?, ?, ?, ?)
-                        """, [next_history_id, bet_id, stake_to_refund, current_bankroll, new_bankroll, f"Cancelled bet: {bet_id}"])
+                            INSERT INTO bankroll_history (id, bet_id, change_type, amount, balance_after, description)
+                            VALUES (?, ?, 'bet_cancelled', ?, ?, ?)
+                        """, [next_id, bet_id, stake_to_refund, new_bankroll, f"Cancelled bet: {bet_id}"])
 
                     # Update bet status
                     self.conn.execute("""
@@ -1027,6 +1048,27 @@ class BettingDatabaseManager:
 
         except Exception as e:
             logger.error(f"Failed to get game from database: {e}")
+            # Try connection recovery if database is invalidated
+            if "database has been invalidated" in str(e).lower():
+                logger.info("Attempting database connection recovery...")
+                try:
+                    self._initialize_connection()
+                    # Retry the query once after recovery
+                    result = self.conn.execute("""
+                        SELECT game_date, home_team, away_team, home_score, away_score, status, time
+                        FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
+                        WHERE game_id LIKE ?
+                        LIMIT 1
+                    """, [f"%{game_id}%"]).fetchone()
+
+                    if result:
+                        columns = ['game_date', 'home_team', 'away_team', 'home_score', 'away_score', 'status', 'time']
+                        game_dict = dict(zip(columns, result))
+                        game_dict['is_played'] = False
+                        return game_dict
+
+                except Exception as retry_e:
+                    logger.error(f"Database recovery failed: {retry_e}")
             return None
 
     def sync_data_store(self) -> Dict[str, Any]:
@@ -1148,10 +1190,10 @@ class BettingDatabaseManager:
             # Bankroll status
             bankroll_status = self.get_bankroll_status()
 
-            # Recent activity
+            # Recent activity - Fixed for DuckDB compatibility
             recent_bets = self.conn.execute("""
                 SELECT COUNT(*) FROM placed_bets
-                WHERE placed_at >= datetime('now', '-7 days')
+                WHERE placed_at >= CURRENT_DATE - INTERVAL '7 days'
             """).fetchone()[0]
 
             return {

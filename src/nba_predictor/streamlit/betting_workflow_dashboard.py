@@ -17,7 +17,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from dateutil import tz
-from ..utils.nba_timezone_utils import NBATimezoneManager
+# Fix relative import for direct execution
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from nba_predictor.utils.nba_timezone_utils import NBATimezoneManager
 
 # Import bet cancellation fix to resolve DuckDB database corruption issues
 # This patches the settle_bet method with improved error handling and retry logic
@@ -33,9 +37,9 @@ except ImportError as e:
     logging.warning(f"Could not import bet cancellation fix: {e}")
 except Exception as e:
     logging.warning(f"Error applying bet cancellation fix: {e}")
-from ..utils.manual_odds_calculator import _manual_odds_calculator
-from ..utils.legacy_risk_manager import LegacyRiskManager
-from ..utils.betting_database_manager import BettingDatabaseManager, BetAnalysis, PlacedBet
+from nba_predictor.utils.manual_odds_calculator import _manual_odds_calculator
+from nba_predictor.utils.legacy_risk_manager import LegacyRiskManager
+from nba_predictor.utils.betting_database_manager import BettingDatabaseManager, BetAnalysis, PlacedBet
 
 # Initialize logger first
 logger = logging.getLogger(__name__)
@@ -51,7 +55,7 @@ except ImportError as e:
 
 # Try to import NBADataProvider, but make it optional for now
 try:
-    from ..api.data_provider import NBADataProvider
+    from nba_predictor.api.data_provider import NBADataProvider
     NBA_DATA_PROVIDER_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"NBADataProvider not available: {e}")
@@ -92,13 +96,13 @@ except ImportError as e:
                 })
 
             return games
-from ..core.data_store import UnifiedDataStore
-from ..utils.exceptions import StreamlitError, APIError
-from .utils.cache_manager import setup_caching_for_app
-from .config.deployment_config import load_config
-from .components.predictions_dashboard import render_predictions_dashboard
+from nba_predictor.core.data_store import UnifiedDataStore
+from nba_predictor.utils.exceptions import StreamlitError, APIError
+from nba_predictor.streamlit.utils.cache_manager import setup_caching_for_app
+from nba_predictor.streamlit.config.deployment_config import load_config
+from nba_predictor.streamlit.components.predictions_dashboard import render_predictions_dashboard
 # Analytics Dashboard rimossa - solo flusso legacy
-from .components.sync_dashboard import render_sync_dashboard
+from nba_predictor.streamlit.components.sync_dashboard import render_sync_dashboard
 
 # Initialize timezone manager per Context7 best practices
 _tz_manager = None
@@ -250,7 +254,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
         edited_df = st.data_editor(
             df_complete,
             num_rows="dynamic",
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config={
                 "#": st.column_config.NumberColumn("#", width="small"),
@@ -387,7 +391,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
 
             st.dataframe(
                 df_recommendations.style.apply(highlight_recommendations, axis=1),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
 
@@ -426,7 +430,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
             if stake_analysis:
                 df_stake = pd.DataFrame(stake_analysis)
                 # Use simple Streamlit dataframe
-                st.dataframe(df_stake, use_container_width=True, hide_index=True)
+                st.dataframe(df_stake, width='stretch', hide_index=True)
 
         elif analysis_view == "🎯 Quality Breakdown":
             # Quality breakdown completo
@@ -451,7 +455,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
             if quality_breakdown:
                 df_quality = pd.DataFrame(quality_breakdown)
                 # Use simple Streamlit dataframe
-                st.dataframe(df_quality, use_container_width=True, hide_index=True)
+                st.dataframe(df_quality, width='stretch', hide_index=True)
 
         elif analysis_view == "💎 Value Opportunities":
             # VALUE bets complete analysis
@@ -477,7 +481,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
             if value_analysis:
                 df_value = pd.DataFrame(value_analysis)
                 # Use simple Streamlit dataframe
-                st.dataframe(df_value, use_container_width=True, hide_index=True)
+                st.dataframe(df_value, width='stretch', hide_index=True)
 
         st.divider()
 
@@ -743,7 +747,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                     st.form_submit_button(
                         "💎 PIAZZA SCOMMESSA",
                         type="primary",
-                        use_container_width=True,
+                        width='stretch',
                         on_click=place_bet_callback
                     )
 
@@ -1554,7 +1558,7 @@ def render_betting_lines_step(data_provider: NBADataProvider) -> None:
                     if st.button(
                         button_label,
                         key=f"quick_line_{line_value}",
-                        use_container_width=True,
+                        width='stretch',
                         type="primary" if line_value == 232.5 else "secondary"
                     ):
                         st.session_state.manual_line = line_value
@@ -1578,7 +1582,7 @@ def render_betting_lines_step(data_provider: NBADataProvider) -> None:
             "🚀 **RUN COMPLETE BETTING ANALYSIS**",
             type="primary",
             key="run_complete_analysis",
-            use_container_width=True,
+            width='stretch',
             help="Generate comprehensive betting analysis with odds, probabilities, and stake recommendations"
         ):
             final_line = st.session_state.manual_line
@@ -1763,19 +1767,24 @@ def render_comprehensive_bets_view():
             if st.button("🔄 Aggiorna Tutti i Risultati", help="Auto-settle tutte le scommesse per giochi conclusi"):
                 with st.spinner("Aggiornamento risultati in corso..."):
                     try:
-                        # Get all games with final scores
-                        # Use parquet files instead of non-existent games table
-                        games_result = db_manager.conn.execute("""
-                            SELECT game_date, home_team, away_team, home_score, away_score
-                            FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
-                            WHERE home_score IS NOT NULL
-                              AND away_score IS NOT NULL
-                              AND home_score > 0
-                              AND away_score > 0
-                              AND status = 'Final'
-                            ORDER BY game_date DESC
-                            LIMIT 50
-                        """).fetchall()
+                        # Get all games with final scores - simplified approach
+                        try:
+                            # Use parquet files for reliable game data
+                            games_result = db_manager.conn.execute("""
+                                SELECT game_date, home_team, away_team, home_score, away_score
+                                FROM read_parquet('/Users/fulvioventura/nba-predictor-streamlit/data/games/*.parquet')
+                                WHERE home_score IS NOT NULL
+                                  AND away_score IS NOT NULL
+                                  AND home_score > 0
+                                  AND away_score > 0
+                                  AND status = 'Final'
+                                ORDER BY game_date DESC
+                                LIMIT 50
+                            """).fetchall()
+
+                        except Exception as e:
+                            st.error(f"Impossibile caricare dati giochi: {e}")
+                            games_result = []
 
                         total_settled = 0
                         for game_row in games_result:
@@ -2057,7 +2066,7 @@ def render_all_bets_table(all_bets: List[PlacedBet], db_manager: BettingDatabase
     df = pd.DataFrame(bets_data)
 
     # Display with formatting
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
 
     # Export option
     if st.button("📥 Esporta Dati"):
@@ -2101,15 +2110,20 @@ def render_data_store_management(db_manager: BettingDatabaseManager):
     st.markdown("### 📊 Table Statistics")
     tables_data = []
     for table_name, table_info in status.get('tables', {}).items():
+        # Fix datetime serialization for Arrow compatibility
+        latest_record = table_info.get('latest_record', 'N/A') or 'N/A'
+        if latest_record != 'N/A' and hasattr(latest_record, 'strftime'):
+            latest_record = latest_record.strftime('%Y-%m-%d %H:%M:%S')
+
         tables_data.append({
             'Table': table_name,
             'Records': table_info.get('count', 0),
-            'Latest Record': table_info.get('latest_record', 'N/A') or 'N/A'
+            'Latest Record': latest_record
         })
 
     if tables_data:
         df_tables = pd.DataFrame(tables_data)
-        st.dataframe(df_tables, use_container_width=True, hide_index=True)
+        st.dataframe(df_tables, width='stretch', hide_index=True)
 
     st.markdown("---")
 
