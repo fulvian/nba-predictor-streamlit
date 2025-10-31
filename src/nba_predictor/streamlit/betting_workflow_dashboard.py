@@ -633,21 +633,9 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                                         st.warning("⚠️ **ATTENZIONE: Questo incontro è già stato concluso!**")
                                         st.info(f"📊 Risultato finale: {game_info.get('final_home_score', '?')}-{game_info.get('final_away_score', '?')}")
 
-                                        # Auto-settle any existing pending bets
-                                        pending_count = len([b for b in existing_bets if b.status == 'pending'])
-                                        if pending_count > 0:
-                                            st.info(f"🔄 Auto-settling {pending_count} scommesse pendenti...")
-                                            settled_count = db_manager.update_game_results_from_scores(
-                                                game_id,
-                                                game_info['final_home_score'],
-                                                game_info['final_away_score']
-                                            )
-                                            if settled_count > 0:
-                                                st.success(f"✅ {settled_count} scommesse settle automaticamente")
-                                            else:
-                                                st.warning("⚠️ Errore nell'auto-settlement")
-
-                                        # For played games, still allow bet placement but with clear warning
+                                        # For played games, allow bet placement with clear warning
+                                        # NOTE: REMOVED auto-settlement logic to allow bets to stay in "pending" status
+                                        # This ensures new bets appear in the "Gestione Scommesse" pending section
                                         if st.checkbox("🎲 Procedi comunque (scommessa post-game)", help="Permette di piazzare scommesse su giochi già conclusi per testing"):
                                             st.warning("⚠️ Stai piazzando una scommessa su un incontro già concluso!")
 
