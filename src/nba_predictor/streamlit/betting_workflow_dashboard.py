@@ -152,18 +152,86 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
 
         st.divider()
 
-        # Genera distribuzione predittiva mock per test
-        mock_distribution = {
-            'predicted_mu': central_line + np.random.normal(0, 3),  # Predizione con variazione ridotta
-            'predicted_sigma': 10.5,  # Deviazione standard più realistica
-            'mc_simulations': 25000
-        }
+        # CRITICAL FIX: Use real ML predictions from game object or session cache
+        # The session state gets reset between steps, so we need to check multiple sources
+        ml_prediction = None
+
+        # DEBUG: Show current game details
+        logger.info(f"🎯 DEBUG: Current game details: {game}")
+
+        # Method 1: Check if predictions are embedded in the game object (most reliable)
+        if 'ml_prediction' in game:
+            ml_prediction = game['ml_prediction']
+            logger.info(f"✅ Found ML prediction embedded in game object: {ml_prediction.get('predicted_total', 'N/A')}")
+        elif st.session_state.selected_game and 'ml_prediction' in st.session_state.selected_game:
+            ml_prediction = st.session_state.selected_game['ml_prediction']
+            logger.info(f"✅ Found ML prediction in session_state.selected_game: {ml_prediction.get('predicted_total', 'N/A')}")
+        else:
+            # Method 2: Check predictions_cache (might be lost due to session reset)
+            if 'predictions_cache' in st.session_state:
+                logger.info(f"🔍 DEBUG: Found predictions_cache with {len(st.session_state.predictions_cache)} items")
+                for cache_key, prediction_data in st.session_state.predictions_cache.items():
+                    logger.info(f"   Cache key: {cache_key}")
+                    if prediction_data:
+                        logger.info(f"   Prediction data keys: {list(prediction_data.keys())}")
+                        logger.info(f"   Teams: {prediction_data.get('home_team', 'N/A')} vs {prediction_data.get('away_team', 'N/A')}")
+                        logger.info(f"   Predicted total: {prediction_data.get('predicted_total', 'N/A')}")
+
+                # Look for prediction for this specific game
+                for cache_key, prediction_data in st.session_state.predictions_cache.items():
+                    if prediction_data and 'home_team' in prediction_data and 'away_team' in prediction_data:
+                        # Match with current game (order doesn't matter)
+                        game_home = game.get('home_team', '').strip()
+                        game_away = game.get('away_team', '').strip()
+                        pred_home = prediction_data.get('home_team', '').strip()
+                        pred_away = prediction_data.get('away_team', '').strip()
+
+                        logger.info(f"🔍 DEBUG: Comparing {pred_home} vs {pred_away} with {game_home} vs {game_away}")
+
+                        if ((pred_home == game_home and pred_away == game_away) or
+                            (pred_home == game_away and pred_away == game_home)):
+                            ml_prediction = prediction_data
+                            logger.info(f"✅ Found ML prediction in cache: {prediction_data.get('predicted_total', 'N/A')}")
+                            break
+            else:
+                logger.warning("⚠️ DEBUG: No predictions_cache found in session state")
+
+        # Create distribution based on ML predictions or fallback to mock if ML not available
+        if ml_prediction and 'predicted_total' in ml_prediction:
+            # Use real ML prediction
+            predicted_mu = ml_prediction['predicted_total']
+            # Use confidence interval if available, otherwise estimate from model characteristics
+            if 'confidence_interval' in ml_prediction and ml_prediction['confidence_interval']:
+                ci_lower, ci_upper = ml_prediction['confidence_interval']
+                # Estimate sigma from confidence interval (approximate 95% CI ≈ μ ± 2σ)
+                predicted_sigma = (ci_upper - ci_lower) / 4
+            else:
+                # Fallback sigma based on model characteristics
+                predicted_sigma = 12.0  # More realistic sigma for NBA totals
+
+            distribution = {
+                'predicted_mu': predicted_mu,
+                'predicted_sigma': predicted_sigma,
+                'mc_simulations': 25000,
+                'source': 'ML_MODEL',
+                'ml_prediction': ml_prediction  # Store full ML data for reference
+            }
+            logger.info(f"🎯 Using ML distribution: μ={predicted_mu:.1f}, σ={predicted_sigma:.1f}")
+        else:
+            # Fallback to mock only if ML prediction not available
+            logger.warning("⚠️ ML prediction not found, using mock distribution as fallback")
+            distribution = {
+                'predicted_mu': central_line + np.random.normal(0, 3),
+                'predicted_sigma': 10.5,
+                'mc_simulations': 25000,
+                'source': 'MOCK_FALLBACK'
+            }
 
         # 🔄 STATUS SPINNER - Context7 Best Practice
         with st.status("🔄 Elaborazione algoritmi legacy di gestione rischio...", expanded=True) as status:
             st.write("⚙️ Caricamento stake calculation avanzato...")
             opportunities = risk_manager.analyze_betting_opportunities(
-                distribution=mock_distribution,
+                distribution=distribution,
                 central_line=central_line,
                 bankroll=bankroll_status['available_bankroll']
             )
@@ -180,6 +248,13 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
         if not value_bets:
             st.info("ℹ️ Nessuna VALUE bet trovata con i parametri attuali")
             return
+
+        # 🎯 Display prediction source information
+        if distribution.get('source') == 'ML_MODEL':
+            st.success("✅ **USANDO PREDIZIONI ML REALI** - Sistema completamente integrato!")
+            st.info(f"🧠 Predizione ML: {distribution['predicted_mu']:.1f} punti (±{distribution['predicted_sigma']:.1f})")
+        else:
+            st.warning("⚠️ **USANDO DATI MOCK** - Predizioni ML non disponibili")
 
         st.success(f"✅ Trovate {len(value_bets)} VALUE bets su {len(opportunities)} linee analizzate")
 
@@ -1430,6 +1505,8 @@ def render_game_analysis_step() -> None:
         # Initialize sync engine (optional)
         sync_engine = None  # Can be initialized if needed
 
+        # Render the predictions dashboard
+        # Note: The dashboard internally handles prediction generation and persistence to game object
         render_predictions_dashboard(data_store, sync_engine, st.session_state.selected_game)
 
         if st.button("💰 Continue to Betting Analysis", type="primary"):

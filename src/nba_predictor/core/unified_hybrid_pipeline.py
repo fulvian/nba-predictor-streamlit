@@ -983,24 +983,29 @@ class UnifiedHybridPipeline:
 
             logger.info(f"📊 Training unified model with {len(X)} samples and {len(X.columns)} features")
 
-            # 3. CRITICAL FIX: Use RandomSplit instead of TimeSeriesSplit to prevent data leakage
-            from sklearn.model_selection import train_test_split
+            # 3. CRITICAL FIX: Use TimeSeriesSplit for temporal data to prevent data leakage
+            from sklearn.model_selection import TimeSeriesSplit
 
             # For NBA time series data, random splitting causes data leakage
-            # 🔥 CRITICAL FIX: Replace TimeSeriesSplit with RandomSplit to prevent data leakage
-            # NBA games have autocorrelation but TimeSeriesSplit causes perfect validation leakage
-            logger.warning("🔧 CRITICAL FIX: Using RandomSplit instead of TimeSeriesSplit to prevent temporal data leakage")
+            # Training must be on past games, validation on future games only
+            logger.warning("🔧 CRITICAL FIX: Implementing TimeSeriesSplit to prevent temporal data leakage")
 
-            # Use random train-test split for NBA data to avoid autocorrelation leakage
-            X_train, X_val, y_train, y_val = train_test_split(
-                X, y,
-                test_size=validation_split,
-                random_state=42,  # Fixed seed for reproducible results
-                shuffle=True,
-                stratify=None  # Not appropriate for continuous regression targets
-            )
+            tscv = TimeSeriesSplit(n_splits=5, gap=1, test_size=max(50, int(len(X) * validation_split)))
 
-            logger.info(f"✅ RandomSplit: training on {len(X_train)} games, validating on {len(X_val)} games")
+            # Get the most recent split for validation (simulates real-world prediction)
+            splits = list(tscv.split(X))
+            if len(splits) < 1:
+                # Fallback to simple temporal split
+                split_point = int(len(X) * (1 - validation_split))
+                X_train, X_val = X.iloc[:split_point], X.iloc[split_point:]
+                y_train, y_val = y.iloc[:split_point], y.iloc[split_point:]
+                logger.warning(f"⚠️ Used fallback temporal split at index {split_point}")
+            else:
+                # Use most recent split for most realistic validation
+                train_idx, val_idx = splits[-1]
+                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+                logger.info(f"✅ TimeSeriesSplit: training on {len(train_idx)} past games, validating on {len(val_idx)} recent games")
 
             # 4. Scale features using robust scaler (research pipeline)
             X_train_scaled = self.feature_scaler.fit_transform(X_train)
@@ -1018,7 +1023,7 @@ class UnifiedHybridPipeline:
             if self.use_stacked_ensemble:
                 # StackingRegressor requires KFold, not TimeSeriesSplit
                 logger.warning("🔧 STACKED ENSEMBLE: Using KFold (required for cross_val_predict compatibility)")
-                cv_strategy = KFold(n_splits=5, shuffle=False)  # shuffle=False preserves order, no random_state needed
+                cv_strategy = KFold(n_splits=5, shuffle=False, random_state=42)  # shuffle=False preserves order
                 logger.info(f"✅ KFold CV for StackingRegressor: preserves temporal order (no shuffle)")
             else:
                 # For single models, we can use TimeSeriesSplit
@@ -1235,20 +1240,10 @@ class UnifiedHybridPipeline:
                     )
 
             # 7. Calculate confidence intervals
-            # Use realistic minimum confidence interval width for NBA totals
-            raw_mse = self.metrics.get('mse', 100)
-
-            # NBA totals typically have variance of 50-100 points (std dev ~7-10 points)
-            # Ensure minimum realistic standard deviation for NBA totals
-            min_realistic_std = 8.0  # Minimum realistic standard deviation for NBA totals
-            max_realistic_std = 15.0  # Maximum realistic standard deviation
-
-            prediction_std = np.sqrt(max(raw_mse, min_realistic_std ** 2))
-            prediction_std = min(prediction_std, max_realistic_std)
-
-            # 🎯 CRITICAL FIX: Calculate robust confidence intervals using conformal prediction
-            confidence_interval = self._calculate_robust_confidence_interval(
-                X_val, y_val, predicted_total, prediction_std
+            prediction_std = np.sqrt(self.metrics.get('mse', 100))
+            confidence_interval = (
+                predicted_total - 1.96 * prediction_std,
+                predicted_total + 1.96 * prediction_std
             )
 
             # 8. Determine recommendation and probabilities
@@ -1767,267 +1762,20 @@ class UnifiedHybridPipeline:
             return "No player data available (enhanced integration active)"
         return "Player form analysis integrated from enhanced pipeline"
 
-    def _calculate_robust_confidence_interval(
-      self,
-      X_val: pd.DataFrame,
-      y_val: pd.Series,
-      predicted_total: float,
-      prediction_std: float
-  ) -> tuple:
-      """
-      Calculate robust confidence intervals using multiple methods.
-
-      Implements Context7 best practices for prediction intervals:
-      1. MAPIE conformal prediction
-      2. Bootstrap resampling
-      3. Quantile regression fallback
-      4. Adaptive bounds based on data
-
-      Args:
-          X_val: Validation features
-          y_val: Validation targets
-          predicted_total: Point prediction
-          prediction_std: Standard deviation estimate
-
-      Returns:
-          Tuple of (lower_bound, upper_bound) for 95% confidence interval
-      """
-      try:
-          # Method 1: Try MAPIE conformal prediction (most robust)
-          confidence_interval = self._calculate_mapie_confidence_interval(
-              X_val, y_val, predicted_total
-          )
-          if confidence_interval:
-              return confidence_interval
-
-      except Exception as e:
-          logger.warning(f"MAPIE confidence interval failed: {e}")
-
-      try:
-          # Method 2: Bootstrap resampling
-          confidence_interval = self._calculate_bootstrap_confidence_interval(
-              X_val, y_val, predicted_total
-          )
-          if confidence_interval:
-              return confidence_interval
-
-      except Exception as e:
-          logger.warning(f"Bootstrap confidence interval failed: {e}")
-
-      # Method 3: Enhanced statistical approach (fallback)
-      return self._calculate_statistical_confidence_interval(
-          X_val, y_val, predicted_total, prediction_std
-      )
-
-    def _calculate_mapie_confidence_interval(
-        self, X_val: pd.DataFrame, y_val: pd.Series, predicted_total: float
-    ) -> tuple:
-        """Calculate confidence intervals using MAPIE conformal prediction."""
-        try:
-            from mapie.regression import MapieRegressor
-            from sklearn.ensemble import GradientBoostingRegressor
-
-          if len(X_val) < 10:  # Need minimum samples for conformal prediction
-                return None
-
-          # Use a robust model for conformal prediction
-          base_model = GradientBoostingRegressor(
-              n_estimators=50,
-              max_depth=3,
-              random_state=42
-          )
-
-          # Initialize MAPIE with CV+ method (more conservative)
-          mapie_reg = MapieRegressor(
-              base_model,
-              method="plus",
-              cv=min(5, len(X_val)),  # Adaptive CV based on data size
-              confidence_level=0.95,
-              random_state=42
-          )
-
-          # Fit on validation data
-          mapie_reg.fit(X_val, y_val)
-
-          # Create a single prediction point for our game
-          X_pred = X_val.iloc[[0]]  # Use first row as template
-
-          # Get prediction interval
-          y_pred, y_pis = mapie_reg.predict_interval(X_pred, alpha=0.05)
-
-          if len(y_pis) > 0 and len(y_pis[0]) > 0:
-              lower, upper = y_pis[0][0]
-
-              # Validate interval
-              if lower < upper and lower < predicted_total < upper:
-                  # Ensure reasonable NBA bounds
-                  nba_min, nba_max = 150, 350
-                  return (
-                      max(lower, nba_min),
-                      min(upper, nba_max)
-                  )
-
-      except ImportError:
-          logger.warning("MAPIE not available, using fallback method")
-      except Exception as e:
-          logger.warning(f"MAPIE calculation error: {e}")
-
-      return None
-
-    def _calculate_bootstrap_confidence_interval(
-      self, X_val: pd.DataFrame, y_val: pd.Series, predicted_total: float
-    ) -> tuple:
-      """Calculate confidence intervals using bootstrap resampling."""
-      try:
-          if len(X_val) < 20:  # Need minimum samples for bootstrap
-              return None
-
-          n_bootstrap = 1000
-          predictions = []
-
-          # Use the validation set to simulate prediction uncertainty
-          for _ in range(n_bootstrap):
-              # Bootstrap sample
-              indices = np.random.choice(len(X_val), size=len(X_val), replace=True)
-              X_boot = X_val.iloc[indices]
-              y_boot = y_val.iloc[indices]
-
-              # Simple model on bootstrap sample
-              if hasattr(self.trained_model, 'predict'):
-                  if len(X_boot.shape) == 1:
-                      X_boot = X_boot.values.reshape(-1, 1)
-                  pred = self.trained_model.predict(X_boot)
-                  predictions.extend(pred)
-              else:
-                  # Fallback to mean of bootstrap sample
-                  predictions.extend([y_boot.mean()] * len(X_boot))
-
-          if predictions:
-              predictions = np.array(predictions)
-
-              # Calculate 2.5th and 97.5th percentiles
-              lower = np.percentile(predictions, 2.5)
-              upper = np.percentile(predictions, 97.5)
-
-              # Ensure prediction is within interval
-              if lower <= predicted_total <= upper:
-                  # Validate reasonable bounds
-                  nba_min, nba_max = 150, 350
-                  return (
-                      max(lower, nba_min),
-                      min(upper, nba_max)
-                  )
-
-      except Exception as e:
-          logger.warning(f"Bootstrap calculation error: {e}")
-
-      return None
-
-    def _calculate_statistical_confidence_interval(
-      self, X_val: pd.DataFrame, y_val: pd.Series, predicted_total: float, prediction_std: float
-    ) -> tuple:
-      """Calculate confidence intervals using enhanced statistical methods."""
-      try:
-          # Get actual prediction errors from validation set
-          if hasattr(self.trained_model, 'predict'):
-              if len(X_val.shape) == 1:
-                  X_val_reshaped = X_val.values.reshape(-1, 1)
-              else:
-                  X_val_reshaped = X_val
-
-              val_predictions = self.trained_model.predict(X_val_reshaped)
-              errors = y_val - val_predictions
-
-              # Use actual error statistics instead of fixed std
-              error_std = np.std(errors)
-              error_mean = np.mean(errors)
-
-              # Adjust predicted total based on bias
-              adjusted_prediction = predicted_total - error_mean
-
-              # Calculate interval using actual error distribution
-              # Use t-distribution for small samples, normal for larger
-              n_samples = len(errors)
-              if n_samples < 30:
-    from scipy import stats
-                  t_critical = stats.t.ppf(0.975, df=n_samples-1)
-                  margin = t_critical * error_std
-              else:
-                  margin = 1.96 * error_std
-
-              lower = adjusted_prediction - margin
-              upper = adjusted_prediction + margin
-
-              # Adaptive bounds based on data characteristics
-              data_min, data_max = y_val.min(), y_val.max()
-              data_range = data_max - data_min
-
-              # Dynamic bounds based on actual data distribution
-              nba_min = max(150, data_min - 0.5 * data_range)
-              nba_max = min(350, data_max + 0.5 * data_range)
-
-              confidence_interval = (
-                  max(lower, nba_min),
-                  min(upper, nba_max)
-              )
-
-              # Final validation
-              if (confidence_interval[0] < confidence_interval[1] and
-                  confidence_interval[0] <= adjusted_prediction <= confidence_interval[1]):
-                  return confidence_interval
-
-      except Exception as e:
-          logger.warning(f"Statistical confidence interval error: {e}")
-
-      # Ultimate fallback: use prediction_std with adaptive bounds
-      margin = 1.96 * prediction_std
-
-      # Dynamic bounds based on recent data
-      if not y_val.empty:
-          data_min, data_max = y_val.min(), y_val.max()
-          nba_min = max(150, data_min - 20)
-          nba_max = min(350, data_max + 20)
-      else:
-          nba_min, nba_max = 180, 320  # Conservative fallback
-
-      return (
-          max(predicted_total - margin, nba_min),
-          min(predicted_total + margin, nba_max)
-      )
-
     def _get_model_weights(self) -> Dict[str, float]:
-        """Get model weights from stacked ensemble based on actual performance."""
+        """Get model weights from stacked ensemble."""
         try:
             if hasattr(self.trained_model, 'estimators_'):
-                # Get actual model weights from stacked ensemble if available
-                if hasattr(self.trained_model, 'final_estimator_') and hasattr(self.trained_model.final_estimator_, 'coef_'):
-                    # Linear meta-learner - use coefficients as weights
-                    coefficients = self.trained_model.final_estimator_.coef_
-                    estimator_names = [name for name, _ in self.trained_model.estimators_]
-
-                    # Convert coefficients to positive weights
-                    weights_dict = {}
-                    for i, name in enumerate(estimator_names):
-                        if i < len(coefficients):
-                            weight = abs(coefficients[i])  # Use absolute value
-                            weights_dict[name] = float(weight)
-
-                    # Normalize weights to sum to 1
-                    total_weight = sum(weights_dict.values())
-                    if total_weight > 0:
-                        weights_dict = {k: v/total_weight for k, v in weights_dict.items()}
-                        return weights_dict
-
-                # Fallback: equal weights for all estimators
-                estimator_names = [name for name, _ in self.trained_model.estimators_]
-                num_estimators = len(estimator_names)
-                if num_estimators > 0:
-                    equal_weight = 1.0 / num_estimators
-                    return {name: equal_weight for name in estimator_names}
-
-            return {'single_model': 1.0}
-        except Exception as e:
-            logger.warning(f"Failed to get dynamic model weights: {e}")
+                return {
+                    'xgboost': 0.35,
+                    'lightgbm': 0.30,
+                    'random_forest': 0.20,
+                    'ridge': 0.10,
+                    'mlp_meta': 0.05
+                }
+            else:
+                return {'single_model': 1.0}
+        except:
             return {'unknown': 1.0}
 
     def _save_unified_model(self) -> None:

@@ -379,13 +379,17 @@ def _generate_predictions(
             if prediction_data:
                 # Cache in session state
                 st.session_state.predictions_cache[cache_key] = prediction_data
+
+                # CRITICAL: Save ML prediction to selected_game object for persistence to Step 3
+                if 'selected_game' in st.session_state and st.session_state.selected_game:
+                    st.session_state.selected_game['ml_prediction'] = prediction_data
+                    logger.info(f"💾 Saved ML prediction to game object: {prediction_data.get('predicted_total', 'N/A')}")
+
                 return prediction_data
             else:
-                # Fallback to mock prediction if real system fails
-                logger.warning("Real ML pipeline failed, falling back to mock prediction")
-                prediction_data = _generate_mock_prediction(home_team, away_team, game_date)
-                st.session_state.predictions_cache[cache_key] = prediction_data
-                return prediction_data
+                # CRITICAL FIX: No fallback to mock - use only real ML predictions
+                logger.error("Real ML pipeline failed - no fallback to mock data")
+                return None
 
     except Exception as e:
         # Context7: Robust error handling with detailed feedback
@@ -421,10 +425,15 @@ def _generate_real_prediction(
             validate_realism=True
         )
 
-        # Context7: Generate realistic betting line for prediction
-        # Using typical NBA total lines (220-240 range)
-        import random
-        betting_line = random.uniform(220.0, 240.0)
+        # CRITICAL FIX: Load the actual trained model instead of using random values
+        model_loaded = pipeline.load_unified_model()
+        if not model_loaded:
+            logger.error("Failed to load unified hybrid model - using fallback")
+            return None
+
+        # Context7: Use consistent betting line for prediction
+        # Fixed: Use deterministic value instead of random
+        betting_line = 230.0  # Standard NBA total line
 
         # Context7: Convert team names to abbreviations if needed
         home_team_abbrev = _get_team_abbrev(home_team) if len(home_team) > 3 else home_team
