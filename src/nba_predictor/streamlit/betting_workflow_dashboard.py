@@ -18,6 +18,21 @@ import pandas as pd
 import streamlit as st
 from dateutil import tz
 from ..utils.nba_timezone_utils import NBATimezoneManager
+
+# Import bet cancellation fix to resolve DuckDB database corruption issues
+# This patches the settle_bet method with improved error handling and retry logic
+try:
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent.parent.parent.parent
+    fix_path = project_root / "bet_cancellation_fix.py"
+    if fix_path.exists():
+        sys.path.insert(0, str(project_root))
+        import bet_cancellation_fix  # This will monkey-patch the settle_bet method
+except ImportError as e:
+    logging.warning(f"Could not import bet cancellation fix: {e}")
+except Exception as e:
+    logging.warning(f"Error applying bet cancellation fix: {e}")
 from ..utils.manual_odds_calculator import _manual_odds_calculator
 from ..utils.legacy_risk_manager import LegacyRiskManager
 from ..utils.betting_database_manager import BettingDatabaseManager, BetAnalysis, PlacedBet
@@ -575,6 +590,10 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                                 # Create professional BetAnalysis object
                                 game_id = game.get('game_id', f"MANUAL_{game.get('home_team', 'Home')}_{game.get('away_team', 'Away')}")
 
+                                # Extract team names from game object
+                                home_team = game.get('home_team', 'Unknown')
+                                away_team = game.get('away_team', 'Unknown')
+
                                 bet_analysis = BetAnalysis(
                                     bet_type=optimal_bet['type'],
                                     line=optimal_bet['line'],
@@ -595,7 +614,9 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                                     risk_level=risk_manager.assess_risk_level(optimal_bet),
                                     game_id=game_id,
                                     central_line=central_line,
-                                    timestamp=datetime.now()
+                                    timestamp=datetime.now(),
+                                    home_team=home_team,
+                                    away_team=away_team
                                 )
 
                                 # Use professional betting database manager
@@ -707,10 +728,15 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                                         st.info(f"💰 Importo: €{stake_override:.2f}")
                                         st.info(f"📊 Potenziale vincita: €{stake_override * optimal_bet['odds']:.2f}")
 
-                                        # Show bankroll status
-                                        bankroll_status = db_manager.get_bankroll_status()
-                                        st.info(f"💵 Bankroll attuale: €{bankroll_status['current_bankroll']:.2f}")
-                                        st.info(f"📊 Scommesse attive: {bankroll_status['pending_bets_count']}")
+                                        # Show bankroll status with error handling
+                                        try:
+                                            bankroll_status = db_manager.get_bankroll_status()
+                                            st.info(f"💵 Bankroll attuale: €{bankroll_status['current_bankroll']:.2f}")
+                                            st.info(f"📊 Scommesse attive: {bankroll_status['pending_bets_count']}")
+                                        except Exception as bankroll_error:
+                                            logger.warning(f"Bankroll status error: {bankroll_error}")
+                                            st.info("💵 Bankroll attuale: €--")
+                                            st.info("📊 Scommesse attive: --")
                                     else:
                                         # Store bet placement error in session state
                                         st.session_state.bet_placed = 'error'
@@ -723,6 +749,7 @@ def render_legacy_betting_analysis(game: Dict[str, Any], central_line: float):
                                 st.error(f"❌ **ERRORE SISTEMA**: {str(e)}")
                                 logger.error(f"Bet placement error: {e}")
                                 st.session_state.bet_placed = 'error'
+                                st.session_state.last_bet_details = None
 
                     # Context7-compliant submit button with callback
                     st.form_submit_button(
@@ -1724,16 +1751,19 @@ def render_comprehensive_bets_view():
         col_bank1, col_bank2, col_bank3, col_bank4 = st.columns(4)
 
         with col_bank1:
-            st.metric("Bankroll Attuale", f"€{bankroll_status.get('current_bankroll', 0):.2f}")
+            current_bankroll = bankroll_status.get('current_bankroll', 0)
+            st.metric("Bankroll Attuale", f"€{float(current_bankroll):.2f}")
 
         with col_bank2:
             st.metric("Scommesse Pendenti", bankroll_status.get('pending_bets_count', 0))
 
         with col_bank3:
-            st.metric("Tasso Vittoria", f"{bankroll_status.get('win_rate', 0):.1f}%")
+            win_rate = bankroll_status.get('win_rate', 0)
+            st.metric("Tasso Vittoria", f"{float(win_rate):.1f}%")
 
         with col_bank4:
-            st.metric("ROI Totale", f"{bankroll_status.get('roi', 0):.1f}%")
+            roi = bankroll_status.get('roi', 0)
+            st.metric("ROI Totale", f"{float(roi):.1f}%")
 
         st.markdown("---")
 
@@ -1852,7 +1882,12 @@ def render_pending_bets_table(pending_bets: List[PlacedBet], db_manager: Betting
     st.subheader(f"📋 Scommesse Pendenti ({len(pending_bets)})")
 
     for i, bet in enumerate(pending_bets):
-        with st.expander(f"💎 {bet.bet_type} {bet.line} @ {bet.odds:.2f} - €{bet.stake:.2f}"):
+        # Convert numeric fields to float for safe formatting
+        odds_float = float(bet.odds) if bet.odds else 0.0
+        stake_float = float(bet.stake) if bet.stake else 0.0
+        potential_float = float(bet.potential_return) if bet.potential_return else 0.0
+
+        with st.expander(f"💎 {bet.bet_type} {bet.line} @ {odds_float:.2f} - €{stake_float:.2f}"):
             col1, col2, col3 = st.columns(3)
 
             with col1:
@@ -1861,16 +1896,21 @@ def render_pending_bets_table(pending_bets: List[PlacedBet], db_manager: Betting
                 st.write(f"**Game ID:** `{bet.game_id}`")
                 st.write(f"**Tipo:** {bet.bet_type}")
                 st.write(f"**Linea:** {bet.line}")
-                st.write(f"**Quota:** {bet.odds:.2f}")
-                st.write(f"**Stake:** €{bet.stake:.2f}")
-                st.write(f"**Potenziale:** €{bet.potential_return:.2f}")
+                st.write(f"**Quota:** {odds_float:.2f}")
+                st.write(f"**Stake:** €{stake_float:.2f}")
+                st.write(f"**Potenziale:** €{potential_float:.2f}")
                 st.write(f"**Rischio:** {bet.risk_level}")
 
             with col2:
                 st.markdown("**📈 Analisi**")
-                st.write(f"**Edge:** {bet.edge:.2f}%")
-                st.write(f"**Probabilità:** {bet.probability:.2f}")
-                st.write(f"**Qualità:** {bet.quality_score:.2f}")
+                # Convert numeric fields to float for safe formatting
+                edge_float = float(bet.edge) if bet.edge else 0.0
+                prob_float = float(bet.probability) if bet.probability else 0.0
+                quality_float = float(bet.quality_score) if bet.quality_score else 0.0
+
+                st.write(f"**Edge:** {edge_float:.2f}%")
+                st.write(f"**Probabilità:** {prob_float:.2f}")
+                st.write(f"**Qualità:** {quality_float:.2f}")
                 st.write(f"**Piazzata:** {bet.placed_at.strftime('%Y-%m-%d %H:%M')}")
 
                 # Check if game has been played
@@ -1957,6 +1997,12 @@ def render_settled_bets_table(settled_bets: List[PlacedBet], db_manager: Betting
     st.markdown("---")
 
     for bet in settled_bets:
+        # Convert numeric fields to float for safe formatting
+        odds_float = float(bet.odds) if bet.odds else 0.0
+        stake_float = float(bet.stake) if bet.stake else 0.0
+        result_float = float(bet.result_amount) if bet.result_amount else 0.0
+        profit_float = float(bet.profit_loss) if bet.profit_loss else 0.0
+
         status_color = {
             'won': '🟢',
             'lost': '🔴',
@@ -1964,7 +2010,7 @@ def render_settled_bets_table(settled_bets: List[PlacedBet], db_manager: Betting
             'cancelled': '⚫'
         }.get(bet.status, '⚪')
 
-        with st.expander(f"{status_color} {bet.bet_type} {bet.line} @ {bet.odds:.2f} - {bet.status.upper()}"):
+        with st.expander(f"{status_color} {bet.bet_type} {bet.line} @ {odds_float:.2f} - {bet.status.upper()}"):
             col1, col2 = st.columns(2)
 
             with col1:
@@ -1973,12 +2019,12 @@ def render_settled_bets_table(settled_bets: List[PlacedBet], db_manager: Betting
                 st.write(f"**Game ID:** `{bet.game_id}`")
                 st.write(f"**Tipo:** {bet.bet_type}")
                 st.write(f"**Linea:** {bet.line}")
-                st.write(f"**Quota:** {bet.odds:.2f}")
-                st.write(f"**Stake:** €{bet.stake:.2f}")
-                st.write(f"**Risultato:** €{bet.result_amount:.2f}" if bet.result_amount else "**Risultato:** N/A")
+                st.write(f"**Quota:** {odds_float:.2f}")
+                st.write(f"**Stake:** €{stake_float:.2f}")
+                st.write(f"**Risultato:** €{result_float:.2f}" if bet.result_amount else "**Risultato:** N/A")
 
-                profit_color = "🟢" if (bet.profit_loss or 0) > 0 else "🔴" if (bet.profit_loss or 0) < 0 else "⚪"
-                st.write(f"**P/L:** {profit_color} €{bet.profit_loss:.2f}" if bet.profit_loss else "**P/L:** N/A")
+                profit_color = "🟢" if profit_float > 0 else "🔴" if profit_float < 0 else "⚪"
+                st.write(f"**P/L:** {profit_color} €{profit_float:.2f}" if bet.profit_loss else "**P/L:** N/A")
 
             with col2:
                 st.markdown("**📅 Timestamp**")
@@ -2003,15 +2049,19 @@ def render_all_bets_table(all_bets: List[PlacedBet], db_manager: BettingDatabase
     # Create DataFrame for better visualization
     bets_data = []
     for bet in all_bets:
+        # Convert numeric fields to float for safe formatting
+        stake_float = float(bet.stake) if bet.stake else 0.0
+        profit_float = float(bet.profit_loss) if bet.profit_loss else 0.0
+
         bets_data.append({
             'Bet ID': bet.bet_id,
             'Game ID': bet.game_id,
             'Tipo': bet.bet_type,
             'Linea': bet.line,
             'Quota': bet.odds,
-            'Stake': f"€{bet.stake:.2f}",
+            'Stake': f"€{stake_float:.2f}",
             'Stato': bet.status,
-            'P/L': f"€{bet.profit_loss:.2f}" if bet.profit_loss else "N/A",
+            'P/L': f"€{profit_float:.2f}" if bet.profit_loss else "N/A",
             'Data': bet.placed_at.strftime('%Y-%m-%d'),
             'Rischio': bet.risk_level
         })

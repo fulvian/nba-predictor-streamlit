@@ -42,6 +42,8 @@ class BetAnalysis:
     game_id: str
     central_line: float
     timestamp: datetime
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
 
 @dataclass
 class PlacedBet:
@@ -64,6 +66,9 @@ class PlacedBet:
     profit_loss: Optional[float] = None
     bookmaker: str = "Internal"
     notes: Optional[str] = None
+    home_team: Optional[str] = None
+    away_team: Optional[str] = None
+    analysis_id: Optional[str] = None
 
 class BettingDatabaseManager:
     """
@@ -267,15 +272,18 @@ class BettingDatabaseManager:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
+            # Add bet_id column to DataFrame for compatibility with table schema
+            df['bet_id'] = df['analysis_id']  # Use analysis_id as bet_id for compatibility
+
             # Use DuckDB's efficient bulk insert with explicit column mapping
             insert_query = """
                 INSERT OR REPLACE INTO betting_analysis (
-                    analysis_id, game_id, bet_type, line, odds, edge, probability,
+                    analysis_id, bet_id, game_id, bet_type, line, odds, edge, probability,
                     implied_probability, true_probability, quality_score, edge_score,
                     confidence_score, risk_score, consistency_score, kelly_fraction,
                     stake, roi, is_value, risk_level, central_line, created_at
                 ) SELECT
-                    analysis_id, game_id, bet_type, line, odds, edge, probability,
+                    analysis_id, bet_id, game_id, bet_type, line, odds, edge, probability,
                     implied_probability, true_probability, quality_score, edge_score,
                     confidence_score, risk_score, consistency_score, kelly_fraction,
                     stake, roi, is_value, risk_level, central_line, timestamp
@@ -360,18 +368,37 @@ class BettingDatabaseManager:
             self.conn.execute("BEGIN TRANSACTION")
 
             try:
-                # Insert bet
+                # Extract team names from game_id if available
+                # game_id format: "MANUAL_Home_Team_Away_Team" or actual game ID
+                home_team = None
+                away_team = None
+
+                if hasattr(analysis, 'home_team') and hasattr(analysis, 'away_team'):
+                    home_team = analysis.home_team
+                    away_team = analysis.away_team
+                else:
+                    # Try to extract from game_id
+                    if '_' in analysis.game_id:
+                        parts = analysis.game_id.split('_')
+                        if len(parts) >= 4 and parts[0] == 'MANUAL':
+                            # Format: MANUAL_Home_Team_Away_Team_...
+                            home_team = parts[1].replace('_', ' ')
+                            away_team = parts[2].replace('_', ' ')
+
+                # Insert bet with complete schema
                 self.conn.execute("""
                     INSERT INTO placed_bets (
                         bet_id, analysis_id, game_id, bet_type, line, odds, stake,
-                        potential_return, edge, probability, quality_score, risk_level, notes
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        potential_return, edge, probability, quality_score, risk_level, notes,
+                        home_team, away_team, status, placed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, [
                     bet_id,
                     analysis_id,  # Use the analysis_id from save_bet_analysis
                     analysis.game_id, analysis.bet_type, analysis.line, analysis.odds, stake,
                     potential_return, analysis.edge, analysis.probability, analysis.quality_score,
-                    analysis.risk_level, notes
+                    analysis.risk_level, notes,
+                    home_team, away_team, 'pending', datetime.now()
                 ])
 
                 # Update bankroll
@@ -384,7 +411,7 @@ class BettingDatabaseManager:
 
                 # Record bankroll change
                 self.conn.execute("""
-                    INSERT INTO bankroll_history (history_id, bet_id, change_type, amount, balance_before, balance_after, notes)
+                    INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
                     VALUES (?, ?, 'bet_placed', ?, ?, ?, ?)
                 """, [next_history_id, bet_id, -stake, current_bankroll, new_bankroll, f"Bet placed: {analysis.bet_type} {analysis.line}"])
 
@@ -467,7 +494,7 @@ class BettingDatabaseManager:
 
                 # Record bankroll change
                 self.conn.execute("""
-                    INSERT INTO bankroll_history (history_id, bet_id, change_type, amount, balance_before, balance_after, notes)
+                    INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
                     VALUES (?, ?, 'bet_settled', ?, ?, ?, ?)
                 """, [next_history_id, bet_id, result_amount, current_bankroll, new_bankroll, f"Bet settled: {result}"])
 
@@ -489,18 +516,22 @@ class BettingDatabaseManager:
         """Get all pending bets."""
         try:
             result = self.conn.execute("""
-                SELECT * FROM placed_bets WHERE status = 'pending' ORDER BY placed_at DESC
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets WHERE status = 'pending' ORDER BY placed_at DESC
             """).fetchall()
 
             bets = []
             for row in result:
                 bet = PlacedBet(
-                    bet_id=row[0], game_id=row[2], bet_type=row[3],
-                    line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
-                    edge=row[8], probability=row[9], quality_score=row[10],
-                    risk_level=row[11], status=row[12], placed_at=row[13],
-                    settled_at=row[14], result_amount=row[15], profit_loss=row[16],
-                    bookmaker=row[17], notes=row[18]
+                    bet_id=row[0], game_id=row[1], bet_type=row[2],
+                    line=row[3], odds=row[4], stake=row[5], potential_return=row[6],
+                    edge=row[7], probability=row[8], quality_score=row[9],
+                    risk_level=row[10], status=row[11], placed_at=row[12],
+                    settled_at=row[13], result_amount=row[14], profit_loss=row[15],
+                    bookmaker=row[16], notes=row[17]
                 )
                 bets.append(bet)
 
@@ -514,7 +545,11 @@ class BettingDatabaseManager:
         """Get bet history for last N days."""
         try:
             result = self.conn.execute("""
-                SELECT * FROM placed_bets
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets
                 WHERE placed_at >= CURRENT_DATE - INTERVAL '{days} days'
                 ORDER BY placed_at DESC
             """.format(days=days)).fetchall()
@@ -522,12 +557,12 @@ class BettingDatabaseManager:
             bets = []
             for row in result:
                 bet = PlacedBet(
-                    bet_id=row[0], game_id=row[2], bet_type=row[3],
-                    line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
-                    edge=row[8], probability=row[9], quality_score=row[10],
-                    risk_level=row[11], status=row[12], placed_at=row[13],
-                    settled_at=row[14], result_amount=row[15], profit_loss=row[16],
-                    bookmaker=row[17], notes=row[18]
+                    bet_id=row[0], game_id=row[1], bet_type=row[2],
+                    line=row[3], odds=row[4], stake=row[5], potential_return=row[6],
+                    edge=row[7], probability=row[8], quality_score=row[9],
+                    risk_level=row[10], status=row[11], placed_at=row[12],
+                    settled_at=row[13], result_amount=row[14], profit_loss=row[15],
+                    bookmaker=row[16], notes=row[17]
                 )
                 bets.append(bet)
 
@@ -540,19 +575,29 @@ class BettingDatabaseManager:
     def get_bankroll_status(self) -> Dict[str, Any]:
         """Get comprehensive bankroll status."""
         try:
-            current_bankroll = float(self.get_setting('current_bankroll'))
-            initial_bankroll = float(self.get_setting('initial_bankroll'))
+            # Handle Decimal to float conversion with error handling
+            try:
+                current_bankroll = float(self.get_setting('current_bankroll'))
+            except (ValueError, TypeError):
+                current_bankroll = 1000.0  # Default value
 
-            # Get pending stakes
-            pending_stakes = self.conn.execute("""
+            try:
+                initial_bankroll = float(self.get_setting('initial_bankroll'))
+            except (ValueError, TypeError):
+                initial_bankroll = 1000.0  # Default value
+
+            # Get pending stakes (ensure float)
+            pending_stakes_result = self.conn.execute("""
                 SELECT COALESCE(SUM(stake), 0) FROM placed_bets WHERE status = 'pending'
             """).fetchone()[0]
+            pending_stakes = float(pending_stakes_result) if pending_stakes_result else 0.0
 
-            # Get total profit/loss
-            total_pl = self.conn.execute("""
+            # Get total profit/loss (ensure float)
+            total_pl_result = self.conn.execute("""
                 SELECT COALESCE(SUM(profit_loss), 0) FROM placed_bets
                 WHERE status IN ('won', 'lost', 'void') AND profit_loss IS NOT NULL
             """).fetchone()[0]
+            total_pl = float(total_pl_result) if total_pl_result else 0.0
 
             # Get bet counts
             total_bets = self.conn.execute("""
@@ -690,7 +735,11 @@ class BettingDatabaseManager:
         """
         try:
             result = self.conn.execute("""
-                SELECT * FROM placed_bets
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets
                 WHERE game_id = ?
                 ORDER BY placed_at DESC
             """, [game_id]).fetchall()
@@ -698,12 +747,13 @@ class BettingDatabaseManager:
             bets = []
             for row in result:
                 bet = PlacedBet(
-                    bet_id=row[0], game_id=row[2], bet_type=row[3],
-                    line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
-                    edge=row[8], probability=row[9], quality_score=row[10],
-                    risk_level=row[11], status=row[12], placed_at=row[13],
-                    settled_at=row[14], result_amount=row[15], profit_loss=row[16],
-                    bookmaker=row[17], notes=row[18]
+                    bet_id=row[0], game_id=row[1], bet_type=row[2],
+                    line=row[3], odds=row[4], stake=row[5], potential_return=row[6],
+                    edge=row[7], probability=row[8], quality_score=row[9],
+                    risk_level=row[10], status=row[11], placed_at=row[12],
+                    settled_at=row[13], result_amount=row[14], profit_loss=row[15],
+                    bookmaker=row[16], notes=row[17], home_team=row[18],
+                    away_team=row[19], analysis_id=row[20]
                 )
                 bets.append(bet)
 
@@ -723,21 +773,33 @@ class BettingDatabaseManager:
         try:
             # Get pending bets
             pending_result = self.conn.execute("""
-                SELECT * FROM placed_bets
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets
                 WHERE status = 'pending'
                 ORDER BY placed_at DESC
             """).fetchall()
 
             # Get settled bets
             settled_result = self.conn.execute("""
-                SELECT * FROM placed_bets
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets
                 WHERE status IN ('won', 'lost', 'void', 'cancelled')
                 ORDER BY placed_at DESC
             """).fetchall()
 
             # Get all bets
             all_result = self.conn.execute("""
-                SELECT * FROM placed_bets
+                SELECT bet_id, game_id, bet_type, line, odds, stake, potential_return,
+                       edge, probability, quality_score, risk_level, status, placed_at,
+                       settled_at, result_amount, profit_loss, bookmaker, notes,
+                       home_team, away_team, analysis_id
+                FROM placed_bets
                 ORDER BY placed_at DESC
             """).fetchall()
 
@@ -745,12 +807,13 @@ class BettingDatabaseManager:
                 bets = []
                 for row in rows:
                     bet = PlacedBet(
-                        bet_id=row[0], game_id=row[2], bet_type=row[3],
-                        line=row[4], odds=row[5], stake=row[6], potential_return=row[7],
-                        edge=row[8], probability=row[9], quality_score=row[10],
-                        risk_level=row[11], status=row[12], placed_at=row[13],
-                        settled_at=row[14], result_amount=row[15], profit_loss=row[16],
-                        bookmaker=row[17], notes=row[18]
+                        bet_id=row[0], game_id=row[1], bet_type=row[2],
+                        line=row[3], odds=row[4], stake=row[5], potential_return=row[6],
+                        edge=row[7], probability=row[8], quality_score=row[9],
+                        risk_level=row[10], status=row[11], placed_at=row[12],
+                        settled_at=row[13], result_amount=row[14], profit_loss=row[15],
+                        bookmaker=row[16], notes=row[17], home_team=row[18],
+                        away_team=row[19], analysis_id=row[20]
                     )
                     bets.append(bet)
                 return bets
@@ -888,7 +951,7 @@ class BettingDatabaseManager:
 
                         # Record refund
                         self.conn.execute("""
-                            INSERT INTO bankroll_history (history_id, bet_id, change_type, amount, balance_before, balance_after, notes)
+                            INSERT INTO bankroll_history (history_id, bet_id, transaction_type, amount, balance_before, balance_after, notes)
                             VALUES (?, ?, 'bet_cancelled', ?, ?, ?, ?)
                         """, [next_history_id, bet_id, stake_to_refund, current_bankroll, new_bankroll, f"Cancelled bet: {bet_id}"])
 
