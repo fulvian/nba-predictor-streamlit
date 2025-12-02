@@ -31,7 +31,7 @@ class UnifiedDataStore:
         self,
         base_path: str,
         duckdb_path: Optional[str] = None,
-        cache_enabled: bool = True
+        cache_enabled: bool = True,
     ) -> None:
         """
         Initialize the unified data store.
@@ -71,8 +71,8 @@ class UnifiedDataStore:
             extra={
                 "base_path": str(self.base_path),
                 "duckdb_path": self.duckdb_path,
-                "cache_enabled": self.cache_enabled
-            }
+                "cache_enabled": self.cache_enabled,
+            },
         )
 
     def initialize(self) -> None:
@@ -88,7 +88,12 @@ class UnifiedDataStore:
             self.base_path.mkdir(parents=True, exist_ok=True)
 
             # Create subdirectories
-            for directory in [self.games_dir, self.players_dir, self.odds_dir, self.teams_dir]:
+            for directory in [
+                self.games_dir,
+                self.players_dir,
+                self.odds_dir,
+                self.teams_dir,
+            ]:
                 directory.mkdir(exist_ok=True)
                 logger.debug(f"Created directory: {directory}")
 
@@ -103,13 +108,15 @@ class UnifiedDataStore:
         except OSError as e:
             logger.error(
                 "Failed to create directories",
-                extra={"error": str(e), "base_path": str(self.base_path)}
+                extra={"error": str(e), "base_path": str(self.base_path)},
             )
-            raise FileNotFoundError(f"Failed to create base path: {self.base_path}") from e
+            raise FileNotFoundError(
+                f"Failed to create base path: {self.base_path}"
+            ) from e
         except Exception as e:
             logger.error(
                 "Database initialization failed",
-                extra={"error": str(e), "duckdb_path": self.duckdb_path}
+                extra={"error": str(e), "duckdb_path": self.duckdb_path},
             )
             raise DatabaseError(f"DuckDB initialization failed: {e}") from e
 
@@ -120,10 +127,10 @@ class UnifiedDataStore:
 
             # Configure DuckDB for optimal performance
             settings = {
-                'memory_limit': '1GB',
-                'threads': '4',
-                'enable_progress_bar': 'false',
-                'preserve_insertion_order': 'false'
+                "memory_limit": "1GB",
+                "threads": "4",
+                "enable_progress_bar": "false",
+                "preserve_insertion_order": "false",
             }
 
             for key, value in settings.items():
@@ -132,7 +139,9 @@ class UnifiedDataStore:
             logger.debug("DuckDB connection initialized with optimized settings")
 
         except Exception as e:
-            logger.error("Failed to initialize DuckDB connection", extra={"error": str(e)})
+            logger.error(
+                "Failed to initialize DuckDB connection", extra={"error": str(e)}
+            )
             raise DatabaseError(f"DuckDB connection failed: {e}") from e
 
     def _create_metadata_table(self) -> None:
@@ -173,7 +182,13 @@ class UnifiedDataStore:
 
         try:
             # Validate required columns
-            required_columns = {'game_id', 'game_date', 'home_team', 'away_team', 'season'}
+            required_columns = {
+                "game_id",
+                "game_date",
+                "home_team",
+                "away_team",
+                "season",
+            }
             missing_columns = required_columns - set(games_df.columns)
 
             if missing_columns:
@@ -183,17 +198,13 @@ class UnifiedDataStore:
             file_path = self.games_dir / f"games_{date_str}.parquet"
 
             # Store as Parquet with compression
-            games_df.write_parquet(
-                file_path,
-                compression='snappy',
-                statistics=True
-            )
+            games_df.write_parquet(file_path, compression="snappy", statistics=True)
 
             # Update metadata
             self._update_metadata(
                 table_name=f"games_{date_str}",
                 record_count=games_df.height,
-                file_path=str(file_path)
+                file_path=str(file_path),
             )
 
             # Clear cache for this table
@@ -206,16 +217,15 @@ class UnifiedDataStore:
                 extra={
                     "file_path": str(file_path),
                     "record_count": games_df.height,
-                    "date": date_str
-                }
+                    "date": date_str,
+                },
             )
 
             return str(file_path)
 
         except Exception as e:
             logger.error(
-                "Failed to store games data",
-                extra={"error": str(e), "date": date_str}
+                "Failed to store games data", extra={"error": str(e), "date": date_str}
             )
             raise DatabaseError(f"Failed to store games data: {e}") from e
 
@@ -239,7 +249,13 @@ class UnifiedDataStore:
 
         try:
             # Validate required columns
-            required_columns = {'player_id', 'player_name', 'team_id', 'season', 'position'}
+            required_columns = {
+                "player_id",
+                "player_name",
+                "team_id",
+                "season",
+                "position",
+            }
             missing_columns = required_columns - set(players_df.columns)
 
             if missing_columns:
@@ -249,17 +265,13 @@ class UnifiedDataStore:
             file_path = self.players_dir / f"players_{season}.parquet"
 
             # Store as Parquet with compression
-            players_df.write_parquet(
-                file_path,
-                compression='snappy',
-                statistics=True
-            )
+            players_df.write_parquet(file_path, compression="snappy", statistics=True)
 
             # Update metadata
             self._update_metadata(
                 table_name=f"players_{season}",
                 record_count=players_df.height,
-                file_path=str(file_path)
+                file_path=str(file_path),
             )
 
             # Clear cache
@@ -272,8 +284,8 @@ class UnifiedDataStore:
                 extra={
                     "file_path": str(file_path),
                     "record_count": players_df.height,
-                    "season": season
-                }
+                    "season": season,
+                },
             )
 
             return str(file_path)
@@ -281,7 +293,7 @@ class UnifiedDataStore:
         except Exception as e:
             logger.error(
                 "Failed to store players data",
-                extra={"error": str(e), "season": season}
+                extra={"error": str(e), "season": season},
             )
             raise DatabaseError(f"Failed to store players data: {e}") from e
 
@@ -305,7 +317,13 @@ class UnifiedDataStore:
 
         try:
             # Validate required columns
-            required_columns = {'game_id', 'bookmaker', 'home_odds', 'away_odds', 'updated_time'}
+            required_columns = {
+                "game_id",
+                "bookmaker",
+                "home_odds",
+                "away_odds",
+                "updated_time",
+            }
             missing_columns = required_columns - set(odds_df.columns)
 
             if missing_columns:
@@ -315,17 +333,13 @@ class UnifiedDataStore:
             file_path = self.odds_dir / f"odds_{date_str}.parquet"
 
             # Store as Parquet with compression
-            odds_df.write_parquet(
-                file_path,
-                compression='snappy',
-                statistics=True
-            )
+            odds_df.write_parquet(file_path, compression="snappy", statistics=True)
 
             # Update metadata
             self._update_metadata(
                 table_name=f"odds_{date_str}",
                 record_count=odds_df.height,
-                file_path=str(file_path)
+                file_path=str(file_path),
             )
 
             # Clear cache
@@ -338,20 +352,21 @@ class UnifiedDataStore:
                 extra={
                     "file_path": str(file_path),
                     "record_count": odds_df.height,
-                    "date": date_str
-                }
+                    "date": date_str,
+                },
             )
 
             return str(file_path)
 
         except Exception as e:
             logger.error(
-                "Failed to store odds data",
-                extra={"error": str(e), "date": date_str}
+                "Failed to store odds data", extra={"error": str(e), "date": date_str}
             )
             raise DatabaseError(f"Failed to store odds data: {e}") from e
 
-    def get_games_data(self, date_range: Optional[tuple[str, str]] = None) -> pl.DataFrame:
+    def get_games_data(
+        self, date_range: Optional[tuple[str, str]] = None
+    ) -> pl.DataFrame:
         """
         Retrieve NBA games data, optionally filtered by date range.
 
@@ -367,9 +382,11 @@ class UnifiedDataStore:
         try:
             if date_range:
                 start_date, end_date = date_range
-                # Use DuckDB for efficient filtering
+                # Use DuckDB for efficient filtering with schema evolution handling
+                # Cast season to VARCHAR to handle mixed types (Int64 vs String)
                 query = f"""
-                SELECT * FROM '{self.games_dir}/*.parquet'
+                SELECT * REPLACE (CAST(season AS VARCHAR) AS season) 
+                FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
                 WHERE game_date BETWEEN '{start_date}' AND '{end_date}'
                 ORDER BY game_date
                 """
@@ -386,12 +403,27 @@ class UnifiedDataStore:
                 else:
                     df = pl.DataFrame()
             else:
-                # Load all games data using Polars lazy evaluation
-                df = pl.scan_parquet(str(self.games_dir / "*.parquet")).collect()
+                # Load all games data using DuckDB to handle schema evolution and type casting
+                query = f"""
+                SELECT * REPLACE (CAST(season AS VARCHAR) AS season) 
+                FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
+                ORDER BY game_date
+                """
+
+                if self._duckdb_conn is None:
+                    raise DatabaseError("DuckDB connection not initialized")
+
+                result = self._duckdb_conn.execute(query).fetchall()
+
+                if result:
+                    columns = [desc[0] for desc in self._duckdb_conn.description]
+                    df = pl.DataFrame(result, schema=columns, orient="row")
+                else:
+                    df = pl.DataFrame()
 
             logger.info(
                 "Games data retrieved successfully",
-                extra={"record_count": df.height, "date_range": date_range}
+                extra={"record_count": df.height, "date_range": date_range},
             )
 
             return df
@@ -399,7 +431,7 @@ class UnifiedDataStore:
         except Exception as e:
             logger.error(
                 "Failed to retrieve games data",
-                extra={"error": str(e), "date_range": date_range}
+                extra={"error": str(e), "date_range": date_range},
             )
             raise DatabaseError(f"Failed to retrieve games data: {e}") from e
 
@@ -430,7 +462,7 @@ class UnifiedDataStore:
 
             logger.debug(
                 "Analytics query executed successfully",
-                extra={"record_count": df.height, "query": sql_query[:100]}
+                extra={"record_count": df.height, "query": sql_query[:100]},
             )
 
             return df
@@ -438,11 +470,13 @@ class UnifiedDataStore:
         except Exception as e:
             logger.error(
                 "Analytics query failed",
-                extra={"error": str(e), "query": sql_query[:100]}
+                extra={"error": str(e), "query": sql_query[:100]},
             )
             raise DatabaseError(f"Query execution failed: {e}") from e
 
-    def _update_metadata(self, table_name: str, record_count: int, file_path: str) -> None:
+    def _update_metadata(
+        self, table_name: str, record_count: int, file_path: str
+    ) -> None:
         """Update metadata table with latest information."""
         if self._duckdb_conn is None:
             raise DatabaseError("DuckDB connection not initialized")
@@ -459,13 +493,13 @@ class UnifiedDataStore:
 
             self._duckdb_conn.execute(
                 upsert_sql,
-                [table_name, datetime.now(), record_count, file_path, checksum]
+                [table_name, datetime.now(), record_count, file_path, checksum],
             )
 
         except Exception as e:
             logger.warning(
                 "Failed to update metadata",
-                extra={"error": str(e), "table_name": table_name}
+                extra={"error": str(e), "table_name": table_name},
             )
 
     def store_player_stats(self, player_stats_df: pl.DataFrame, date_str: str) -> str:
@@ -488,11 +522,13 @@ class UnifiedDataStore:
 
         try:
             # Validate required columns
-            required_columns = {'player_id', 'player_name', 'team_id'}
+            required_columns = {"player_id", "player_name", "team_id"}
             missing_columns = required_columns - set(player_stats_df.columns)
 
             if missing_columns:
-                logger.warning(f"Missing optional columns in player stats: {missing_columns}")
+                logger.warning(
+                    f"Missing optional columns in player stats: {missing_columns}"
+                )
 
             # Create file path
             file_path = self.players_dir / f"player_stats_{date_str}.parquet"
@@ -506,7 +542,9 @@ class UnifiedDataStore:
             # Update metadata
             self._update_metadata("player_stats", date_str, len(player_stats_df))
 
-            logger.info(f"Stored player stats for {len(player_stats_df)} players to {file_path}")
+            logger.info(
+                f"Stored player stats for {len(player_stats_df)} players to {file_path}"
+            )
             return str(file_path)
 
         except Exception as e:
@@ -533,11 +571,13 @@ class UnifiedDataStore:
 
         try:
             # Validate required columns
-            required_columns = {'team_id', 'team_name'}
+            required_columns = {"team_id", "team_name"}
             missing_columns = required_columns - set(team_stats_df.columns)
 
             if missing_columns:
-                logger.warning(f"Missing optional columns in team stats: {missing_columns}")
+                logger.warning(
+                    f"Missing optional columns in team stats: {missing_columns}"
+                )
 
             # Create file path
             file_path = self.teams_dir / f"team_stats_{date_str}.parquet"
@@ -551,14 +591,18 @@ class UnifiedDataStore:
             # Update metadata
             self._update_metadata("team_stats", date_str, len(team_stats_df))
 
-            logger.info(f"Stored team stats for {len(team_stats_df)} teams to {file_path}")
+            logger.info(
+                f"Stored team stats for {len(team_stats_df)} teams to {file_path}"
+            )
             return str(file_path)
 
         except Exception as e:
             logger.error(f"Failed to store team stats: {e}")
             raise DatabaseError(f"Failed to store team stats: {e}") from e
 
-    def get_player_stats(self, date_range: Optional[tuple[str, str]] = None) -> pl.DataFrame:
+    def get_player_stats(
+        self, date_range: Optional[tuple[str, str]] = None
+    ) -> pl.DataFrame:
         """
         Retrieve player statistics from persistent storage.
 
@@ -603,8 +647,11 @@ class UnifiedDataStore:
                     return pl.concat(dfs)
 
             # If no date range, get most recent
-            most_recent_file = max(self.players_dir.glob("player_stats_*.parquet"),
-                                  key=lambda x: x.stat().st_mtime, default=None)
+            most_recent_file = max(
+                self.players_dir.glob("player_stats_*.parquet"),
+                key=lambda x: x.stat().st_mtime,
+                default=None,
+            )
             if most_recent_file:
                 return pl.read_parquet(most_recent_file)
 
@@ -614,7 +661,9 @@ class UnifiedDataStore:
             logger.error(f"Failed to retrieve player stats: {e}")
             return pl.DataFrame()
 
-    def get_team_stats(self, date_range: Optional[tuple[str, str]] = None) -> pl.DataFrame:
+    def get_team_stats(
+        self, date_range: Optional[tuple[str, str]] = None
+    ) -> pl.DataFrame:
         """
         Retrieve team statistics from persistent storage.
 
@@ -659,8 +708,11 @@ class UnifiedDataStore:
                     return pl.concat(dfs)
 
             # If no date range, get most recent
-            most_recent_file = max(self.teams_dir.glob("team_stats_*.parquet"),
-                                  key=lambda x: x.stat().st_mtime, default=None)
+            most_recent_file = max(
+                self.teams_dir.glob("team_stats_*.parquet"),
+                key=lambda x: x.stat().st_mtime,
+                default=None,
+            )
             if most_recent_file:
                 return pl.read_parquet(most_recent_file)
 
