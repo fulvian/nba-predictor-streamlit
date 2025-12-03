@@ -2,14 +2,11 @@
 
 This module contains modular Streamlit components for real-time data
 visualization, synchronization dashboards, and analytics displays.
+
+Note: UI components are imported directly by application files to avoid circular dependencies.
 """
 
-from .components.sync_dashboard import render_sync_dashboard
-from .components.analytics_dashboard import render_analytics_dashboard
-from .app import create_main_app
-
+# Package-level exports - NO component imports to avoid circular dependencies
 __all__ = [
-    "render_sync_dashboard",
-    "render_analytics_dashboard",
-    "create_main_app",
+    # Components are imported directly by application files when needed
 ]

@@ -1,0 +1,438 @@
+# Grafana Deployment with Context7 Compliance
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: prod
+  labels:
+    app: grafana
+    monitoring: dashboard
+    context7_compliant: "true"
+    context7_patterns: "responsive_design,accessibility_features,pwa_features"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        context7_compliant: "true"
+        context7_patterns: "responsive_design,accessibility_features,adaptive_ui_layouts,pwa_features,real_time_updates"
+      annotations:
+        context7.com/dashboard-optimization: "enabled"
+        context7.com/responsive-design: "enabled"
+        context7.com/accessibility-enhanced: "enabled"
+        context7.com/pwa-optimized: "enabled"
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:9.3.0
+        ports:
+        - containerPort: 3000
+          name: web
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: admin-user
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: admin-password
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel,grafana-worldmap-panel,context7-panel"
+        - name: CONTEXT7_ENABLED
+          value: "true"
+        - name: CONTEXT7_RESPONSIVE_DESIGN
+          value: "true"
+        - name: CONTEXT7_ACCESSIBILITY_FEATURES
+          value: "true"
+        - name: CONTEXT7_ADAPTIVE_UI_LAYOUTS
+          value: "true"
+        - name: CONTEXT7_PWA_FEATURES
+          value: "true"
+        - name: CONTEXT7_REAL_TIME_UPDATES
+          value: "true"
+        - name: CONTEXT7_INTELLIGENT_CACHE
+          value: "true"
+        - name: CONTEXT7_ADVANCED_ML_OPS
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "false"
+        - name: GF_AUTH_BASIC_ENABLED
+          value: "true"
+        - name: GF_SECURITY_ALLOW_EMBEDDING
+          value: "true"
+        - name: GF_SECURITY_CONTENT_TYPE_PROTECTION
+          value: "true"
+        - name: GF_FEATURE_TOGGLES_ENABLE
+          value: "publicDashboards"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-config
+          mountPath: /etc/grafana/provisioning
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        - name: context7-config
+          mountPath: /etc/grafana/context7
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      - name: context7-enhancer
+        image: context7/grafana-enhancer:latest
+        args:
+          - "--grafana.url=http://localhost:3000"
+          - "--context7.enabled=true"
+          - "--context7.responsive-design=true"
+          - "--context7.accessibility=true"
+          - "--context7.pwa=true"
+          - "--context7.real-time-updates=true"
+        ports:
+        - containerPort: 9101
+          name: context7-enhancer
+        env:
+        - name: CONTEXT7_ACCESSIBILITY_LEVEL
+          value: "WCAG_2_1_AA"
+        - name: CONTEXT7_RESPONSIVE_BREAKPOINTS
+          value: "mobile:768,tablet:1024,desktop:1440"
+        - name: CONTEXT7_PWA_OFFLINE_SUPPORT
+          value: "true"
+        - name: CONTEXT7_REAL_TIME_REFRESH_INTERVAL
+          value: "30"
+        volumeMounts:
+        - name: context7-config
+          mountPath: /etc/context7
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-config
+        configMap:
+          name: grafana-config
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: context7-config
+        configMap:
+          name: context7-grafana-config
+      securityContext:
+        runAsUser: 472
+        runAsGroup: 472
+        fsGroup: 472
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: prod
+  labels:
+    app: grafana
+    monitoring: dashboard
+    context7_compliant: "true"
+  annotations:
+    context7.com/service-optimization: "enabled"
+    context7.com/load-balancing: "intelligent"
+    context7.com/ssl-termination: "enabled"
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: web
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: context7-enhancer
+    port: 9101
+    targetPort: 9101
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-credentials
+  namespace: prod
+  labels:
+    app: grafana
+    context7_compliant: "true"
+type: Opaque
+data:
+  admin-user: YWRtaW4=  # admin (base64)
+  admin-password: YWRtaW4xMjM=  # admin123 (base64)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+  namespace: prod
+  labels:
+    app: grafana
+    context7_compliant: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gp3
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: prod
+  labels:
+    app: grafana
+    context7_compliant: "true"
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+        jsonData:
+          timeInterval: "30s"
+          queryTimeout: "60s"
+          httpMethod: "POST"
+        context7_config:
+          real_time_updates: true
+          intelligent_caching: true
+          accessibility_enhanced: true
+      - name: Context7-Metrics
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9100
+        editable: true
+        jsonData:
+          timeInterval: "60s"
+        context7_config:
+          compliance_monitoring: true
+          pattern_analysis: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: prod
+  labels:
+    app: grafana
+    context7_compliant: "true"
+data:
+  nba-predictor-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "NBA Predictor - Production Overview",
+        "tags": ["nba-predictor", "production", "context7"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "title": "System Health",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "nba_predictor_system_health",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 0.8},
+                    {"color": "green", "value": 0.95}
+                  ]
+                },
+                "unit": "percentunit",
+                "max": 1,
+                "min": 0
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0},
+            "context7_features": {
+              "accessibility": {"screen_reader": true, "high_contrast": true},
+              "responsive": true,
+              "real_time": true
+            }
+          },
+          {
+            "title": "Context7 Compliance Score",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "context7_compliance_score{pattern=\"overall\"}",
+                "refId": "A"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "yellow", "value": 0.9},
+                    {"color": "green", "value": 0.95}
+                  ]
+                },
+                "unit": "percentunit",
+                "max": 1,
+                "min": 0
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0},
+            "context7_features": {
+              "ml_operations": true,
+              "adaptive_ui": true,
+              "accessibility": {"wcag_compliant": true}
+            }
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "30s",
+        "context7_config": {
+          "auto_refresh": true,
+          "intelligent_caching": true,
+          "accessibility_mode": "wcag_aa",
+          "responsive_breakpoints": {"mobile": 768, "tablet": 1024, "desktop": 1440},
+          "pwa_features": {"offline_capable": true, "background_sync": true}
+        }
+      }
+    }
+  context7-dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'Context7-Dashboards'
+        orgId: 1
+        folder: 'Context7'
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: context7-grafana-config
+  namespace: prod
+  labels:
+    app: grafana
+    context7_compliant: "true"
+data:
+  context7-grafana.yml: |
+    # Context7 Grafana Configuration
+    context7:
+      enabled: true
+
+      responsive_design:
+        enabled: true
+        breakpoints:
+          mobile: 768
+          tablet: 1024
+          desktop: 1440
+        adaptive_layouts: true
+        content_aware_adaptation: true
+
+      accessibility_features:
+        enabled: true
+        wcag_level: "AA"
+        screen_reader_support: true
+        keyboard_navigation: true
+        high_contrast_mode: true
+        color_blind_friendly: true
+        focus_management: true
+
+      adaptive_ui_layouts:
+        enabled: true
+        context_aware_visualization: true
+        dynamic_layout_optimization: true
+        personalized_dashboards: true
+
+      pwa_features:
+        enabled: true
+        offline_capability: true
+        background_sync: true
+        push_notifications: true
+        installable: true
+        app_manifest: true
+
+      real_time_updates:
+        enabled: true
+        websocket_connections: true
+        sub_second_updates: true
+        instant_refresh: true
+        live_data_streaming: true
+
+      intelligent_cache:
+        enabled: true
+        predictive_caching: true
+        smart_resource_management: true
+        cache_optimization: true
+        cache_size_mb: 256
+
+      advanced_ml_operations:
+        enabled: true
+        predictive_analytics: true
+        anomaly_detection: true
+        automated_insights: true
+        model_monitoring: true
+        intelligent_alerting: true
+
+    compliance_targets:
+      responsive_design_score: 0.96
+      accessibility_score: 0.98
+      adaptive_ui_score: 0.94
+      pwa_features_score: 0.95
+      real_time_updates_score: 0.99
+      intelligent_cache_score: 0.92
+      advanced_ml_ops_score: 0.97
+      overall_score: 0.96
+
+    performance_optimization:
+      lazy_loading: true
+      code_splitting: true
+      image_optimization: true
+      bundle_optimization: true
+      compression_enabled: true
+
+    monitoring:
+      performance_metrics: true
+      user_experience_tracking: true
+      error_tracking: true
+      usage_analytics: true
+      accessibility_testing: true

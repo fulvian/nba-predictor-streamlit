@@ -145,6 +145,7 @@ Changelog = "https://github.com/nba-predictor/nba-predictor-streamlit/blob/main/
 [project.scripts]
 nba-predictor = "nba_predictor.cli:main"
 nba-predictor-server = "nba_predictor.server:main"
+nba-dev = "startup:main"
 
 [tool.hatch.version]
 path = "src/nba_predictor/__init__.py"

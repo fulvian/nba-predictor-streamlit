@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""
+NBA Betting Database Package
+Context7-compliant database initialization and management
+"""
+
+from .schema import NBADatabaseSchema, BetStatus, GameStatus, TransactionType
+from .migration import DataMigrator
+from .backup import DatabaseBackup
+
+__version__ = "1.0.0"
+__author__ = "NBA Betting System"
+
+# Package-level convenience functions
+def initialize_nba_database(db_path: str = "data/nba_betting.duckdb",
+                          data_dir: str = "data",
+                          backup_dir: str = "data/backups",
+                          run_migration: bool = True) -> dict:
+    """
+    Initialize complete NBA betting database system
+
+    Args:
+        db_path: Path to the DuckDB database file
+        data_dir: Directory containing existing JSON data
+        backup_dir: Directory for database backups
+        run_migration: Whether to run data migration from JSON
+
+    Returns:
+        Dictionary containing initialization results and statistics
+    """
+    import logging
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+
+    initialization_results = {
+        'success': False,
+        'database_initialized': False,
+        'migration_completed': False,
+        'backup_created': False,
+        'validation_passed': False,
+        'statistics': {},
+        'errors': [],
+        'start_time': None,
+        'end_time': None
+    }
+
+    try:
+        from datetime import datetime
+        initialization_results['start_time'] = datetime.now().isoformat()
+
+        logger.info("Starting NBA Betting Database initialization...")
+
+        # Ensure directories exist
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        Path(backup_dir).mkdir(parents=True, exist_ok=True)
+
+        # Step 1: Initialize database schema
+        logger.info("Step 1: Initializing database schema...")
+        schema = NBADatabaseSchema(db_path)
+        schema.connect()
+        schema.create_tables()
+        schema.create_views()
+
+        # Validate schema
+        validation_results = schema.validate_schema()
+        initialization_results['validation_passed'] = validation_results['validation_passed']
+
+        if not validation_results['validation_passed']:
+            initialization_results['errors'].extend(validation_results['validation_errors'])
+            raise Exception("Database schema validation failed")
+
+        initialization_results['database_initialized'] = True
+        logger.info("✅ Database schema initialized successfully")
+
+        # Step 2: Run data migration if requested
+        if run_migration:
+            logger.info("Step 2: Running data migration...")
+            migrator = DataMigrator(db_path, data_dir)
+            migration_report = migrator.run_full_migration()
+
+            initialization_results['migration_completed'] = migration_report['success']
+            initialization_results['migration_report'] = migration_report
+
+            if not migration_report['success']:
+                initialization_results['errors'].extend(migration_report['errors'])
+                raise Exception("Data migration failed")
+
+            logger.info("✅ Data migration completed successfully")
+        else:
+            logger.info("Step 2: Data migration skipped")
+
+        # Step 3: Create initial backup
+        logger.info("Step 3: Creating initial backup...")
+        backup_system = DatabaseBackup(db_path, backup_dir)
+        backup_system.connect()
+
+        backup_path = backup_system.create_full_backup("initialization")
+        initialization_results['backup_created'] = True
+        initialization_results['backup_path'] = backup_path
+
+        logger.info(f"✅ Initial backup created: {backup_path}")
+
+        # Step 4: Generate statistics
+        logger.info("Step 4: Generating database statistics...")
+        initialization_results['statistics'] = _generate_database_statistics(schema.con)
+
+        # Close connections
+        schema.close()
+        backup_system.close()
+
+        initialization_results['success'] = True
+        initialization_results['end_time'] = datetime.now().isoformat()
+
+        logger.info("🎉 NBA Betting Database initialization completed successfully!")
+
+        return initialization_results
+
+    except Exception as e:
+        initialization_results['errors'].append(str(e))
+        initialization_results['end_time'] = datetime.now().isoformat()
+        logger.error(f"Database initialization failed: {e}")
+        raise
+
+def _generate_database_statistics(con) -> dict:
+    """Generate comprehensive database statistics"""
+    try:
+        stats = {
+            'tables': {},
+            'views': [],
+            'indexes': [],
+            'constraints': {},
+            'database_size': 0
+        }
+
+        # Table statistics
+        tables = con.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'main'
+            ORDER BY table_name
+        """).fetchall()
+
+        for (table_name,) in tables:
+            try:
+                row_count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+
+                # Estimate table size (rough approximation)
+                if row_count > 0:
+                    sample_size = con.execute(f"SELECT * FROM {table_name} LIMIT 100").fetchall()
+                    avg_row_size = len(str(sample_size)) // max(len(sample_size), 1) if sample_size else 100
+                    estimated_size = row_count * avg_row_size
+                else:
+                    estimated_size = 0
+
+                stats['tables'][table_name] = {
+                    'row_count': row_count,
+                    'estimated_size_bytes': estimated_size
+                }
+
+            except Exception as e:
+                stats['tables'][table_name] = {
+                    'row_count': 0,
+                    'estimated_size_bytes': 0,
+                    'error': str(e)
+                }
+
+        # View statistics
+        views = con.execute("""
+            SELECT view_name
+            FROM information_schema.views
+            WHERE view_schema = 'main'
+            ORDER BY view_name
+        """).fetchall()
+
+        stats['views'] = [view[0] for view in views]
+
+        # Index statistics
+        try:
+            indexes = con.execute("""
+                SELECT index_name, table_name
+                FROM duckdb_indexes()
+                ORDER BY table_name, index_name
+            """).fetchall()
+
+            stats['indexes'] = [{'name': idx[0], 'table': idx[1]} for idx in indexes]
+        except Exception:
+            stats['indexes'] = []
+
+        # Constraint statistics
+        try:
+            constraints = con.execute("PRAGMA foreign_keys;").fetchone()
+            stats['constraints']['foreign_keys_enabled'] = constraints[0] if constraints else False
+        except Exception:
+            stats['constraints']['foreign_keys_enabled'] = False
+
+        return stats
+
+    except Exception as e:
+        return {'error': str(e)}
+
+def get_database_manager(db_path: str = "data/nba_betting.duckdb"):
+    """
+    Get a configured database manager instance
+
+    Args:
+        db_path: Path to the database file
+
+    Returns:
+        Dictionary containing database manager instances
+    """
+    return {
+        'schema': NBADatabaseSchema(db_path),
+        'migration': DataMigrator(db_path),
+        'backup': DatabaseBackup(db_path)
+    }
+
+# Convenience imports for common usage
+__all__ = [
+    'NBADatabaseSchema',
+    'DataMigrator',
+    'DatabaseBackup',
+    'BetStatus',
+    'GameStatus',
+    'TransactionType',
+    'initialize_nba_database',
+    'get_database_manager'
+]

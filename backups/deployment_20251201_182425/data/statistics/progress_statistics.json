@@ -1,0 +1,44 @@
+{
+  "session_id": "20251027_154729",
+  "stats": {
+    "total_tasks": 2,
+    "completed_tasks": 2,
+    "failed_tasks": 0,
+    "total_games_downloaded": 7548,
+    "total_bytes_stored": 0,
+    "start_time": "2025-10-27T15:47:29.992377",
+    "last_activity": "2025-10-27T15:47:36.252705",
+    "api_calls_made": 8
+  },
+  "active_tasks": {},
+  "completed_tasks": {
+    "download_season_2024-25_Regular_Season": {
+      "task_id": "download_season_2024-25_Regular_Season",
+      "name": "Download 2024-25 Regular Season Games",
+      "priority": 3,
+      "status": "completed",
+      "retries": 0,
+      "max_retries": 5,
+      "error": null,
+      "created_at": "2025-10-27T15:47:29.991954",
+      "started_at": "2025-10-27T15:47:29.992389",
+      "completed_at": "2025-10-27T15:47:33.378512",
+      "chunk_info": {},
+      "progress_info": {}
+    },
+    "download_season_2024-25_Playoffs": {
+      "task_id": "download_season_2024-25_Playoffs",
+      "name": "Download 2024-25 Playoffs Games",
+      "priority": 3,
+      "status": "completed",
+      "retries": 0,
+      "max_retries": 5,
+      "error": null,
+      "created_at": "2025-10-27T15:47:29.991974",
+      "started_at": "2025-10-27T15:47:34.390468",
+      "completed_at": "2025-10-27T15:47:36.252682",
+      "chunk_info": {},
+      "progress_info": {}
+    }
+  }
+}

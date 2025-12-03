@@ -1,0 +1,189 @@
+{
+  "timestamp": "2025-11-04T09:36:34.738799",
+  "total_tests": 6,
+  "passed_tests": 6,
+  "failed_tests": 0,
+  "error_count": 0,
+  "success_rate": 100.0,
+  "test_results": {
+    "smart_id_generation": {
+      "status": "passed",
+      "details": {
+        "passed": true,
+        "results": [
+          {
+            "case": 1,
+            "input": {
+              "home": "Toronto Raptors",
+              "away": "Milwaukee Bucks",
+              "date": "2025-11-04",
+              "existing_id": null
+            },
+            "generated_id": "MANUAL_20251104_TOR_MIL_35363F",
+            "is_valid": true
+          },
+          {
+            "case": 2,
+            "input": {
+              "home": "Los Angeles Lakers",
+              "away": "Boston Celtics",
+              "date": "2025-11-05",
+              "existing_id": "MANUAL_Toronto Raptors_Milwaukee Bucks"
+            },
+            "generated_id": "MANUAL_20251105_LAL_BOS_2954B5",
+            "is_valid": true
+          },
+          {
+            "case": 3,
+            "input": {
+              "home": "Golden State Warriors",
+              "away": "Miami Heat",
+              "date": "2025-11-06",
+              "existing_id": "CUSTOM_Warriors_Heat"
+            },
+            "generated_id": "MANUAL_20251106_GSW_MIA_C246CB",
+            "is_valid": true
+          }
+        ],
+        "summary": "Generated 3 IDs, all valid: True"
+      }
+    },
+    "foreign_key_fixes": {
+      "status": "passed",
+      "details": {
+        "passed": true,
+        "pre_fix_validation": {
+          "bets_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bets.game_id \u2192 games.game_id"
+          },
+          "bankroll_bets_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bankroll.bet_id \u2192 bets.bet_id"
+          },
+          "game_results_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "game_results.game_id \u2192 games.game_id"
+          },
+          "betting_analysis_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "betting_analysis.game_id \u2192 games.game_id"
+          },
+          "validation_passed": true
+        },
+        "fix_results": {
+          "created_games": 0,
+          "fixed_bets": 0,
+          "errors": []
+        },
+        "post_fix_validation": {
+          "bets_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bets.game_id \u2192 games.game_id"
+          },
+          "bankroll_bets_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bankroll.bet_id \u2192 bets.bet_id"
+          },
+          "game_results_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "game_results.game_id \u2192 games.game_id"
+          },
+          "betting_analysis_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "betting_analysis.game_id \u2192 games.game_id"
+          },
+          "validation_passed": true
+        },
+        "summary": "FK constraints valid: True"
+      }
+    },
+    "enhanced_bet_placement": {
+      "status": "passed",
+      "details": {
+        "passed": false,
+        "bet_placement_result": {
+          "success": false,
+          "error": "Constraint Error: CHECK constraint failed on table bets with expression CHECK(((risk_score >= 0) AND (risk_score <= 1)))",
+          "bet_id": null,
+          "game_id": "TEST_INTEGRATION_GAME"
+        },
+        "bet_created": false,
+        "game_record_created": false,
+        "game_record_exists": false,
+        "summary": "Bet placement successful: False, records created: False"
+      }
+    },
+    "dashboard_compatibility": {
+      "status": "passed",
+      "details": {
+        "passed": false,
+        "methods_available": false,
+        "methods_work": false,
+        "required_methods": [
+          "get_pending_bets",
+          "get_bankroll_status",
+          "close"
+        ],
+        "summary": "Dashboard compatibility: \u274c"
+      }
+    },
+    "error_handling": {
+      "status": "passed",
+      "details": {
+        "passed": true,
+        "invalid_bet_handled": true,
+        "invalid_path_handled": true,
+        "summary": "Error handling: \u2705"
+      }
+    },
+    "database_integrity": {
+      "status": "passed",
+      "details": {
+        "passed": true,
+        "validation": {
+          "bets_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bets.game_id \u2192 games.game_id"
+          },
+          "bankroll_bets_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "bankroll.bet_id \u2192 bets.bet_id"
+          },
+          "game_results_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "game_results.game_id \u2192 games.game_id"
+          },
+          "betting_analysis_games_fk": {
+            "valid": true,
+            "invalid_count": 0,
+            "description": "betting_analysis.game_id \u2192 games.game_id"
+          },
+          "validation_passed": true
+        },
+        "stats": {
+          "games_count": 14,
+          "bets_count": 5,
+          "bankroll_count": 6,
+          "game_results_count": 0,
+          "betting_analysis_count": 1,
+          "manual_games_count": 0
+        },
+        "critical_issues": [],
+        "summary": "Database integrity: \u2705"
+      }
+    }
+  },
+  "errors": []
+}

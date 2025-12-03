@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""
+NBA Betting Database Schema Definition
+Context7-compliant robust database design with ACID transactions
+"""
+
+import duckdb
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from enum import Enum
+import json
+import logging
+from pathlib import Path
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class BetStatus(Enum):
+    """Bet status enumeration for type safety"""
+    PENDING = "pending"
+    WON = "won"
+    LOST = "lost"
+    CANCELLED = "cancelled"
+    REPLACED = "replaced"
+
+class GameStatus(Enum):
+    """Game status enumeration"""
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    POSTPONED = "postponed"
+
+class TransactionType(Enum):
+    """Transaction type enumeration"""
+    BET_PLACED = "bet_placed"
+    BET_WON = "bet_won"
+    BET_LOST = "bet_lost"
+    BET_CANCELLED = "bet_cancelled"
+    DEPOSIT = "deposit"
+    WITHDRAWAL = "withdrawal"
+
+class NBADatabaseSchema:
+    """
+    NBA Betting Database Schema with Context7 best practices
+    Implements ACID transactions and robust data validation
+    """
+
+    def __init__(self, db_path: str = "data/nba_betting.duckdb"):
+        self.db_path = db_path
+        self.con = None
+
+    def connect(self) -> duckdb.DuckDBPyConnection:
+        """Establish database connection with optimal settings"""
+        try:
+            # Create directory if it doesn't exist
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+
+            # Connect with optimal settings for performance and safety
+            self.con = duckdb.connect(self.db_path)
+
+            # Configure database for optimal performance
+            self.con.execute("PRAGMA enable_progress_bar=false;")
+            self.con.execute("PRAGMA preserve_insertion_order=true;")
+            self.con.execute("PRAGMA threads=4;")
+            self.con.execute("PRAGMA memory_limit='1GB';")
+
+            logger.info(f"Connected to database: {self.db_path}")
+            return self.con
+
+        except Exception as e:
+            logger.error(f"Failed to connect to database: {e}")
+            raise
+
+    def create_tables(self) -> None:
+        """
+        Create all database tables with proper constraints and indexes
+        Following DuckDB best practices for columnar storage
+        """
+        if not self.con:
+            self.connect()
+
+        try:
+            # Begin transaction for atomic table creation
+            self.con.execute("BEGIN TRANSACTION;")
+
+            # Games table - Core NBA games data
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS games (
+                    game_id VARCHAR PRIMARY KEY,
+                    api_game_id VARCHAR,
+                    home_team VARCHAR NOT NULL,
+                    home_team_abbr VARCHAR NOT NULL,
+                    away_team VARCHAR NOT NULL,
+                    away_team_abbr VARCHAR NOT NULL,
+                    game_date DATE NOT NULL,
+                    game_time VARCHAR,
+                    league VARCHAR DEFAULT 'NBA',
+                    season VARCHAR,
+                    status VARCHAR DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled', 'postponed')),
+                    home_score INTEGER,
+                    away_score INTEGER,
+                    total_score INTEGER,
+                    data_completeness_score INTEGER CHECK (data_completeness_score >= 0 AND data_completeness_score <= 100),
+                    data_sources_summary VARCHAR, -- JSON string
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # Bets table - All betting transactions
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS bets (
+                    bet_id VARCHAR PRIMARY KEY,
+                    game_id VARCHAR NOT NULL,
+                    bet_type VARCHAR NOT NULL CHECK (bet_type IN ('OVER', 'UNDER', 'SPREAD', 'MONEYLINE')),
+                    line DOUBLE,
+                    odds DOUBLE NOT NULL CHECK (odds > 0),
+                    stake DOUBLE NOT NULL CHECK (stake > 0),
+                    potential_payout DOUBLE GENERATED ALWAYS AS (stake * odds) VIRTUAL,
+
+                    -- Probabilities and metrics
+                    probability DOUBLE CHECK (probability >= 0 AND probability <= 1),
+                    implied_probability DOUBLE CHECK (implied_probability >= 0 AND implied_probability <= 1),
+                    true_probability DOUBLE CHECK (true_probability >= 0 AND true_probability <= 1),
+                    edge DOUBLE,
+                    quality_score DOUBLE CHECK (quality_score >= 0 AND quality_score <= 1),
+                    confidence_score DOUBLE CHECK (confidence_score >= 0 AND confidence_score <= 1),
+                    risk_score DOUBLE CHECK (risk_score >= 0 AND risk_score <= 1),
+                    consistency_score DOUBLE CHECK (consistency_score >= 0 AND consistency_score <= 1),
+                    margin DOUBLE CHECK (margin >= 0),
+
+                    -- Simulation data
+                    simulation_wins INTEGER CHECK (simulation_wins >= 0),
+                    total_simulations INTEGER CHECK (total_simulations > 0),
+
+                    -- Status and metadata
+                    status VARCHAR DEFAULT 'pending' CHECK (status IN ('pending', 'won', 'lost', 'cancelled', 'replaced')),
+                    is_value BOOLEAN DEFAULT false,
+                    original_bet_data VARCHAR, -- JSON string for original bet if replaced
+                    replaced_at TIMESTAMP,
+
+                    -- Timestamps
+                    placed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    settled_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    -- Foreign key constraint
+                    FOREIGN KEY (game_id) REFERENCES games(game_id)
+                );
+            """)
+
+            # Bankroll table - Financial tracking with audit trail
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS bankroll (
+                    transaction_id INTEGER PRIMARY KEY,
+                    transaction_type VARCHAR NOT NULL CHECK (transaction_type IN ('bet_placed', 'bet_won', 'bet_lost', 'bet_cancelled', 'deposit', 'withdrawal')),
+                    amount DOUBLE NOT NULL,
+                    balance_after DOUBLE NOT NULL,
+                    bet_id VARCHAR,
+                    description VARCHAR,
+                    metadata VARCHAR, -- JSON string for additional context
+
+                    -- Audit fields
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    -- Foreign key constraint
+                    FOREIGN KEY (bet_id) REFERENCES bets(bet_id)
+                );
+            """)
+
+            # Game results table - Track actual game outcomes
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS game_results (
+                    result_id INTEGER PRIMARY KEY,
+                    game_id VARCHAR NOT NULL UNIQUE,
+                    final_home_score INTEGER NOT NULL,
+                    final_away_score INTEGER NOT NULL,
+                    final_total_score INTEGER NOT NULL,
+                    home_team_win BOOLEAN,
+                    over_under_result VARCHAR, -- 'OVER', 'UNDER', or 'PUSH'
+                    spread_result VARCHAR, -- 'HOME', 'AWAY', or 'PUSH'
+                    actual_line DOUBLE,
+                    quarter_scores VARCHAR, -- JSON string for detailed scores
+
+                    -- Verification data
+                    verified_at TIMESTAMP,
+                    data_source VARCHAR,
+
+                    -- Timestamps
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    -- Foreign key constraint
+                    FOREIGN KEY (game_id) REFERENCES games(game_id)
+                );
+            """)
+
+            # Betting analysis table - Store analysis metrics
+            self.con.execute("""
+                CREATE TABLE IF NOT EXISTS betting_analysis (
+                    analysis_id INTEGER PRIMARY KEY,
+                    game_id VARCHAR NOT NULL,
+                    predicted_total DOUBLE,
+                    prediction_date TIMESTAMP,
+                    bookmaker_line DOUBLE,
+                    bookmaker_over_quote DOUBLE,
+                    bet_recommendation VARCHAR,
+                    bet_stake DOUBLE,
+
+                    -- Model metrics
+                    model_confidence DOUBLE,
+                    edge_percentage DOUBLE,
+                    expected_value DOUBLE,
+
+                    -- Analysis metadata
+                    analysis_version VARCHAR,
+                    model_metadata VARCHAR, -- JSON string
+
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    -- Foreign key constraint
+                    FOREIGN KEY (game_id) REFERENCES games(game_id)
+                );
+            """)
+
+            # Create indexes for performance (DuckDB creates automatic indexes for primary keys)
+            self._create_indexes()
+
+            # Commit transaction
+            self.con.execute("COMMIT;")
+            logger.info("All tables created successfully")
+
+        except Exception as e:
+            self.con.execute("ROLLBACK;")
+            logger.error(f"Failed to create tables: {e}")
+            raise
+
+    def _create_indexes(self) -> None:
+        """Create additional indexes for query performance"""
+        try:
+            # Games table indexes
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_games_date ON games(game_date);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_games_teams ON games(home_team, away_team);")
+
+            # Bets table indexes
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bets_game_id ON bets(game_id);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bets_status ON bets(status);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bets_placed_at ON bets(placed_at);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bets_type ON bets(bet_type);")
+
+            # Bankroll table indexes
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bankroll_created_at ON bankroll(created_at);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_bankroll_transaction_type ON bankroll(transaction_type);")
+
+            # Game results indexes
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_game_results_game_id ON game_results(game_id);")
+
+            # Betting analysis indexes
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_game_id ON betting_analysis(game_id);")
+            self.con.execute("CREATE INDEX IF NOT EXISTS idx_betting_analysis_date ON betting_analysis(prediction_date);")
+
+            logger.info("All indexes created successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to create indexes: {e}")
+            raise
+
+    def create_views(self) -> None:
+        """Create useful database views for common queries"""
+        try:
+            # Active bets view
+            self.con.execute("""
+                CREATE OR REPLACE VIEW active_bets AS
+                SELECT
+                    b.bet_id,
+                    b.game_id,
+                    g.home_team,
+                    g.away_team,
+                    g.game_date,
+                    b.bet_type,
+                    b.line,
+                    b.odds,
+                    b.stake,
+                    b.potential_payout,
+                    b.status,
+                    b.quality_score,
+                    b.confidence_score,
+                    b.placed_at
+                FROM bets b
+                JOIN games g ON b.game_id = g.game_id
+                WHERE b.status IN ('pending', 'placed')
+                ORDER BY b.placed_at DESC;
+            """)
+
+            # Bankroll summary view
+            self.con.execute("""
+                CREATE OR REPLACE VIEW bankroll_summary AS
+                SELECT
+                    transaction_id,
+                    transaction_type,
+                    amount,
+                    balance_after,
+                    description,
+                    created_at
+                FROM bankroll
+                ORDER BY created_at DESC;
+            """)
+
+            # Betting performance view
+            self.con.execute("""
+                CREATE OR REPLACE VIEW betting_performance AS
+                SELECT
+                    COUNT(*) as total_bets,
+                    COUNT(CASE WHEN status = 'won' THEN 1 END) as won_bets,
+                    COUNT(CASE WHEN status = 'lost' THEN 1 END) as lost_bets,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_bets,
+                    SUM(CASE WHEN status = 'won' THEN stake * odds - stake ELSE -stake END) as total_pnl,
+                    SUM(stake) as total_staked,
+                    AVG(CASE WHEN status = 'won' THEN odds END) as avg_winning_odds,
+                    AVG(quality_score) as avg_quality_score,
+                    AVG(confidence_score) as avg_confidence_score
+                FROM bets;
+            """)
+
+            logger.info("All views created successfully")
+
+        except Exception as e:
+            logger.error(f"Failed to create views: {e}")
+            raise
+
+    def validate_schema(self) -> Dict[str, Any]:
+        """Validate database schema integrity"""
+        try:
+            validation_results = {
+                'tables_exist': [],
+                'tables_missing': [],
+                'indexes': [],
+                'foreign_keys': [],
+                'check_constraints': [],
+                'validation_passed': True,
+                'validation_errors': []
+            }
+
+            # Check if all tables exist
+            expected_tables = ['games', 'bets', 'bankroll', 'game_results', 'betting_analysis']
+            for table in expected_tables:
+                try:
+                    result = self.con.execute(f"SELECT COUNT(*) FROM {table} LIMIT 1;").fetchone()
+                    validation_results['tables_exist'].append(table)
+                except Exception as e:
+                    validation_results['tables_missing'].append(table)
+                    validation_results['validation_passed'] = False
+                    validation_results['validation_errors'].append(f"Table {table} missing: {e}")
+
+            # Check indexes
+            indexes_result = self.con.execute("""
+                SELECT index_name, table_name
+                FROM duckdb_indexes()
+                WHERE index_name LIKE 'idx_%';
+            """).fetchall()
+            validation_results['indexes'] = indexes_result
+
+            # Note: DuckDB doesn't support PRAGMA foreign_keys
+            # Foreign keys are always enabled in DuckDB
+            validation_results['foreign_keys'].append({
+                'foreign_keys_enabled': True,
+                'note': 'DuckDB always has foreign keys enabled'
+            })
+
+            # Check table constraints
+            for table in expected_tables:
+                if table in validation_results['tables_exist']:
+                    try:
+                        constraints = self.con.execute(f"PRAGMA table_info({table});").fetchall()
+                        validation_results['check_constraints'].extend([
+                            {'table': table, 'constraints': constraints}
+                        ])
+                    except Exception as e:
+                        validation_results['validation_errors'].append(f"Cannot check constraints for {table}: {e}")
+
+            logger.info(f"Schema validation completed. Passed: {validation_results['validation_passed']}")
+            return validation_results
+
+        except Exception as e:
+            logger.error(f"Schema validation failed: {e}")
+            raise
+
+    def close(self) -> None:
+        """Close database connection"""
+        if self.con:
+            self.con.close()
+            logger.info("Database connection closed")
+
+# Database initialization utility function
+def initialize_database(db_path: str = "data/nba_betting.duckdb") -> NBADatabaseSchema:
+    """
+    Initialize the NBA betting database with all tables and views
+    Returns database schema instance
+    """
+    try:
+        schema = NBADatabaseSchema(db_path)
+        schema.connect()
+        schema.create_tables()
+        schema.create_views()
+
+        # Validate schema
+        validation = schema.validate_schema()
+        if not validation['validation_passed']:
+            logger.error("Database schema validation failed")
+            for error in validation['validation_errors']:
+                logger.error(f"Validation error: {error}")
+            raise Exception("Database schema validation failed")
+
+        logger.info("Database initialized successfully")
+        return schema
+
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+
+if __name__ == "__main__":
+    # Initialize database when run directly
+    db_schema = initialize_database()
+    print("✅ NBA Betting Database initialized successfully!")

@@ -1,0 +1,817 @@
+{
+  "setup_type": "nba_betting_database_initialization",
+  "timestamp": "2025-10-31T12:07:43.571283",
+  "results": {
+    "success": false,
+    "database_initialized": true,
+    "migration_completed": true,
+    "backup_created": true,
+    "validation_passed": true,
+    "statistics": {
+      "error": "Binder Error: Referenced column \"view_schema\" not found in FROM clause!\nCandidate bindings: \"table_schema\", \"view_definition\", \"table_name\", \"is_trigger_deletable\", \"table_catalog\"\n\nLINE 4:             WHERE view_schema = 'main'\n                          ^"
+    },
+    "errors": [
+      "Post-setup validation failed"
+    ],
+    "start_time": "2025-10-31T12:07:43.075322",
+    "end_time": "2025-10-31T12:07:43.558019",
+    "migration_report": {
+      "start_time": "2025-10-31T12:07:43.096182",
+      "backup_location": "data/backup_20251031_120743",
+      "migration_results": {
+        "games": {
+          "migrated": 3,
+          "errors": 0
+        },
+        "bets": {
+          "migrated": 4,
+          "errors": 0
+        },
+        "bankroll": {
+          "migrated": 1,
+          "errors": 0
+        }
+      },
+      "errors": [],
+      "success": true,
+      "end_time": "2025-10-31T12:07:43.500567",
+      "validation": {
+        "tables_exist": [
+          "games",
+          "bets",
+          "bankroll",
+          "game_results",
+          "betting_analysis"
+        ],
+        "tables_missing": [],
+        "indexes": [
+          [
+            "idx_bankroll_created_at",
+            "bankroll"
+          ],
+          [
+            "idx_bankroll_transaction_type",
+            "bankroll"
+          ],
+          [
+            "idx_bets_game_id",
+            "bets"
+          ],
+          [
+            "idx_bets_placed_at",
+            "bets"
+          ],
+          [
+            "idx_bets_status",
+            "bets"
+          ],
+          [
+            "idx_bets_type",
+            "bets"
+          ],
+          [
+            "idx_betting_analysis_date",
+            "betting_analysis"
+          ],
+          [
+            "idx_betting_analysis_game_id",
+            "betting_analysis"
+          ],
+          [
+            "idx_games_date",
+            "games"
+          ],
+          [
+            "idx_games_status",
+            "games"
+          ],
+          [
+            "idx_games_teams",
+            "games"
+          ],
+          [
+            "idx_game_results_game_id",
+            "game_results"
+          ]
+        ],
+        "foreign_keys": [
+          {
+            "foreign_keys_enabled": true,
+            "note": "DuckDB always has foreign keys enabled"
+          }
+        ],
+        "check_constraints": [
+          {
+            "table": "games",
+            "constraints": [
+              [
+                0,
+                "game_id",
+                "VARCHAR",
+                true,
+                null,
+                true
+              ],
+              [
+                1,
+                "api_game_id",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                2,
+                "home_team",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                3,
+                "home_team_abbr",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                4,
+                "away_team",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                5,
+                "away_team_abbr",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                6,
+                "game_date",
+                "DATE",
+                true,
+                null,
+                false
+              ],
+              [
+                7,
+                "game_time",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                8,
+                "league",
+                "VARCHAR",
+                false,
+                "'NBA'",
+                false
+              ],
+              [
+                9,
+                "season",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                10,
+                "status",
+                "VARCHAR",
+                false,
+                "'scheduled'",
+                false
+              ],
+              [
+                11,
+                "home_score",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                12,
+                "away_score",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                13,
+                "total_score",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                14,
+                "data_completeness_score",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                15,
+                "data_sources_summary",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                16,
+                "created_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ],
+              [
+                17,
+                "updated_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ]
+            ]
+          },
+          {
+            "table": "bets",
+            "constraints": [
+              [
+                0,
+                "bet_id",
+                "VARCHAR",
+                true,
+                null,
+                true
+              ],
+              [
+                1,
+                "game_id",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                2,
+                "bet_type",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                3,
+                "line",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                4,
+                "odds",
+                "DOUBLE",
+                true,
+                null,
+                false
+              ],
+              [
+                5,
+                "stake",
+                "DOUBLE",
+                true,
+                null,
+                false
+              ],
+              [
+                6,
+                "potential_payout",
+                "DOUBLE",
+                false,
+                "CAST((stake * odds) AS DOUBLE)",
+                false
+              ],
+              [
+                7,
+                "probability",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                8,
+                "implied_probability",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                9,
+                "true_probability",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                10,
+                "edge",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                11,
+                "quality_score",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                12,
+                "confidence_score",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                13,
+                "risk_score",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                14,
+                "consistency_score",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                15,
+                "margin",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                16,
+                "simulation_wins",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                17,
+                "total_simulations",
+                "INTEGER",
+                false,
+                null,
+                false
+              ],
+              [
+                18,
+                "status",
+                "VARCHAR",
+                false,
+                "'pending'",
+                false
+              ],
+              [
+                19,
+                "is_value",
+                "BOOLEAN",
+                false,
+                "CAST('f' AS BOOLEAN)",
+                false
+              ],
+              [
+                20,
+                "original_bet_data",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                21,
+                "replaced_at",
+                "TIMESTAMP",
+                false,
+                null,
+                false
+              ],
+              [
+                22,
+                "placed_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ],
+              [
+                23,
+                "settled_at",
+                "TIMESTAMP",
+                false,
+                null,
+                false
+              ],
+              [
+                24,
+                "created_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ],
+              [
+                25,
+                "updated_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ]
+            ]
+          },
+          {
+            "table": "bankroll",
+            "constraints": [
+              [
+                0,
+                "transaction_id",
+                "INTEGER",
+                true,
+                null,
+                true
+              ],
+              [
+                1,
+                "transaction_type",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                2,
+                "amount",
+                "DOUBLE",
+                true,
+                null,
+                false
+              ],
+              [
+                3,
+                "balance_after",
+                "DOUBLE",
+                true,
+                null,
+                false
+              ],
+              [
+                4,
+                "bet_id",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                5,
+                "description",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                6,
+                "metadata",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                7,
+                "created_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ]
+            ]
+          },
+          {
+            "table": "game_results",
+            "constraints": [
+              [
+                0,
+                "result_id",
+                "INTEGER",
+                true,
+                null,
+                true
+              ],
+              [
+                1,
+                "game_id",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                2,
+                "final_home_score",
+                "INTEGER",
+                true,
+                null,
+                false
+              ],
+              [
+                3,
+                "final_away_score",
+                "INTEGER",
+                true,
+                null,
+                false
+              ],
+              [
+                4,
+                "final_total_score",
+                "INTEGER",
+                true,
+                null,
+                false
+              ],
+              [
+                5,
+                "home_team_win",
+                "BOOLEAN",
+                false,
+                null,
+                false
+              ],
+              [
+                6,
+                "over_under_result",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                7,
+                "spread_result",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                8,
+                "actual_line",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                9,
+                "quarter_scores",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                10,
+                "verified_at",
+                "TIMESTAMP",
+                false,
+                null,
+                false
+              ],
+              [
+                11,
+                "data_source",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                12,
+                "created_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ],
+              [
+                13,
+                "updated_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ]
+            ]
+          },
+          {
+            "table": "betting_analysis",
+            "constraints": [
+              [
+                0,
+                "analysis_id",
+                "INTEGER",
+                true,
+                null,
+                true
+              ],
+              [
+                1,
+                "game_id",
+                "VARCHAR",
+                true,
+                null,
+                false
+              ],
+              [
+                2,
+                "predicted_total",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                3,
+                "prediction_date",
+                "TIMESTAMP",
+                false,
+                null,
+                false
+              ],
+              [
+                4,
+                "bookmaker_line",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                5,
+                "bookmaker_over_quote",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                6,
+                "bet_recommendation",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                7,
+                "bet_stake",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                8,
+                "model_confidence",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                9,
+                "edge_percentage",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                10,
+                "expected_value",
+                "DOUBLE",
+                false,
+                null,
+                false
+              ],
+              [
+                11,
+                "analysis_version",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                12,
+                "model_metadata",
+                "VARCHAR",
+                false,
+                null,
+                false
+              ],
+              [
+                13,
+                "created_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ],
+              [
+                14,
+                "updated_at",
+                "TIMESTAMP",
+                false,
+                "CURRENT_TIMESTAMP",
+                false
+              ]
+            ]
+          }
+        ],
+        "validation_passed": true,
+        "validation_errors": []
+      },
+      "statistics": {
+        "games_count": 7,
+        "bets_count": 4,
+        "bankroll_count": 5,
+        "game_results_count": 0,
+        "betting_analysis_count": 0,
+        "bankroll_summary": {
+          "total_transactions": 5,
+          "total_deposits": 89.48,
+          "total_withdrawals": 16.799999999999997,
+          "current_balance": 72.68
+        },
+        "bet_summary": {
+          "total_bets": 4,
+          "pending_bets": 4,
+          "total_staked": 16.799999999999997,
+          "avg_quality_score": 0.81115074408374,
+          "avg_confidence_score": 0.8875
+        }
+      }
+    },
+    "backup_path": "data/backups/nba_betting_full_20251031_120743.duckdb.gz",
+    "integrity_tests_passed": false,
+    "performance_tests_passed": true
+  },
+  "system_info": {
+    "python_version": "3.11.13 (main, Jun  3 2025, 18:38:25) [Clang 17.0.0 (clang-1700.0.13.3)]",
+    "platform": "darwin",
+    "working_directory": "/Users/fulvioventura/nba-predictor-streamlit"
+  },
+  "recommendations": [
+    "Review and fix reported errors",
+    "Ensure all prerequisites are met",
+    "Check file permissions and disk space",
+    "Review and settle pending bets"
+  ]
+}

@@ -1,0 +1,245 @@
+# Prometheus Configuration for NBA Predictor
+# Context7-Compliant Production Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'production'
+    service: 'nba-predictor'
+    context7_compliance: 'enabled'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      context7_labels:
+        accessibility: true
+        real_time_alerts: true
+
+# Rule files
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+  - "/etc/prometheus/context7_rules.yml"
+
+# Context7-specific monitoring rules
+context7_rules:
+  - name: context7_responsive_design
+    interval: 30s
+    rules:
+      - record: context7:responsive_design_score
+        expr: avg(nba_predictor_responsive_design_score) by (instance)
+        labels:
+          context7_pattern: "responsive_design"
+          compliance_target: "0.96"
+
+      - record: context7:accessibility_score
+        expr: avg(nba_predictor_accessibility_score) by (instance)
+        labels:
+          context7_pattern: "accessibility_features"
+          compliance_target: "0.98"
+
+      - record: context7:pwa_performance
+        expr: avg(nba_predictor_pwa_score) by (instance)
+        labels:
+          context7_pattern: "pwa_features"
+          compliance_target: "0.95"
+
+      - record: context7:real_time_latency
+        expr: histogram_quantile(0.95, rate(nba_predictor_real_time_latency_bucket[5m]))
+        labels:
+          context7_pattern: "real_time_updates"
+          target_threshold: "100"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    context7_labels:
+      monitoring_type: "self"
+      critical_service: true
+
+  # NBA Predictor API metrics
+  - job_name: 'nba-predictor-api'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: nba-predictor-api
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: ${1}:8000
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: kubernetes_pod_name
+    metrics_path: /metrics
+    scrape_interval: 15s
+    context7_labels:
+      service_type: "api"
+      context7_monitored: true
+      real_time_metrics: true
+
+  # NBA Predictor Dashboard metrics
+  - job_name: 'nba-predictor-dashboard'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: nba-predictor-dashboard
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: ${1}:8501
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: kubernetes_namespace
+    metrics_path: /metrics
+    scrape_interval: 30s
+    context7_labels:
+      service_type: "dashboard"
+      context7_monitored: true
+      accessibility_metrics: true
+
+  # Kubernetes cluster metrics
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+    scrape_interval: 30s
+    context7_labels:
+      monitoring_type: "infrastructure"
+      cluster_health: true
+
+  # Kubernetes pods metrics
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+    scrape_interval: 30s
+    context7_labels:
+      monitoring_type: "application"
+      pod_health: true
+
+  # Application Load Balancer metrics
+  - job_name: 'aws-alb-metrics'
+    ec2_sd_configs:
+      - region: us-east-1
+        port: 9100
+        filters:
+          - name: "tag:Environment"
+            values: ["prod"]
+          - name: "tag:Service"
+            values: ["nba-predictor-alb"]
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: instance
+    metrics_path: /aws-alb-metrics
+    scrape_interval: 60s
+    context7_labels:
+      monitoring_type: "load_balancer"
+      user_facing: true
+
+  # RDS database metrics
+  - job_name: 'aws-rds-metrics'
+    static_configs:
+      - targets: ['rds-exporter:9181']
+    scrape_interval: 60s
+    context7_labels:
+      monitoring_type: "database"
+      data_critical: true
+
+  # Redis cache metrics
+  - job_name: 'redis-metrics'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    context7_labels:
+      monitoring_type: "cache"
+      performance_critical: true
+
+  # Context7 compliance monitoring
+  - job_name: 'context7-compliance'
+    static_configs:
+      - targets: ['context7-exporter:9100']
+    scrape_interval: 60s
+    context7_labels:
+      monitoring_type: "compliance"
+      context7_core: true
+
+  # Custom business metrics
+  - job_name: 'business-metrics'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_monitoring]
+        action: keep
+        regex: business
+      - source_labels: [__meta_kubernetes_pod_ip]
+        target_label: __address__
+        replacement: ${1}:9000
+    scrape_interval: 60s
+    context7_labels:
+      monitoring_type: "business"
+      predictive_analytics: true
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: "https://prometheus-remote-write.example.com/api/v1/write"
+    basic_auth:
+      username: admin
+      password: ${REMOTE_WRITE_PASSWORD}
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+    context7_config:
+      compression: true
+      intelligent_batching: true
+      compliance_tracking: true
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 15d
+    retention.size: 50GB
+    wal-compression: true
+    context7_optimization:
+      intelligent_compaction: true
+      access_pattern_tracking: true

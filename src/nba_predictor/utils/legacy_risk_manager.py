@@ -427,6 +427,98 @@ class LegacyRiskManager:
             'implied_prob': implied_prob
         }
 
+    def calculate_risk_score(self, edge: float, estimated_prob: float, odds: float) -> float:
+        """
+        Calcola il punteggio di rischio isolato seguendo pattern Context7 enterprise.
+
+        Metodo Context7-compliant che:
+        - Implementa calcolo rischio robusto e validato
+        - Fornisce graceful degradation per input anomali
+        - Include validazione input sanitization
+        - Applica scaling intelligente con bounds checking
+        - Supporta traceability per audit compliance
+
+        Args:
+            edge: Vantaggio matematico calcolato
+            estimated_prob: Probabilità stimata dal modello
+            odds: Quota decimal offerta
+
+        Returns:
+            float: Risk score normalizzato 0-1 con Context7 compliance
+        """
+        try:
+            # Context7: Input sanitization e validation
+            if not all(isinstance(x, (int, float)) for x in [edge, estimated_prob, odds]):
+                return 0.0
+
+            if odds <= 1.0 or estimated_prob <= 0 or estimated_prob >= 1:
+                return 0.0
+
+            # Context7: Kelly Criterion calculation per risk assessment
+            b = odds - 1  # Net odds
+            q = 1 - estimated_prob
+
+            # Context7: Protected calculation con bounds checking
+            if b <= 0:
+                return 0.0
+
+            kelly_fraction = (estimated_prob * b - q) / b
+            kelly_fraction = max(0, min(0.25, kelly_fraction))  # Context7: Safety bounds
+
+            # Context7: Risk multi-factor assessment
+            # 1. Kelly-based risk (inverse relationship)
+            kelly_risk = 1.0 - (kelly_fraction / 0.25)  # Higher kelly = lower risk
+
+            # 2. Edge-based risk assessment
+            edge_pct = edge * 100
+            if edge_pct <= 0:
+                edge_risk = 1.0  # Maximum risk se non c'è edge
+            elif edge_pct >= 15:
+                edge_risk = 0.0  # Minimum risk con edge elevato
+            else:
+                # Context7: Non-linear scaling per risk assessment
+                edge_risk = 1.0 - (edge_pct / 15) ** 0.8
+
+            # 3. Probability-based risk assessment
+            prob_pct = estimated_prob * 100
+            if prob_pct < 40 or prob_pct > 90:
+                prob_risk = 1.0  # High risk per probabilità estreme
+            elif 50 <= prob_pct <= 70:
+                prob_risk = 0.0  # Minimum risk nel sweet spot
+            elif 45 <= prob_pct < 50 or 70 < prob_pct <= 80:
+                prob_risk = 0.3  # Low-moderate risk
+            else:
+                prob_risk = 0.6  # Moderate risk
+
+            # Context7: Intelligent weighted combination
+            # Pesi dinamici basati sulla confidence del modello
+            confidence_weight = min(1.0, estimated_prob * 1.5)  # Higher confidence = more weight
+
+            risk_score = (
+                kelly_risk * 0.4 +      # 40% Kelly-based risk
+                edge_risk * 0.35 +      # 35% Edge-based risk
+                prob_risk * 0.25        # 25% Probability-based risk
+            ) * confidence_weight + (1 - confidence_weight) * 0.5  # Context7: Confidence adjustment
+
+            # Context7: Final bounds checking e normalization
+            risk_score = max(0.0, min(1.0, risk_score))
+
+            # Context7: Traceability log per audit compliance
+            if hasattr(self, 'debug_mode') and self.debug_mode:
+                print(f"🔍 Context7 Risk Score Calculation:")
+                print(f"   Edge: {edge:.4f} → Edge Risk: {edge_risk:.3f}")
+                print(f"   Est Prob: {estimated_prob:.4f} → Prob Risk: {prob_risk:.3f}")
+                print(f"   Odds: {odds:.3f} → Kelly: {kelly_fraction:.3f} → Kelly Risk: {kelly_risk:.3f}")
+                print(f"   Final Risk Score: {risk_score:.3f}")
+
+            return risk_score
+
+        except Exception as e:
+            # Context7: Graceful degradation con logging strutturato
+            print(f"⚠️ Context7 Risk Score Calculation Error: {str(e)}")
+            print(f"📍 Input: edge={edge}, prob={estimated_prob}, odds={odds}")
+            return 0.0  # Context7: Safe fallback per robustezza enterprise
+
     def generate_odds_from_central_line(self, central_line: float) -> List[Dict[str, float]]:
         """
         Genera quote da linea centrale (identico al legacy).
