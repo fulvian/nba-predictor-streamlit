@@ -27,9 +27,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from data_provider import NBADataProvider
-from src.nba_predictor.core.data_store import UnifiedDataStore
-from src.nba_predictor.core.sync_engine import AutomaticSyncEngine
-from src.nba_predictor.utils.exceptions import DatabaseError, ValidationError
+from nba_predictor.core.data_store import UnifiedDataStore
+from nba_predictor.core.sync_engine import AutomaticSyncEngine
+from nba_predictor.utils.exceptions import DatabaseError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,11 @@ class DataPersistenceBridge:
 
     def __init__(
         self,
-        data_provider: Union["NBADataProvider", Any],  # Use Union to avoid circular import
+        data_provider: Union[
+            "NBADataProvider", Any
+        ],  # Use Union to avoid circular import
         storage_path: str = "data/persistent",
-        auto_persist: bool = True
+        auto_persist: bool = True,
     ) -> None:
         """
         Initialize the data persistence bridge.
@@ -62,8 +64,7 @@ class DataPersistenceBridge:
         # Initialize storage components
         self.storage_path = Path(storage_path)
         self.data_store = UnifiedDataStore(
-            base_path=str(self.storage_path),
-            cache_enabled=True
+            base_path=str(self.storage_path), cache_enabled=True
         )
 
         # Initialize sync engine
@@ -71,7 +72,7 @@ class DataPersistenceBridge:
             data_store=self.data_store,
             sync_interval=3600,  # 1 hour
             retry_attempts=3,
-            batch_size=1000
+            batch_size=1000,
         )
 
         # Bridge status
@@ -80,15 +81,15 @@ class DataPersistenceBridge:
             "total_games_saved": 0,
             "last_persist_date": None,
             "cache_hits": 0,
-            "api_calls": 0
+            "api_calls": 0,
         }
 
         logger.info(
             "DataPersistenceBridge initialized",
             extra={
                 "storage_path": str(self.storage_path),
-                "auto_persist": auto_persist
-            }
+                "auto_persist": auto_persist,
+            },
         )
 
     def initialize(self) -> None:
@@ -107,7 +108,7 @@ class DataPersistenceBridge:
         self,
         days_ahead: int = 7,
         specific_date: Optional[str] = None,
-        force_api: bool = False
+        force_api: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Get scheduled games with automatic persistence.
@@ -129,13 +130,13 @@ class DataPersistenceBridge:
         # Convert date format for storage lookup
         if specific_date:
             try:
-                target_date = datetime.strptime(specific_date, '%Y-%m-%d').date()
+                target_date = datetime.strptime(specific_date, "%Y-%m-%d").date()
             except ValueError:
                 target_date = date.today()
         else:
             target_date = date.today()
 
-        date_str = target_date.strftime('%Y-%m-%d')
+        date_str = target_date.strftime("%Y-%m-%d")
 
         # Step 1: Try to get from persistent storage first
         if not force_api:
@@ -144,7 +145,7 @@ class DataPersistenceBridge:
                 self._persistence_stats["cache_hits"] += 1
                 logger.info(
                     f"Retrieved {len(stored_games)} games from persistent storage",
-                    extra={"date": date_str, "source": "persistent_storage"}
+                    extra={"date": date_str, "source": "persistent_storage"},
                 )
                 return stored_games
 
@@ -156,11 +157,10 @@ class DataPersistenceBridge:
         games = []
 
         # Use BallDontLie API directly (primary source)
-        if hasattr(self.data_provider, '_get_ball_dont_lie_games'):
+        if hasattr(self.data_provider, "_get_ball_dont_lie_games"):
             try:
                 bdl_games = self.data_provider._get_ball_dont_lie_games(
-                    days_ahead=days_ahead,
-                    specific_date=specific_date
+                    days_ahead=days_ahead, specific_date=specific_date
                 )
                 games.extend(bdl_games)
             except Exception as e:
@@ -168,18 +168,24 @@ class DataPersistenceBridge:
 
         # Use fallback sources if no BallDontLie games
         if not games:
-            if hasattr(self.data_provider, '_get_odds_api_games'):
+            if hasattr(self.data_provider, "_get_odds_api_games"):
                 try:
-                    odds_games = self.data_provider._get_odds_api_games(days_ahead=days_ahead)
+                    odds_games = self.data_provider._get_odds_api_games(
+                        days_ahead=days_ahead
+                    )
                     games.extend(odds_games)
                 except Exception as e:
                     logger.warning(f"Failed to get Odds API games: {e}")
 
-            if hasattr(self.data_provider, '_get_nba_completed_games'):
+            if hasattr(self.data_provider, "_get_nba_completed_games"):
                 try:
-                    completed_games = self.data_provider._get_nba_completed_games(days_back=3)
+                    completed_games = self.data_provider._get_nba_completed_games(
+                        days_back=3
+                    )
                     if specific_date:
-                        completed_games = [g for g in completed_games if g['date'] == specific_date]
+                        completed_games = [
+                            g for g in completed_games if g["date"] == specific_date
+                        ]
                     games.extend(completed_games)
                 except Exception as e:
                     logger.warning(f"Failed to get NBA completed games: {e}")
@@ -190,7 +196,9 @@ class DataPersistenceBridge:
 
         return games
 
-    def _get_from_persistent_storage(self, date_str: str) -> Optional[List[Dict[str, Any]]]:
+    def _get_from_persistent_storage(
+        self, date_str: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Try to retrieve games from persistent storage.
 
@@ -209,7 +217,7 @@ class DataPersistenceBridge:
                 games_list = self._dataframe_to_api_format(games_df)
                 logger.debug(
                     f"Found {len(games_list)} games in persistent storage",
-                    extra={"date": date_str}
+                    extra={"date": date_str},
                 )
                 return games_list
 
@@ -218,7 +226,7 @@ class DataPersistenceBridge:
         except Exception as e:
             logger.warning(
                 f"Failed to retrieve from persistent storage: {e}",
-                extra={"date": date_str}
+                extra={"date": date_str},
             )
             return None
 
@@ -246,14 +254,14 @@ class DataPersistenceBridge:
                 extra={
                     "date": date_str,
                     "file_path": file_path,
-                    "total_saved": self._persistence_stats["total_games_saved"]
-                }
+                    "total_saved": self._persistence_stats["total_games_saved"],
+                },
             )
 
         except Exception as e:
             logger.error(
                 f"Failed to persist API data: {e}",
-                extra={"date": date_str, "games_count": len(games)}
+                extra={"date": date_str, "games_count": len(games)},
             )
 
     def _api_format_to_dataframe(self, games: List[Dict[str, Any]]) -> pl.DataFrame:
@@ -284,7 +292,7 @@ class DataPersistenceBridge:
                 "game_time": game.get("time_utc", ""),
                 "venue": game.get("venue", ""),
                 "source": game.get("source", "API"),
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
             }
             unified_games.append(unified_game)
 
@@ -317,7 +325,7 @@ class DataPersistenceBridge:
                 "status": row.get("status", "Scheduled"),
                 "time_utc": row.get("game_time", ""),
                 "source": f"Persistent Storage ({row.get('source', 'Unknown')})",
-                "persisted_at": row.get("created_at", "")
+                "persisted_at": row.get("created_at", ""),
             }
             api_games.append(api_game)
 
@@ -340,24 +348,31 @@ class DataPersistenceBridge:
             return {
                 "bridge_status": {
                     "initialized": self._is_initialized,
-                    "auto_persist": self.auto_persist
+                    "auto_persist": self.auto_persist,
                 },
                 "persistence_stats": self._persistence_stats,
                 "data_store_stats": {
                     "total_tables": metadata.height,
-                    "total_records": metadata["record_count"].sum() if metadata.height > 0 else 0,
-                    "last_updated": metadata["last_updated"].max() if metadata.height > 0 else None
+                    "total_records": metadata["record_count"].sum()
+                    if metadata.height > 0
+                    else 0,
+                    "last_updated": metadata["last_updated"].max()
+                    if metadata.height > 0
+                    else None,
                 },
-                "sync_engine_stats": sync_stats
+                "sync_engine_stats": sync_stats,
             }
 
         except Exception as e:
             logger.error(f"Failed to get persistence statistics: {e}")
             return {
-                "bridge_status": {"initialized": self._is_initialized, "auto_persist": self.auto_persist},
+                "bridge_status": {
+                    "initialized": self._is_initialized,
+                    "auto_persist": self.auto_persist,
+                },
                 "persistence_stats": self._persistence_stats,
                 "data_store_stats": {"error": str(e)},
-                "sync_engine_stats": {"error": str(e)}
+                "sync_engine_stats": {"error": str(e)},
             }
 
     def force_full_sync(self) -> Dict[str, Any]:
@@ -392,8 +407,8 @@ class DataPersistenceBridge:
                 extra={
                     "success": results.get("success", False),
                     "duration": results.get("duration_seconds", 0),
-                    "games_count": results.get("games_count", 0)
-                }
+                    "games_count": results.get("games_count", 0),
+                },
             )
 
             return results
@@ -404,7 +419,7 @@ class DataPersistenceBridge:
                 "success": False,
                 "error": str(e),
                 "games_count": 0,
-                "duration_seconds": 0
+                "duration_seconds": 0,
             }
 
     def cleanup_old_data(self, days_to_keep: int = 30) -> Dict[str, Any]:
@@ -420,14 +435,12 @@ class DataPersistenceBridge:
         try:
             # Calculate cutoff date
             cutoff_date = date.today() - timedelta(days=days_to_keep)
-            cutoff_str = cutoff_date.strftime('%Y-%m-%d')
+            cutoff_str = cutoff_date.strftime("%Y-%m-%d")
 
             # Get old data from metadata
             metadata = self.data_store.get_metadata()
 
-            old_tables = metadata.filter(
-                pl.col("table_name") < f"games_{cutoff_str}"
-            )
+            old_tables = metadata.filter(pl.col("table_name") < f"games_{cutoff_str}")
 
             # TODO: Implement actual file deletion
             # This would require extending UnifiedDataStore with delete functionality
@@ -437,8 +450,8 @@ class DataPersistenceBridge:
                 extra={
                     "days_to_keep": days_to_keep,
                     "cutoff_date": cutoff_str,
-                    "old_tables_count": old_tables.height
-                }
+                    "old_tables_count": old_tables.height,
+                },
             )
 
             return {
@@ -446,16 +459,12 @@ class DataPersistenceBridge:
                 "days_to_keep": days_to_keep,
                 "cutoff_date": cutoff_str,
                 "old_tables_found": old_tables.height,
-                "deleted_files": 0  # TODO: Implement actual deletion
+                "deleted_files": 0,  # TODO: Implement actual deletion
             }
 
         except Exception as e:
             logger.error(f"Cleanup failed: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "days_to_keep": days_to_keep
-            }
+            return {"success": False, "error": str(e), "days_to_keep": days_to_keep}
 
     def close(self) -> None:
         """Close all connections and cleanup resources."""
@@ -484,7 +493,7 @@ def get_persistence_bridge() -> Optional[DataPersistenceBridge]:
 def initialize_persistence_bridge(
     data_provider: Union["NBADataProvider", Any],  # Use Union to avoid circular import
     storage_path: str = "data/persistent",
-    auto_persist: bool = True
+    auto_persist: bool = True,
 ) -> DataPersistenceBridge:
     """
     Initialize the global persistence bridge.
@@ -503,7 +512,7 @@ def initialize_persistence_bridge(
         _persistence_bridge = DataPersistenceBridge(
             data_provider=data_provider,
             storage_path=storage_path,
-            auto_persist=auto_persist
+            auto_persist=auto_persist,
         )
         _persistence_bridge.initialize()
 

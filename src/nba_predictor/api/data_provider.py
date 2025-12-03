@@ -89,7 +89,7 @@ from balldontlie.exceptions import BallDontLieException
 
 # Import Data Persistence Bridge
 try:
-    from data_persistence_bridge import (
+    from ..core.data_persistence_bridge import (
         DataPersistenceBridge,
         initialize_persistence_bridge,
     )
