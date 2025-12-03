@@ -825,18 +825,87 @@ def render_step_5_portfolio():
         settled_bets = [b for b in history_bets if b["status"] != "PENDING"]
 
         if settled_bets:
-            df = pd.DataFrame(settled_bets)
-            # Format columns
-            display_cols = [
-                "created_at",
-                "game_id",
-                "bet_type",
-                "odds",
-                "amount",
-                "result",
-                "profit_loss",
-            ]
-            st.dataframe(df[display_cols], use_container_width=True)
+            # Display as a list with delete buttons (like Pending tab) for control
+            for bet in settled_bets:
+                with st.container():
+                    c1, c2, c3, c4, c5, c6 = st.columns([3, 1, 1, 1, 1, 1])
+                    with c1:
+                        game_id = str(bet.get("game_id"))
+                        # Try to find matchup in game_map if available, else use ID
+                        matchup = game_map.get(game_id, f"Game {game_id}")
+                        st.write(f"**{matchup}**")
+                        st.caption(f"📅 {bet.get('created_at')}")
+                    with c2:
+                        st.write(f"**{bet.get('bet_type')}**")
+                    with c3:
+                        st.write(f"@{bet.get('odds')}")
+                    with c4:
+                        st.write(f"€{bet.get('amount')}")
+                    with c5:
+                        res = bet.get("result")
+                        color = "green" if res == "WON" else "red"
+                        st.markdown(f":{color}[{res}]")
+                        if res == "WON":
+                            st.caption(f"+€{bet.get('profit_loss'):.2f}")
+                    with c6:
+                        if st.button(
+                            "🗑️",
+                            key=f"del_hist_{bet.get('bet_id')}",
+                            help="Delete Record",
+                        ):
+                            # Bankroll Adjustment Logic
+                            refund_amount = 0.0
+                            stake = float(bet.get("amount", 0.0))
+
+                            if bet.get("result") == "WON":
+                                # Revert Win: Deduct Payout, Add back Stake (effectively remove Profit)
+                                # Payout = Stake + Profit
+                                # Current Bankroll has (Stake + Profit) added (relative to post-bet state)
+                                # We want to go back to Pre-Bet state.
+                                # Pre-Bet = Current - Profit - Stake + Stake? No.
+                                # Let's trace:
+                                # Start: 100
+                                # Bet 10: 90
+                                # Win 20 (Profit 10): 110
+                                # Delete: Want 100.
+                                # Adjustment: -10. (Which is -Profit).
+                                # Profit = Payout - Stake.
+                                # So Adjustment = -(Payout - Stake).
+                                # Wait, update_bankroll adds the argument.
+                                # So we pass -(Payout - Stake).
+                                payout = stake * float(bet.get("odds", 1.0))
+                                profit = payout - stake
+                                refund_amount = -profit
+
+                            elif bet.get("result") == "LOST":
+                                # Revert Loss: Add back Stake
+                                # Start: 100
+                                # Bet 10: 90
+                                # Loss: 90
+                                # Delete: Want 100.
+                                # Adjustment: +10.
+                                refund_amount = stake
+
+                            if db_manager.safe_delete_bet(
+                                bet.get("bet_id"),
+                                "test_user_001",
+                                audit_user="WIC_DASHBOARD",
+                            ):
+                                if update_bankroll(refund_amount):
+                                    st.toast(
+                                        f"Bet deleted. Bankroll adjusted by €{refund_amount:.2f}",
+                                        icon="🗑️",
+                                    )
+                                else:
+                                    st.warning(
+                                        "Bet deleted but bankroll update failed."
+                                    )
+
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Could not delete bet.")
+                    st.divider()
         else:
             st.info("No settled bets history.")
 
