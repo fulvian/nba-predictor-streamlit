@@ -83,6 +83,7 @@ class EnhancedPredictionBridgeProfessional:
         game_date: date,
         betting_line: Optional[float] = None,
         include_detailed_analysis: bool = True,
+        force_refresh: bool = True,  # Default to True to prevent caching issues
     ) -> Dict[str, Any]:
         """
         Ottieni previsione professionale con analisi dettagliata.

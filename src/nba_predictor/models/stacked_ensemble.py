@@ -16,6 +16,7 @@ from typing import Optional, Any, Dict, Union, List
 
 try:
     import xgboost as xgb
+
     _xgboost_available = True
 except ImportError:
     xgb = None  # type: ignore
@@ -23,6 +24,7 @@ except ImportError:
 
 try:
     import lightgbm as lgb
+
     _lightgbm_available = True
 except ImportError:
     lgb = None  # type: ignore
@@ -33,22 +35,21 @@ try:
     from sklearn.linear_model import RidgeCV
     from sklearn.neural_network import MLPRegressor
     from sklearn.model_selection import TimeSeriesSplit
+
     _sklearn_available = True
 except ImportError:
     _sklearn_available = False
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 def create_research_stacked_ensemble(
-    cv_strategy: Optional[Any] = None,
-    n_jobs: int = -1
-) -> 'StackingRegressor':
+    cv_strategy: Optional[Any] = None, n_jobs: int = -1
+) -> "StackingRegressor":
     """
     Create research-based stacked ensemble for NBA predictions.
 
@@ -83,10 +84,11 @@ def create_research_stacked_ensemble(
         if cv_strategy is None:
             # Use standard KFold for compatibility with StackingRegressor
             from sklearn.model_selection import KFold
+
             cv_strategy = KFold(n_splits=5, shuffle=True, random_state=42)
 
         # Validate CV strategy
-        if not hasattr(cv_strategy, 'split'):
+        if not hasattr(cv_strategy, "split"):
             raise ValueError("cv_strategy must have a 'split' method")
 
         # Create base estimators with NBA-optimized configurations
@@ -101,7 +103,7 @@ def create_research_stacked_ensemble(
             final_estimator=meta_learner,
             cv=cv_strategy,
             n_jobs=n_jobs,
-            passthrough=True  # Pass original features to meta-learner
+            passthrough=True,  # Pass original features to meta-learner
         )
 
         logger.info(
@@ -110,8 +112,8 @@ def create_research_stacked_ensemble(
                 "base_models": len(base_estimators),
                 "cv_strategy": type(cv_strategy).__name__,
                 "n_jobs": n_jobs,
-                "passthrough": True
-            }
+                "passthrough": True,
+            },
         )
 
         return stacked_model
@@ -122,8 +124,8 @@ def create_research_stacked_ensemble(
             extra={
                 "cv_strategy": type(cv_strategy).__name__ if cv_strategy else None,
                 "n_jobs": n_jobs,
-                "error": str(e)
-            }
+                "error": str(e),
+            },
         )
         raise ValueError(f"Invalid stacked ensemble parameters: {e}") from e
 
@@ -146,19 +148,19 @@ def create_base_estimators(n_jobs: int = -1) -> List[tuple[str, Any]]:
     # 1. XGBoost - NBA optimized
     if _xgboost_available:
         xgb_params: Dict[str, Any] = {
-            'n_estimators': 200,
-            'learning_rate': 0.05,
-            'max_depth': 6,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'reg_alpha': 0.1,
-            'reg_lambda': 0.1,
-            'random_state': 42,
-            'n_jobs': n_jobs,
-            'verbosity': 0
+            "n_estimators": 200,
+            "learning_rate": 0.05,
+            "max_depth": 6,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.1,
+            "random_state": 42,
+            "n_jobs": n_jobs,
+            "verbosity": 0,
         }
         xgb_model = xgb.XGBRegressor(**xgb_params)
-        base_estimators.append(('xgb', xgb_model))
+        base_estimators.append(("xgb", xgb_model))
         logger.info("Added XGBoost base estimator")
     else:
         logger.warning("XGBoost not available, skipping")
@@ -166,49 +168,49 @@ def create_base_estimators(n_jobs: int = -1) -> List[tuple[str, Any]]:
     # 2. LightGBM - NBA optimized
     if _lightgbm_available:
         lgbm_params: Dict[str, Any] = {
-            'objective': 'regression',
-            'metric': ['l1', 'l2'],
-            'n_estimators': 200,
-            'learning_rate': 0.05,
-            'num_leaves': 31,
-            'max_depth': 6,
-            'min_child_samples': 20,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'reg_alpha': 0.1,
-            'reg_lambda': 0.1,
-            'random_state': 42,
-            'n_jobs': n_jobs,
-            'verbose': -1
+            "objective": "regression",
+            "metric": ["l1", "l2"],
+            "n_estimators": 200,
+            "learning_rate": 0.05,
+            "num_leaves": 31,
+            "max_depth": 6,
+            "min_child_samples": 20,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.1,
+            "random_state": 42,
+            "n_jobs": n_jobs,
+            "verbose": -1,
         }
         lgbm_model = lgb.LGBMRegressor(**lgbm_params)
-        base_estimators.append(('lgbm', lgbm_model))
+        base_estimators.append(("lgbm", lgbm_model))
         logger.info("Added LightGBM base estimator")
     else:
         logger.warning("LightGBM not available, skipping")
 
     # 3. Random Forest - Conservative configuration
     rf_params: Dict[str, Any] = {
-        'n_estimators': 200,
-        'max_depth': 10,  # Conservative to prevent overfitting
-        'min_samples_split': 5,
-        'min_samples_leaf': 2,
-        'max_features': 'sqrt',
-        'random_state': 42,
-        'n_jobs': n_jobs
+        "n_estimators": 200,
+        "max_depth": 10,  # Conservative to prevent overfitting
+        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "random_state": 42,
+        "n_jobs": n_jobs,
     }
     rf_model = RandomForestRegressor(**rf_params)
-    base_estimators.append(('rf', rf_model))
+    base_estimators.append(("rf", rf_model))
     logger.info("Added Random Forest base estimator")
 
     # 4. Ridge Regression - Linear baseline
     ridge_params: Dict[str, Any] = {
-        'alphas': [0.1, 1.0, 10.0],
-        'cv': 5,  # Use standard CV for Ridge (not time series)
-        'scoring': 'neg_mean_absolute_error'
+        "alphas": [0.1, 1.0, 10.0],
+        "cv": 5,  # Use standard CV for Ridge (not time series)
+        "scoring": "neg_mean_absolute_error",
     }
     ridge_model = RidgeCV(**ridge_params)
-    base_estimators.append(('ridge', ridge_model))
+    base_estimators.append(("ridge", ridge_model))
     logger.info("Added Ridge Regression base estimator")
 
     if len(base_estimators) < 2:
@@ -220,7 +222,7 @@ def create_base_estimators(n_jobs: int = -1) -> List[tuple[str, Any]]:
     return base_estimators
 
 
-def create_mlp_meta_learner() -> 'MLPRegressor':
+def create_mlp_meta_learner() -> "MLPRegressor":
     """
     Create MLP meta-learner optimized for NBA predictions.
 
@@ -235,28 +237,28 @@ def create_mlp_meta_learner() -> 'MLPRegressor':
 
     # MLP architecture research-based for NBA data
     meta_params: Dict[str, Any] = {
-        'hidden_layer_sizes': (64, 32),  # Two layers, decreasing size
-        'activation': 'relu',
-        'solver': 'adam',
-        'alpha': 0.001,  # L2 regularization
-        'learning_rate': 'adaptive',
-        'learning_rate_init': 0.001,
-        'max_iter': 1000,
-        'random_state': 42,
-        'early_stopping': True,
-        'validation_fraction': 0.1,
-        'n_iter_no_change': 20,
-        'tol': 1e-4
+        "hidden_layer_sizes": (64, 32),  # Two layers, decreasing size
+        "activation": "relu",
+        "solver": "adam",
+        "alpha": 0.001,  # L2 regularization
+        "learning_rate": "adaptive",
+        "learning_rate_init": 0.001,
+        "max_iter": 1000,
+        "random_state": 42,
+        "early_stopping": True,
+        "validation_fraction": 0.1,
+        "n_iter_no_change": 20,
+        "tol": 1e-4,
     }
 
     meta_learner = MLPRegressor(**meta_params)
     logger.info(
         "Created MLP meta-learner",
         extra={
-            "hidden_layers": meta_params['hidden_layer_sizes'],
-            "activation": meta_params['activation'],
-            "early_stopping": meta_params['early_stopping']
-        }
+            "hidden_layers": meta_params["hidden_layer_sizes"],
+            "activation": meta_params["activation"],
+            "early_stopping": meta_params["early_stopping"],
+        },
     )
 
     return meta_learner
@@ -281,13 +283,12 @@ def validate_ensemble_dependencies() -> None:
         missing_deps.append("lightgbm")
 
     if missing_deps:
-        logger.warning(
-            "Some dependencies missing",
-            extra={"missing": missing_deps}
-        )
+        logger.warning("Some dependencies missing", extra={"missing": missing_deps})
 
 
-def get_ensemble_feature_importance(stacked_model: 'StackingRegressor') -> Dict[str, float]:
+def get_ensemble_feature_importance(
+    stacked_model: "StackingRegressor",
+) -> Dict[str, float]:
     """
     Extract feature importance from stacked ensemble base models.
 
@@ -300,30 +301,54 @@ def get_ensemble_feature_importance(stacked_model: 'StackingRegressor') -> Dict[
     Raises:
         ValueError: If model is not fitted or doesn't support feature importance
     """
-    if not hasattr(stacked_model, 'estimators_'):
-        raise ValueError("Stacked model must be fitted before extracting feature importance")
+    if not hasattr(stacked_model, "estimators_"):
+        raise ValueError(
+            "Stacked model must be fitted before extracting feature importance"
+        )
 
     importance_scores = {}
 
-    for name, estimator in stacked_model.estimators_:
-        try:
-            if hasattr(estimator, 'feature_importances_'):
-                # Get mean importance across all features
-                importance = float(estimator.feature_importances_.mean())
-                importance_scores[name] = importance
-                logger.debug(f"Extracted feature importance for {name}: {importance:.4f}")
-            else:
-                logger.debug(f"Model {name} does not support feature importance")
-        except Exception as e:
-            logger.warning(f"Failed to extract importance from {name}: {e}")
+    try:
+        # StackingRegressor.estimators_ is a list of fitted estimators
+        # StackingRegressor.estimators is a list of (name, estimator) tuples
+        # We handle cases where structure might differ
+
+        # Get names safely
+        names = []
+        if hasattr(stacked_model, "estimators"):
+            for item in stacked_model.estimators:
+                if isinstance(item, tuple) and len(item) >= 1:
+                    names.append(str(item[0]))
+                else:
+                    names.append(f"estimator_{len(names)}")
+
+        # Iterate fitted estimators
+        for i, estimator in enumerate(stacked_model.estimators_):
+            try:
+                # Determine name
+                name = names[i] if i < len(names) else f"estimator_{i}"
+
+                if hasattr(estimator, "feature_importances_"):
+                    # Get mean importance across all features
+                    importance = float(estimator.feature_importances_.mean())
+                    importance_scores[name] = importance
+                    logger.debug(
+                        f"Extracted feature importance for {name}: {importance:.4f}"
+                    )
+                else:
+                    logger.debug(f"Model {name} does not support feature importance")
+            except Exception as e:
+                logger.warning(f"Failed to extract importance from estimator {i}: {e}")
+
+    except Exception as e:
+        logger.warning(f"Failed to iterate estimators for importance: {e}")
 
     return importance_scores
 
 
 def create_conservative_stacked_ensemble(
-    cv_strategy: Optional[Any] = None,
-    n_jobs: int = -1
-) -> 'StackingRegressor':
+    cv_strategy: Optional[Any] = None, n_jobs: int = -1
+) -> "StackingRegressor":
     """
     Create conservative stacked ensemble for limited NBA data.
 
@@ -345,6 +370,7 @@ def create_conservative_stacked_ensemble(
         # Create more conservative CV strategy
         if cv_strategy is None:
             from sklearn.model_selection import KFold
+
             cv_strategy = KFold(n_splits=3, shuffle=True, random_state=42)
 
         # Conservative base estimators
@@ -362,14 +388,14 @@ def create_conservative_stacked_ensemble(
                 reg_lambda=0.3,
                 random_state=42,
                 n_jobs=n_jobs,
-                verbosity=0
+                verbosity=0,
             )
-            conservative_estimators.append(('xgb_conservative', xgb_conservative))
+            conservative_estimators.append(("xgb_conservative", xgb_conservative))
 
         # More conservative LightGBM
         if _lightgbm_available:
             lgbm_conservative = lgb.LGBMRegressor(
-                objective='regression',
+                objective="regression",
                 n_estimators=100,
                 learning_rate=0.03,
                 num_leaves=15,  # Fewer leaves
@@ -381,9 +407,9 @@ def create_conservative_stacked_ensemble(
                 reg_lambda=0.3,
                 random_state=42,
                 n_jobs=n_jobs,
-                verbose=-1
+                verbose=-1,
             )
-            conservative_estimators.append(('lgbm_conservative', lgbm_conservative))
+            conservative_estimators.append(("lgbm_conservative", lgbm_conservative))
 
         # Simple Random Forest
         rf_conservative = RandomForestRegressor(
@@ -391,25 +417,25 @@ def create_conservative_stacked_ensemble(
             max_depth=6,
             min_samples_split=10,
             min_samples_leaf=5,
-            max_features='sqrt',
+            max_features="sqrt",
             random_state=42,
-            n_jobs=n_jobs
+            n_jobs=n_jobs,
         )
-        conservative_estimators.append(('rf_conservative', rf_conservative))
+        conservative_estimators.append(("rf_conservative", rf_conservative))
 
         # Simple Ridge
         ridge_conservative = RidgeCV(alphas=[1.0, 10.0, 100.0], cv=3)
-        conservative_estimators.append(('ridge_conservative', ridge_conservative))
+        conservative_estimators.append(("ridge_conservative", ridge_conservative))
 
         # Conservative meta-learner
         meta_conservative = MLPRegressor(
             hidden_layer_sizes=(32,),  # Single smaller layer
-            activation='relu',
+            activation="relu",
             alpha=0.01,  # Stronger regularization
             learning_rate_init=0.001,
             max_iter=500,
             random_state=42,
-            early_stopping=True
+            early_stopping=True,
         )
 
         conservative_ensemble = StackingRegressor(
@@ -417,15 +443,15 @@ def create_conservative_stacked_ensemble(
             final_estimator=meta_conservative,
             cv=cv_strategy,
             n_jobs=n_jobs,
-            passthrough=True
+            passthrough=True,
         )
 
         logger.info(
             "Conservative stacked ensemble created",
             extra={
                 "base_models": len(conservative_estimators),
-                "cv_strategy": type(cv_strategy).__name__
-            }
+                "cv_strategy": type(cv_strategy).__name__,
+            },
         )
 
         return conservative_ensemble

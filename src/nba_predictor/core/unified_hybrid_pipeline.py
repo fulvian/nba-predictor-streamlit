@@ -285,6 +285,13 @@ class UnifiedHybridPipeline:
                 }
                 self.team_name_to_id = {v: k for k, v in self.team_id_to_name.items()}
                 logger.info("✅ Using comprehensive NBA team mapping")
+
+            # Add common aliases
+            if "Los Angeles Clippers" in self.team_name_to_id:
+                self.team_name_to_id["LA Clippers"] = self.team_name_to_id[
+                    "Los Angeles Clippers"
+                ]
+
         except Exception as e:
             logger.error(f"❌ Error loading team mapping: {e}")
             # Initialize empty mappings as fallback
@@ -2082,7 +2089,7 @@ class UnifiedHybridPipeline:
             )
 
             # 11. Apply Emergency CAP (only for extreme cases)
-            emergency_cap = 20.0  # CAP only for pathological errors
+            emergency_cap = 30.0  # Increased from 20.0 to 30.0 for more flexibility
             final_deviation = predicted_total - line
 
             if abs(final_deviation) > emergency_cap:
@@ -2669,7 +2676,15 @@ class UnifiedHybridPipeline:
     def _get_team_adjustments(
         self, team1: str, team2: str, df: pd.DataFrame
     ) -> Dict[str, float]:
-        """Get team-specific adjustments based on real data."""
+        """
+        Get team-specific adjustments based on Advanced Momentum logic (NotebookLM Best Practice).
+
+        Logic:
+        1. Calculate Weighted Stats (ORtg, Pace) using 0.7 (Recent) / 0.3 (Season) split.
+        2. Estimate Match Pace based on weighted paces of both teams.
+        3. Derive Expected Points from Weighted ORtg and Match Pace.
+        4. Calculate Adjustment as (Expected Points - Baseline Seasonal Points).
+        """
         adjustments = {
             "team1_score": 0.0,
             "team2_score": 0.0,
@@ -2677,56 +2692,135 @@ class UnifiedHybridPipeline:
         }
 
         try:
-            # High-performing teams (based on recent NBA data)
-            high_performance_teams = [
-                "Boston Celtics",
-                "Milwaukee Bucks",
-                "Denver Nuggets",
-                "Phoenix Suns",
-                "Golden State Warriors",
-                "Philadelphia 76ers",
-                "Los Angeles Clippers",
-                "Memphis Grizzlies",
-                "Sacramento Kings",
-                "Cleveland Cavaliers",
-            ]
+            # 1. Setup & Data Preparation
+            # ---------------------------
+            team1_id = self.team_name_to_id.get(team1)
+            team2_id = self.team_name_to_id.get(team2)
 
-            # Lower-performing teams
-            low_performance_teams = [
-                "Detroit Pistons",
-                "Houston Rockets",
-                "San Antonio Spurs",
-                "Charlotte Hornets",
-                "Orlando Magic",
-                "Washington Wizards",
-                "Indiana Pacers",
-                "Portland Trail Blazers",
-            ]
+            if not team1_id or not team2_id:
+                logger.warning(f"Could not find IDs for {team1} or {team2}")
+                return adjustments
 
-            # Calculate adjustments based on team quality
-            recent_games = df.tail(1000) if len(df) > 1000 else df
-            score_std = (
-                recent_games["HOME_SCORE"].std()
-                if "HOME_SCORE" in recent_games.columns
-                else 10.0
+            # Sort by date to ensure correct "recent" vs "season" split
+            df_sorted = df.sort_values("GAME_DATE_EST", ascending=False)
+
+            # Helper to extract metrics for a team
+            def get_team_metrics(t_id, games_df, limit=None):
+                team_games = games_df[
+                    (games_df["HOME_TEAM_ID"] == t_id)
+                    | (games_df["AWAY_TEAM_ID"] == t_id)
+                ]
+
+                if limit:
+                    team_games = team_games.head(limit)
+
+                if len(team_games) == 0:
+                    return None
+
+                ortgs = []
+                paces = []
+
+                for _, game in team_games.iterrows():
+                    if game["HOME_TEAM_ID"] == t_id:
+                        o = game.get("HOME_ORtg", 0)
+                        p = game.get(
+                            "HOME_PACE", 0
+                        )  # Fallback if missing, but should exist
+                        if p == 0:
+                            p = game.get(
+                                "GAME_PACE", 98.0
+                            )  # Fallback to game pace or league avg
+                    else:
+                        o = game.get("AWAY_ORtg", 0)
+                        p = game.get("AWAY_PACE", 0)
+                        if p == 0:
+                            p = game.get("GAME_PACE", 98.0)
+
+                    if not pd.isna(o) and o > 0:
+                        ortgs.append(o)
+                    if not pd.isna(p) and p > 0:
+                        paces.append(p)
+
+                if not ortgs or not paces:
+                    return None
+
+                return {
+                    "ORtg": sum(ortgs) / len(ortgs),
+                    "Pace": sum(paces) / len(paces),
+                }
+
+            # 2. Calculate Metrics (Season vs Recent)
+            # ---------------------------------------
+            # Season: Last ~82 games (or full df provided)
+            t1_season = get_team_metrics(team1_id, df_sorted, limit=82)
+            t2_season = get_team_metrics(team2_id, df_sorted, limit=82)
+
+            # Recent: Last 5 games
+            t1_recent = get_team_metrics(team1_id, df_sorted, limit=5)
+            t2_recent = get_team_metrics(team2_id, df_sorted, limit=5)
+
+            if not (t1_season and t2_season and t1_recent and t2_recent):
+                logger.warning("Insufficient data for advanced momentum calculation")
+                return adjustments
+
+            # 3. Apply Weights (0.7 Recent / 0.3 Season)
+            # ------------------------------------------
+            w_recent = 0.7
+            w_season = 0.3
+
+            t1_weighted_ortg = (t1_recent["ORtg"] * w_recent) + (
+                t1_season["ORtg"] * w_season
+            )
+            t1_weighted_pace = (t1_recent["Pace"] * w_recent) + (
+                t1_season["Pace"] * w_season
             )
 
-            if team1 in high_performance_teams:
-                adjustments["team1_score"] += score_std * 0.3
-                adjustments["efg_pct"] += 0.01
-            elif team1 in low_performance_teams:
-                adjustments["team1_score"] -= score_std * 0.2
-                adjustments["efg_pct"] -= 0.008
+            t2_weighted_ortg = (t2_recent["ORtg"] * w_recent) + (
+                t2_season["ORtg"] * w_season
+            )
+            t2_weighted_pace = (t2_recent["Pace"] * w_recent) + (
+                t2_season["Pace"] * w_season
+            )
 
-            if team2 in high_performance_teams:
-                adjustments["team2_score"] += score_std * 0.3
-                adjustments["efg_pct"] += 0.01
-            elif team2 in low_performance_teams:
-                adjustments["team2_score"] -= score_std * 0.2
-                adjustments["efg_pct"] -= 0.008
+            # 4. Calculate Expected Points & Adjustments
+            # ------------------------------------------
+
+            # A. Baseline (Seasonal) Expectation
+            # What would we predict based purely on seasonal averages?
+            baseline_pace = (t1_season["Pace"] + t2_season["Pace"]) / 2
+            t1_baseline_score = (t1_season["ORtg"] / 100) * baseline_pace
+            t2_baseline_score = (t2_season["ORtg"] / 100) * baseline_pace
+
+            # B. Momentum (Weighted) Expectation
+            # What do we predict based on weighted form?
+            match_pace = (t1_weighted_pace + t2_weighted_pace) / 2
+            t1_momentum_score = (t1_weighted_ortg / 100) * match_pace
+            t2_momentum_score = (t2_weighted_ortg / 100) * match_pace
+
+            # C. The Adjustment (Delta)
+            adj_t1 = t1_momentum_score - t1_baseline_score
+            adj_t2 = t2_momentum_score - t2_baseline_score
+
+            adjustments["team1_score"] = adj_t1
+            adjustments["team2_score"] = adj_t2
+
+            # Small eFG% adjustment based on ORtg trend direction
+            if t1_weighted_ortg > t1_season["ORtg"]:
+                adjustments["efg_pct"] += 0.005
+            else:
+                adjustments["efg_pct"] -= 0.004
+
+            if t2_weighted_ortg > t2_season["ORtg"]:
+                adjustments["efg_pct"] += 0.005
+            else:
+                adjustments["efg_pct"] -= 0.004
+
+            logger.info(
+                f"Advanced Momentum: {team1} Adj={adj_t1:.2f} (ORtg {t1_season['ORtg']:.1f}->{t1_weighted_ortg:.1f}), {team2} Adj={adj_t2:.2f} (ORtg {t2_season['ORtg']:.1f}->{t2_weighted_ortg:.1f})"
+            )
 
         except Exception as e:
-            logger.warning(f"Error calculating team adjustments: {e}")
+            logger.warning(f"Error calculating team adjustments: {e}", exc_info=True)
 
         return adjustments
 

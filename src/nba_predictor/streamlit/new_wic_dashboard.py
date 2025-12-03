@@ -467,7 +467,9 @@ def render_step_2_predictor():
                     home_team=game.get("home_team"),
                     away_team=game.get("away_team"),
                     game_date=g_date,
+                    betting_line=game.get("total_line", 220.0),  # Add explicit line
                     include_detailed_analysis=True,
+                    force_refresh=True,  # Force refresh to prevent stale predictions
                 )
 
                 # Store in State
