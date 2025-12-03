@@ -3,7 +3,7 @@
 🏀 ENHANCED PREDICTION BRIDGE PROFESSIONAL - Bridge NBA con Previsioni Avanzate
 
 Integra il motore di previsione avanzato nel sistema Streamlit:
-1. ✅ Usa Advanced NBA Prediction Engine con team metrics
+1. ✅ Usa Unified Hybrid Pipeline (New System)
 2. ✅ Confidence intervals e probability distributions
 3. ✅ Situational factors analysis
 4. ✅ Professional betting recommendations
@@ -16,29 +16,13 @@ from datetime import date, datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, Optional, List
-from datetime import datetime, date
 import logging
 
-logger = logging.getLogger(__name__)
-# Add the predictive system directory to path
-project_root = Path(__file__).resolve().parents[4]
-predictive_system_path = project_root / "nba_predictive_system"
-if str(predictive_system_path) not in sys.path:
-    sys.path.append(str(predictive_system_path))
-
-try:
-    from advanced_nba_prediction_engine import (
-        predict_nba_game_advanced,
-        get_advanced_prediction_engine,
-        PredictionResult,
-    )
-except ImportError as e:
-    # Fallback se il modulo non è trovato
-    logger.warning(f"⚠️ Advanced prediction engine not found: {e}, using fallback")
-    predict_nba_game_advanced = None
-    get_advanced_prediction_engine = None
-    PredictionResult = None
+# Import Unified Pipeline
+from nba_predictor.core.unified_hybrid_pipeline import (
+    get_unified_hybrid_pipeline,
+    UnifiedPredictionResult,
+)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -46,23 +30,17 @@ logger = logging.getLogger(__name__)
 
 
 class EnhancedPredictionBridgeProfessional:
-    """Bridge professionale per previsioni NBA avanzate."""
+    """Bridge professionale per previsioni NBA avanzate (Unified Hybrid System)."""
 
     def __init__(self):
         """Inizializza il bridge professionale."""
-        logger.info("🚀 Initializing Enhanced NBA Prediction Bridge Professional...")
+        logger.info(
+            "🚀 Initializing Enhanced NBA Prediction Bridge Professional (Unified System)..."
+        )
 
         try:
-            if get_advanced_prediction_engine:
-                self.prediction_engine = get_advanced_prediction_engine()
-            else:
-                logger.warning(
-                    "⚠️ Prediction engine function is None, using fallback mode"
-                )
-                self.prediction_engine = None
-
+            self.prediction_engine = get_unified_hybrid_pipeline()
             self.historical_data = self._load_historical_data()
-            self.calibration_data = {}
 
             logger.info(
                 "✅ Enhanced Prediction Bridge Professional initialized successfully"
@@ -76,6 +54,7 @@ class EnhancedPredictionBridgeProfessional:
     def _load_historical_data(self) -> Optional[pd.DataFrame]:
         """Carica dati storici per calibration."""
         try:
+            # Use the pipeline's data if possible, or load directly
             df = pd.read_csv("data/nba_data_with_mu_sigma_for_ml.csv", low_memory=False)
 
             # Filtra solo partite valide
@@ -107,20 +86,10 @@ class EnhancedPredictionBridgeProfessional:
     ) -> Dict[str, Any]:
         """
         Ottieni previsione professionale con analisi dettagliata.
-
-        Args:
-            home_team: Team casa
-            away_team: Team ospite
-            game_date: Data partita
-            betting_line: Linea di betting (opzionale)
-            include_detailed_analysis: Include analisi dettagliata
-
-        Returns:
-            Dict con previsione professionale e analisi
         """
 
         logger.info(
-            f"🎯 Professional prediction: {away_team} @ {home_team} ({game_date})"
+            f"🎯 Professional prediction (Unified): {away_team} @ {home_team} ({game_date})"
         )
 
         try:
@@ -129,12 +98,18 @@ class EnhancedPredictionBridgeProfessional:
                     home_team, away_team, "Engine not available"
                 )
 
-            # Esegui previsione avanzata
-            prediction_result = predict_nba_game_advanced(
+            # Ensure betting line is a float, default to 225.0 if None
+            line = float(betting_line) if betting_line else 225.0
+
+            # Esegui previsione unificata
+            # Note: predict_unified expects team1, team2. We map away=team1, home=team2 usually,
+            # but let's stick to the method signature: predict_unified(team1, team2, line, home_team=...)
+            prediction_result = self.prediction_engine.predict_unified(
+                team1=away_team,
+                team2=home_team,
+                line=line,
                 home_team=home_team,
-                away_team=away_team,
-                game_date=game_date,
-                betting_line=betting_line,
+                validate_prediction=True,
             )
 
             # Costruisci response professionale
@@ -143,39 +118,62 @@ class EnhancedPredictionBridgeProfessional:
                 "status": "success",
                 "predicted_total": prediction_result.predicted_total,
                 "confidence_interval": prediction_result.confidence_interval,
-                "standard_error": prediction_result.standard_error,
-                "model_confidence": prediction_result.model_confidence,
+                "standard_error": (
+                    prediction_result.confidence_interval[1]
+                    - prediction_result.predicted_total
+                )
+                / 1.96,  # Approx
+                "model_confidence": prediction_result.confidence
+                / 100.0,  # Convert 0-100 to 0-1
                 "recommendation": prediction_result.recommendation,
                 # Professional analysis
                 "professional_analysis": self._build_professional_analysis(
-                    prediction_result, home_team, away_team, betting_line
+                    prediction_result, home_team, away_team, line
                 ),
                 # Risk management
                 "risk_assessment": self._calculate_risk_assessment(
-                    prediction_result, betting_line
+                    prediction_result, line
                 ),
                 # Model validation
                 "model_validation": self._validate_prediction(prediction_result),
                 # Metadata
-                "prediction_method": "Advanced NBA Engine",
+                "prediction_method": "Unified Hybrid Pipeline (Enhanced)",
                 "data_quality": self._assess_data_quality(),
                 "prediction_timestamp": datetime.now().isoformat(),
                 "game_date": game_date.isoformat(),
-                "betting_line": betting_line,
+                "betting_line": line,
             }
 
             if include_detailed_analysis:
                 response.update(
                     {
-                        "team_metrics": self._format_team_metrics(
-                            prediction_result.team_metrics
-                        ),
-                        "situational_factors": prediction_result.situational_adjustments,
-                        "probability_analysis": prediction_result.probability_over_line,
+                        "team_metrics": {
+                            "home": {"team_name": home_team},  # Simplified for now
+                            "away": {"team_name": away_team},
+                        },
+                        "situational_factors": {
+                            "injury_impact": prediction_result.injury_impact.get(
+                                "impact_score", 0
+                            ),
+                            "momentum": prediction_result.player_momentum.get(
+                                "momentum_score", 0
+                            ),
+                        },
+                        "probability_analysis": {
+                            "over": prediction_result.over_probability,
+                            "under": prediction_result.under_probability,
+                        },
                         "historical_comparisons": self._find_historical_comparisons(
                             prediction_result.predicted_total
                         ),
-                        "prediction_factors": prediction_result.prediction_factors,
+                        "prediction_factors": {
+                            "shap_values": getattr(
+                                prediction_result, "shap_values", {}
+                            ),
+                            "feature_importance": getattr(
+                                prediction_result, "feature_importance", {}
+                            ),
+                        },
                     }
                 )
 
@@ -187,18 +185,18 @@ class EnhancedPredictionBridgeProfessional:
 
     def _build_professional_analysis(
         self,
-        prediction_result: PredictionResult,
+        prediction_result: UnifiedPredictionResult,
         home_team: str,
         away_team: str,
         betting_line: Optional[float],
     ) -> Dict[str, Any]:
         """Costruisci analisi professionale dettagliata."""
 
+        confidence_val = prediction_result.confidence / 100.0
+
         analysis = {
-            "summary": f"Prediction: {prediction_result.predicted_total} points total",
-            "confidence_level": self._interpret_confidence(
-                prediction_result.model_confidence
-            ),
+            "summary": f"Prediction: {prediction_result.predicted_total:.1f} points total",
+            "confidence_level": self._interpret_confidence(confidence_val),
             "edge_analysis": self._analyze_betting_edge(
                 prediction_result, betting_line
             ),
@@ -210,35 +208,21 @@ class EnhancedPredictionBridgeProfessional:
         # Aggiungi insights specifici
         insights = []
 
-        # Team matchup analysis
-        if prediction_result.team_metrics:
-            home_metrics = prediction_result.team_metrics.get("home")
-            away_metrics = prediction_result.team_metrics.get("away")
-
-            if home_metrics and away_metrics:
-                # Offensive matchup
-                if home_metrics.offensive_rating > away_metrics.defensive_rating + 5:
-                    insights.append(
-                        f"Strong offensive matchup: {home_team} offense vs {away_team} defense"
-                    )
-                if away_metrics.offensive_rating > home_metrics.defensive_rating + 5:
-                    insights.append(
-                        f"Strong offensive matchup: {away_team} offense vs {home_team} defense"
-                    )
-
-                # Pace analysis
-                avg_pace = (home_metrics.pace + away_metrics.pace) / 2
-                if avg_pace > 100:
-                    insights.append(f"Fast-paced game expected (pace: {avg_pace:.1f})")
-                elif avg_pace < 95:
-                    insights.append(f"Slow-paced game expected (pace: {avg_pace:.1f})")
-
-        # Situational insights
-        total_adjustment = sum(prediction_result.situational_adjustments.values())
-        if abs(total_adjustment) > 3:
-            direction = "increasing" if total_adjustment > 0 else "decreasing"
+        # Add insights from the unified result
+        if (
+            prediction_result.injury_impact
+            and prediction_result.injury_impact.get("impact_score", 0) != 0
+        ):
             insights.append(
-                f"Significant situational factors {direction} total by {abs(total_adjustment):.1f} points"
+                f"Injury Impact: {prediction_result.injury_impact.get('summary', 'N/A')}"
+            )
+
+        if (
+            prediction_result.player_momentum
+            and prediction_result.player_momentum.get("momentum_score", 0) != 0
+        ):
+            insights.append(
+                f"Momentum: {prediction_result.player_momentum.get('summary', 'N/A')}"
             )
 
         analysis["insights"] = insights
@@ -259,7 +243,7 @@ class EnhancedPredictionBridgeProfessional:
             return "Very Low"
 
     def _analyze_betting_edge(
-        self, prediction_result: PredictionResult, betting_line: Optional[float]
+        self, prediction_result: UnifiedPredictionResult, betting_line: Optional[float]
     ) -> Dict[str, Any]:
         """Analizza betting edge."""
         if not betting_line:
@@ -291,14 +275,14 @@ class EnhancedPredictionBridgeProfessional:
         }
 
     def _assess_betting_value(
-        self, prediction_result: PredictionResult, betting_line: Optional[float]
+        self, prediction_result: UnifiedPredictionResult, betting_line: Optional[float]
     ) -> Dict[str, Any]:
         """Assess betting value."""
         if not betting_line:
             return {"value_score": 0.0, "recommendation": "No line available"}
 
         edge = prediction_result.predicted_total - betting_line
-        confidence = prediction_result.model_confidence
+        confidence = prediction_result.confidence / 100.0
 
         # Calculate value score (edge * confidence)
         value_score = abs(edge) * confidence
@@ -325,7 +309,7 @@ class EnhancedPredictionBridgeProfessional:
         }
 
     def _calculate_risk_assessment(
-        self, prediction_result: PredictionResult, betting_line: Optional[float]
+        self, prediction_result: UnifiedPredictionResult, betting_line: Optional[float]
     ) -> Dict[str, Any]:
         """Calculate risk assessment for the prediction."""
 
@@ -333,7 +317,7 @@ class EnhancedPredictionBridgeProfessional:
         risk_score = 0  # 0-100 scale
 
         # Confidence risk
-        confidence = prediction_result.model_confidence
+        confidence = prediction_result.confidence / 100.0
         if confidence < 0.3:
             risk_factors.append("Low model confidence")
             risk_score += 30
@@ -341,8 +325,10 @@ class EnhancedPredictionBridgeProfessional:
             risk_factors.append("Moderate model confidence")
             risk_score += 15
 
-        # Standard error risk
-        std_error = prediction_result.standard_error
+        # Standard error risk (approximate from CI)
+        std_error = (
+            prediction_result.confidence_interval[1] - prediction_result.predicted_total
+        ) / 1.96
         if std_error > 25:
             risk_factors.append("High prediction uncertainty")
             risk_score += 20
@@ -381,7 +367,7 @@ class EnhancedPredictionBridgeProfessional:
         }
 
     def _validate_prediction(
-        self, prediction_result: PredictionResult
+        self, prediction_result: UnifiedPredictionResult
     ) -> Dict[str, Any]:
         """Validate prediction against historical patterns."""
 
@@ -407,15 +393,9 @@ class EnhancedPredictionBridgeProfessional:
         else:
             validation_checks.append("⚠️ Unusual confidence interval width")
 
-        # Standard error validation
-        if 10 <= prediction_result.standard_error <= 25:
-            validation_checks.append("✅ Reasonable prediction uncertainty")
-            validation_score += 20
-        else:
-            validation_checks.append("⚠️ Unusual prediction uncertainty")
-
         # Model confidence validation
-        if 0.2 <= prediction_result.model_confidence <= 0.9:
+        conf = prediction_result.confidence / 100.0
+        if 0.2 <= conf <= 0.9:
             validation_checks.append("✅ Appropriate model confidence")
             validation_score += 15
         else:
@@ -474,26 +454,6 @@ class EnhancedPredictionBridgeProfessional:
             return 0.7
         else:
             return 0.5
-
-    def _format_team_metrics(self, team_metrics: Dict[str, Any]) -> Dict[str, Any]:
-        """Format team metrics for display."""
-        formatted = {}
-
-        for location, metrics in team_metrics.items():
-            if metrics:
-                formatted[location] = {
-                    "team_name": metrics.team_name,
-                    "offensive_rating": round(metrics.offensive_rating, 1),
-                    "defensive_rating": round(metrics.defensive_rating, 1),
-                    "net_rating": round(metrics.net_rating, 1),
-                    "pace": round(metrics.pace, 1),
-                    "home_offensive_rating": round(metrics.home_offensive_rating, 1),
-                    "away_offensive_rating": round(metrics.away_offensive_rating, 1),
-                    "home_defensive_rating": round(metrics.home_defensive_rating, 1),
-                    "away_defensive_rating": round(metrics.away_defensive_rating, 1),
-                }
-
-        return formatted
 
     def _find_historical_comparisons(
         self, predicted_total: float, limit: int = 5

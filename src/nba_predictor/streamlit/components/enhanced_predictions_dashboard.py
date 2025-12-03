@@ -510,6 +510,62 @@ def _render_enhanced_prediction_results(
                 f"• Temporal Validation: {'✅ Active' if temporal_validation else '❌ Inactive'}"
             )
 
+        # EV Analysis Section
+        ev_analysis = prediction_data.get("ev_analysis")
+        if ev_analysis:
+            st.markdown("---")
+            st.subheader("💰 Value Betting Analysis")
+
+            ev_cols = st.columns(4)
+            with ev_cols[0]:
+                st.metric(
+                    "Expected Value (EV)",
+                    f"{ev_analysis.get('ev_percentage', 0):.1f}%",
+                    delta="Positive EV"
+                    if ev_analysis.get("ev_percentage", 0) > 0
+                    else "Negative EV",
+                    delta_color="normal"
+                    if ev_analysis.get("ev_percentage", 0) > 0
+                    else "inverse",
+                )
+            with ev_cols[1]:
+                st.metric("Edge", f"{ev_analysis.get('edge', 0):.1%}")
+            with ev_cols[2]:
+                st.metric("Kelly Stake", f"{ev_analysis.get('kelly_stake', 0):.1%}")
+            with ev_cols[3]:
+                is_value = ev_analysis.get("is_value", False)
+                st.metric("Value Bet?", "✅ YES" if is_value else "❌ NO")
+
+            if ev_analysis.get("reason"):
+                st.info(f"💡 **Analysis:** {ev_analysis.get('reason')}")
+
+        # Bayesian Update Section
+        bayesian_update = prediction_data.get("bayesian_update")
+        if bayesian_update:
+            st.markdown("---")
+            st.subheader("🔄 Live Updates (Bayesian)")
+
+            bayes_cols = st.columns(3)
+            with bayes_cols[0]:
+                st.metric(
+                    "Live Adjusted Total",
+                    f"{bayesian_update.get('updated_total', 0):.1f}",
+                    delta=f"{bayesian_update.get('updated_total', 0) - prediction_data.get('predicted_total', 0):.1f} vs Pre-Game",
+                )
+            with bayes_cols[1]:
+                st.metric(
+                    "News Items Processed", f"{bayesian_update.get('news_count', 0)}"
+                )
+            with bayes_cols[2]:
+                orig_ci = bayesian_update.get("original_ci", [0, 0])
+                new_ci = bayesian_update.get("updated_ci", [0, 0])
+                uncertainty_change = (new_ci[1] - new_ci[0]) - (orig_ci[1] - orig_ci[0])
+                st.metric(
+                    "Uncertainty Change",
+                    f"{uncertainty_change:+.1f}",
+                    help="Change in confidence interval width due to new information",
+                )
+
         # SHAP Explanations section
         _render_shap_explanations(prediction_data, home_team, away_team)
 

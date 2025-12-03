@@ -1,7 +1,7 @@
 # 📘 NBA Predictor - System Development Documentation
 
-> **Version:** 2.0.0
-> **Last Updated:** 2025-12-02
+> **Version:** 2.1.0
+> **Last Updated:** 2025-12-03
 > **Status:** Production Ready
 > **Author:** Antigravity (Google Deepmind) & User
 
@@ -12,8 +12,9 @@
 The **NBA Predictor** is a professional-grade predictive analytics system designed to forecast NBA game outcomes with high precision. It leverages a hybrid architecture that combines:
 1.  **Real-Time Data Integration:** Fetches live game data, player stats, and odds from multiple external APIs.
 2.  **Advanced Machine Learning:** Utilizes an ensemble of XGBoost and Neural Networks, enhanced by a "Unified Hybrid Pipeline" that merges rule-based expert systems with data-driven ML models.
-3.  **Risk Management:** Implements a sophisticated betting strategy based on the Kelly Criterion and dynamic bankroll management.
-4.  **Interactive Dashboard:** A Streamlit-based UI ("WIC Dashboard") that guides the user through a structured workflow: *Update -> Schedule -> Predict -> Analyze -> Trade -> Portfolio*.
+3.  **Value Betting (EV+):** Identifies profitable betting opportunities using **Fractional Kelly Criterion** and strict safety filters (Edge > 2.5%, Confidence > 60%).
+4.  **Dynamic Bayesian Updates:** Adjusts predictions in real-time based on breaking news (e.g., injuries) using **Monte Carlo simulations** and Bayesian inference.
+5.  **Interactive Dashboard:** A Streamlit-based UI ("WIC Dashboard") that guides the user through a structured workflow: *Update -> Schedule -> Predict -> Analyze -> Trade -> Portfolio*.
 
 The system is built with a "No Compromise" philosophy, ensuring that every prediction is grounded in real, up-to-date data and statistically validated models.
 
@@ -29,10 +30,12 @@ graph TD
         API1[NBA API]
         API2[BallDontLie]
         API3[The Odds API]
+        API4[Twitter/X API (News)]
     end
 
     subgraph "Data Ingestion & Storage"
         DP[NBADataProvider] -->|Fetch & Normalize| UDS[UnifiedDataStore]
+        NA[NewsAggregator] -->|Fetch News| UDS
         UDS -->|Store| DB[(DuckDB / Parquet)]
         UDS -->|Cache| Redis[Redis Cache]
     end
@@ -41,12 +44,18 @@ graph TD
         UHP[Unified Hybrid Pipeline]
         ANPE[Advanced Prediction Engine]
         NEP[NBA Ensemble Predictor]
+        EVC[EV Calculator]
+        BU[Bayesian Updater]
         
         UDS --> UHP
         UHP --> ANPE
         UHP --> NEP
-        ANPE -->|Rule-Based| Pred[Prediction Result]
+        UHP --> EVC
+        UHP --> BU
+        ANPE -->|Rule-Based| Pred[Unified Prediction Result]
         NEP -->|ML-Based| Pred
+        EVC -->|Value Analysis| Pred
+        BU -->|Live Updates| Pred
     end
 
     subgraph "Business Logic"
@@ -70,14 +79,16 @@ graph TD
     API1 --> DP
     API2 --> DP
     API3 --> DP
+    API4 --> NA
 ```
 
 ### Key Components
 
 *   **UnifiedDataStore (`src/nba_predictor/core/data_store.py`)**: The central data access layer. It abstracts the underlying storage (Parquet files queried via DuckDB) and provides a unified API for retrieving games, stats, and odds.
-*   **NBADataProvider (`src/nba_predictor/api/data_provider.py`)**: Responsible for fetching external data. It handles API rate limits, data normalization, and fallback strategies (e.g., checking local cache before calling APIs).
-*   **AdvancedNBAPredictionEngine (`nba_predictive_system/advanced_nba_prediction_engine.py`)**: The core expert system. It calculates team ratings (Offensive/Defensive), pace, and applies deterministic situational adjustments (Back-to-Back, Rest Days, Travel) based on historical averages.
-*   **LegacyRiskManager (`src/nba_predictor/utils/legacy_risk_manager.py`)**: Implements the financial logic. It calculates the optimal stake using a modified Kelly Criterion, considering the "Quality Score" of a bet (Edge, Confidence, Odds).
+*   **UnifiedHybridPipeline (`src/nba_predictor/core/unified_hybrid_pipeline.py`)**: The orchestrator that combines data, ML models, and analytical components. It integrates `EVCalculator` and `BayesianUpdater` into the prediction flow.
+*   **EVCalculator (`src/nba_predictor/analytics/ev_calculator.py`)**: Calculates Expected Value (EV) and recommends stake sizes using a **Fractional Kelly (0.25x)** strategy. It applies safety filters to ensure only high-quality bets are recommended.
+*   **BayesianUpdater (`src/nba_predictor/intelligence/bayesian_updater.py`)**: Dynamically adjusts predictions based on real-time news. It uses **Monte Carlo simulations (5000 runs)** to model the impact of injuries and other factors on the score distribution.
+*   **NewsAggregator (`src/nba_predictor/intelligence/news_aggregator.py`)**: Aggregates real-time news from sources like Twitter/X and The Odds API to feed the Bayesian Updater.
 *   **WIC Dashboard (`src/nba_predictor/streamlit/new_wic_dashboard.py`)**: The user interface. It implements the "Workflow Intelligent Control" pattern, guiding the user step-by-step.
 
 ---
@@ -94,11 +105,11 @@ graph TD
 *   **Pandas / Polars:** Data manipulation and analysis. Polars is used for high-performance data processing.
 *   **JSON:** Lightweight storage for configuration and state (e.g., `bankroll.json`).
 
-### Machine Learning
+### Machine Learning & Analytics
 *   **Scikit-Learn:** Base ML algorithms and preprocessing (StandardScaler, etc.).
 *   **XGBoost:** Gradient boosting framework for high-performance classification/regression.
-*   **TensorFlow / Keras:** Neural Networks for deep learning components (optional/hybrid).
-*   **SciPy:** Statistical functions (Normal distribution, Z-scores).
+*   **SciPy / NumPy:** Statistical functions (Normal distribution, Z-scores, Monte Carlo simulations).
+*   **Bayesian Inference:** Custom logic for probabilistic updates.
 
 ### Web & UI
 *   **Streamlit:** Rapid application development framework for the dashboard.
@@ -108,6 +119,7 @@ graph TD
 *   **nba_api:** Official NBA stats endpoints.
 *   **BallDontLie API:** Free NBA data (players, teams, games).
 *   **The Odds API:** Real-time betting odds.
+*   **Twitter/X API:** Real-time news (simulated/integrated).
 
 ---
 
@@ -129,16 +141,19 @@ The `AdvancedNBAPredictionEngine` generates features dynamically:
     *   *Back-to-Back:* Fixed penalty for playing on consecutive nights.
 *   **Matchup Analysis:** Head-to-head history and style contrast (e.g., Fast Pace vs. Slow Pace).
 
-### 4.3. Prediction Generation
-The prediction process is deterministic to ensure stability:
-1.  **Base Prediction:** Calculated from Team Metrics (Home Offense vs. Away Defense, adjusted for Pace).
-2.  **Adjustments:** Situational factors are added/subtracted.
-3.  **Confidence Interval:** A 95% confidence interval is generated based on historical standard error.
-4.  **Probability Distribution:** Z-scores are calculated against the betting line to determine the probability of Over/Under.
+### 4.3. Prediction Generation & Analysis
+The prediction process is a multi-stage pipeline:
+1.  **Base Prediction:** Calculated from Team Metrics and ML models.
+2.  **Adjustments:** Situational factors are applied.
+3.  **Bayesian Update (New):** If new information (e.g., injury news) is available, a Bayesian update is performed using Monte Carlo simulations to adjust the mean and standard deviation of the prediction.
+4.  **EV Analysis (New):** The final probability is compared against the bookmaker's implied probability.
+    *   *Edge Calculation:* `(Model Prob - Implied Prob) / Implied Prob`
+    *   *Kelly Staking:* `(Edge / Odds - 1)` * Fraction (0.25)
+5.  **Validation:** The `UnifiedHybridPipeline` ensures predictions fall within realistic NBA ranges (e.g., Total Score 180-280).
 
 ### 4.4. Model Precision
-*   **Calibration:** The system uses deterministic adjustments derived from historical averages (e.g., -2.5 points for B2B) rather than random sampling, ensuring consistent outputs.
-*   **Validation:** The `UnifiedHybridPipeline` ensures predictions fall within realistic NBA ranges (e.g., Total Score 180-280).
+*   **Calibration:** The system uses deterministic adjustments derived from historical averages rather than random sampling, ensuring consistent outputs.
+*   **Uncertainty Modeling:** Bayesian updates explicitly model the increase in uncertainty (wider confidence intervals) when late-breaking news occurs.
 
 ---
 

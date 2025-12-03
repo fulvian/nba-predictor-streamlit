@@ -66,9 +66,10 @@ class FourFactorsEngineer:
                 fga = game_data["field_goals_attempted"]
                 fg3m = game_data.get("three_pointers_made", 0)
                 efg_pct = ((fgm + 0.5 * fg3m) / fga) if fga > 0 else 0.450
-                features["efg_pct"] = np.clip(efg_pct, 0.450, 0.580)
+                # Widen clipping range for modern NBA (up to 0.750 is possible in high scoring games)
+                features["efg_pct"] = np.clip(efg_pct, 0.350, 0.750)
             else:
-                features["efg_pct"] = 0.492  # NBA average
+                features["efg_pct"] = 0.540  # Modern NBA average (approx)
 
             # Turnover Percentage
             if "turnovers" in game_data and "field_goals_attempted" in game_data:
@@ -77,9 +78,9 @@ class FourFactorsEngineer:
                 fta = game_data.get("free_throws_attempted", 0)
                 possessions = fga + 0.44 * fta - game_data.get("offensive_rebounds", 0)
                 tov_pct = (tov / possessions) if possessions > 0 else 0.138
-                features["tov_pct"] = np.clip(tov_pct, 0.100, 0.180)
+                features["tov_pct"] = np.clip(tov_pct, 0.050, 0.250)
             else:
-                features["tov_pct"] = 0.138  # NBA average
+                features["tov_pct"] = 0.130  # Modern NBA average
 
             # Offensive Rebound Percentage
             if (
@@ -91,9 +92,9 @@ class FourFactorsEngineer:
                 fta = game_data.get("free_throws_attempted", 0)
                 possessions = fga + 0.44 * fta
                 orb_pct = (orb / (possessions - orb)) if possessions > 0 else 0.217
-                features["orb_pct"] = np.clip(orb_pct, 0.200, 0.320)
+                features["orb_pct"] = np.clip(orb_pct, 0.100, 0.400)
             else:
-                features["orb_pct"] = 0.217  # NBA average
+                features["orb_pct"] = 0.240  # Modern NBA average
 
             # Free Throw Rate
             if "free_throws_made" in game_data and "field_goals_attempted" in game_data:
@@ -101,9 +102,9 @@ class FourFactorsEngineer:
                 fga = game_data["field_goals_attempted"]
                 fta = game_data.get("free_throws_attempted", 0)
                 ftr = (ftm / fga) if fga > 0 else 0.197
-                features["ftr"] = np.clip(ftr, 0.150, 0.300)
+                features["ftr"] = np.clip(ftr, 0.100, 0.450)
             else:
-                features["ftr"] = 0.197  # NBA average
+                features["ftr"] = 0.200  # Modern NBA average
 
             return features
 
