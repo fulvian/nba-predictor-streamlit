@@ -104,33 +104,31 @@ def render_prediction_summary(prediction: Dict[str, Any]):
 
     # Create HTML Card
     card_html = f"""
-    <div class="game-card">
-        <div class="card-header">
-            <div class="team-name">{away_team} @ {home_team}</div>
-            <div class="game-time">Live Analysis</div>
-        </div>
-        
-        <div class="odds-section">
-            <div class="odds-box">
-                <div class="odds-label">Predicted Total</div>
-                <div class="odds-value">{predicted_total:.1f}</div>
-            </div>
-            <div class="odds-box">
-                <div class="odds-label">Confidence</div>
-                <div class="odds-value">{confidence:.1f}%</div>
-            </div>
-             <div class="odds-box">
-                <div class="odds-label">Edge</div>
-                <div class="odds-value"><span class="ev-badge {ev_class}">{ev_display}</span></div>
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 10px;">
-            <div class="odds-label">Recommendation</div>
-            <div style="font-size: 1.2rem; font-weight: 700; color: var(--primary-color);">{recommendation}</div>
-        </div>
-    </div>
-    """
+<div class="game-card">
+<div class="card-header">
+<div class="team-name">{away_team} @ {home_team}</div>
+<div class="game-time">Live Analysis</div>
+</div>
+<div class="odds-section">
+<div class="odds-box">
+<div class="odds-label">Predicted Total</div>
+<div class="odds-value">{predicted_total:.1f}</div>
+</div>
+<div class="odds-box">
+<div class="odds-label">Confidence</div>
+<div class="odds-value">{confidence:.1f}%</div>
+</div>
+<div class="odds-box">
+<div class="odds-label">Edge</div>
+<div class="odds-value"><span class="ev-badge {ev_class}">{ev_display}</span></div>
+</div>
+</div>
+<div style="text-align: center; margin-top: 10px;">
+<div class="odds-label">Recommendation</div>
+<div style="font-size: 1.2rem; font-weight: 700; color: var(--primary-color);">{recommendation}</div>
+</div>
+</div>
+"""
 
     st.markdown(card_html, unsafe_allow_html=True)
 
