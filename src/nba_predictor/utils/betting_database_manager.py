@@ -547,15 +547,14 @@ class SecureBettingDatabaseManager:
         self, bet_id: str, user_id: str, audit_user: str = None
     ) -> bool:
         """
-        Safely delete a pending bet for a specific user.
-        Only allows deleting bets that are in 'PENDING' status.
+        Safely delete a bet for a specific user.
         """
         validated_bet_id = self._validate_user_input(bet_id, "bet_id")
         validated_user_id = self._validate_user_input(user_id, "user_id")
 
         query = """
             DELETE FROM bets
-            WHERE bet_id = ? AND user_id = ? AND status = 'PENDING'
+            WHERE bet_id = ? AND user_id = ?
         """
 
         # We can't easily check rowcount with the current safe_execute_query wrapper for DELETE
