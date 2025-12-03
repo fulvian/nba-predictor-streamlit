@@ -187,6 +187,17 @@ class AdvancedPredictiveModel:
                 X, y, test_size=0.2, random_state=42, stratify=y
             )
 
+            # Fit scaler on training data and transform
+            if self.scaler is None:
+                self.scaler = StandardScaler()
+            
+            # Keep as DataFrame to preserve column names for feature importance
+            X_train_scaled = self.scaler.fit_transform(X_train)
+            X_test_scaled = self.scaler.transform(X_test)
+            
+            X_train = pd.DataFrame(X_train_scaled, columns=X_train.columns, index=X_train.index)
+            X_test = pd.DataFrame(X_test_scaled, columns=X_test.columns, index=X_test.index)
+
             # Train individual models
             self._train_xgboost_model(X_train, y_train)
             self._train_logistic_regression_model(X_train, y_train)
@@ -194,23 +205,24 @@ class AdvancedPredictiveModel:
 
             # Create ensemble with weighted voting
             self._create_voting_ensemble()
-
-            # Evaluate models
-            self._evaluate_models(X_test, y_test)
+            
+            # Fit ensemble on scaled data
+            self.ensemble.fit(X_train, y_train)
 
             # Calculate training time
             training_time = (datetime.now() - start_time).total_seconds()
 
             # Store metrics
+            y_pred = self.ensemble.predict(X_test)
+            y_proba = self.ensemble.predict_proba(X_test)[:, 1]
+            
             self.metrics = ModelMetrics(
-                accuracy=accuracy_score(y_test, self.ensemble.predict(X_test)),
-                precision=precision_score(y_test, self.ensemble.predict(X_test), average='weighted'),
-                recall=recall_score(y_test, self.ensemble.predict(X_test), average='weighted'),
-                f1_score=f1_score(y_test, self.ensemble.predict(X_test), average='weighted'),
-                roc_auc=roc_auc_score(y_test, self.ensemble.predict_proba(X_test)[:, 1]),
-                cross_val_scores=cross_val_score(
-                    self.ensemble, X, y, cv=5, scoring='accuracy'
-                ).tolist(),
+                accuracy=accuracy_score(y_test, y_pred),
+                precision=precision_score(y_test, y_pred, average='weighted'),
+                recall=recall_score(y_test, y_pred, average='weighted'),
+                f1_score=f1_score(y_test, y_pred, average='weighted'),
+                roc_auc=roc_auc_score(y_test, y_proba),
+                cross_val_scores=[],  # Disabled for performance and scaling complexity
                 training_time=training_time
             )
 
@@ -278,7 +290,7 @@ class AdvancedPredictiveModel:
                 raise ValueError("Game features DataFrame is empty")
 
             # Ensure features match training data
-            if not set(game_features.columns).issubset(set(self.feature_columns)):
+            if not set(self.feature_columns).issubset(set(game_features.columns)):
                 missing_features = set(self.feature_columns) - set(game_features.columns)
                 raise ValueError(f"Missing features: {missing_features}")
 

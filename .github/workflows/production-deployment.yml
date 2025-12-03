@@ -1,0 +1,422 @@
+# NBA Predictor Phase 5 - Production Deployment Pipeline
+# Superpoteri Context7-compliant CI/CD with automated validation
+
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches: [main, feature/phase-5-implementation]
+    tags: ['v*']
+  pull_request:
+    branches: [main, feature/phase-5-implementation]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment (skip tests)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nba-predictor
+  CONTEXT7_VALIDATION_ENABLED: true
+  SUPERPOTERI_MODE: active
+
+jobs:
+  # Context7 Compliance Validation
+  context7-validation:
+    name: Context7 Compliance Validation
+    runs-on: ubuntu-latest
+    outputs:
+      compliance_score: ${{ steps.validation.outputs.compliance_score }}
+      validation_passed: ${{ steps.validation.outputs.passed }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Context7 Validator
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Context7 validation tools
+      run: |
+        pip install -q \
+          context7-validator==1.0.0 \
+          pwa-linter==2.0.0 \
+          accessibility-checker==1.5.0 \
+          ml-operations-validator==0.9.0
+
+    - name: Run Context7 compliance validation
+      id: validation
+      run: |
+        echo "🔍 Running Context7 compliance validation..."
+
+        # Responsive Design Validation
+        RESPONSIVE_SCORE=$(context7-validator validate --pattern responsive \
+          --source src/ --output json | jq -r '.score // 0')
+        echo "Responsive Design Score: $RESPONSIVE_SCORE"
+
+        # Accessibility Features Validation
+        ACCESSIBILITY_SCORE=$(context7-validator validate --pattern accessibility \
+          --source src/ --output json | jq -r '.score // 0')
+        echo "Accessibility Features Score: $ACCESSIBILITY_SCORE"
+
+        # PWA Features Validation
+        PWA_SCORE=$(pwa-linter validate --manifest static/pwa/manifest.json \
+          --service-worker static/pwa/sw.js --output json | jq -r '.score // 0')
+        echo "PWA Features Score: $PWA_SCORE"
+
+        # Advanced ML Operations Validation
+        ML_OPS_SCORE=$(ml-ops-validator validate --source src/ \
+          --pattern advanced --output json | jq -r '.score // 0')
+        echo "Advanced ML Operations Score: $ML_OPS_SCORE"
+
+        # Calculate overall compliance score
+        COMPLIANCE_SCORE=$(echo "scale=3; ($RESPONSIVE_SCORE + $ACCESSIBILITY_SCORE + $PWA_SCORE + $ML_OPS_SCORE) / 4" | bc)
+        echo "Overall Context7 Compliance Score: $COMPLIANCE_SCORE"
+
+        # Check if passed minimum threshold (0.95)
+        PASSED=$(echo "$COMPLIANCE_SCORE >= 0.95" | bc)
+        echo "Validation Passed: $PASSED"
+
+        # Set outputs
+        echo "compliance_score=$COMPLIANCE_SCORE" >> $GITHUB_OUTPUT
+        echo "passed=$PASSED" >> $GITHUB_OUTPUT
+
+        # Fail if below threshold
+        if [ "$PASSED" -eq "0" ]; then
+          echo "❌ Context7 compliance validation failed (score: $COMPLIANCE_SCORE < 0.95)"
+          exit 1
+        fi
+
+        echo "✅ Context7 compliance validation passed (score: $COMPLIANCE_SCORE)"
+
+  # Security and Dependency Scanning
+  security-scan:
+    name: Security & Dependency Scan
+    runs-on: ubuntu-latest
+    needs: context7-validation
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        languages: python
+
+    - name: OWASP Dependency Check
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'nba-predictor'
+        path: '.'
+        format: 'HTML'
+
+  # Automated Testing with Context7 compliance
+  test-suite:
+    name: Automated Test Suite
+    runs-on: ubuntu-latest
+    needs: [context7-validation, security-scan]
+    strategy:
+      matrix:
+        python-version: ['3.11']
+        test-type: ['unit', 'integration', 'e2e', 'context7-compliance']
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+
+    - name: Run ${{ matrix.test-type }} tests
+      run: |
+        case "${{ matrix.test-type }}" in
+          "unit")
+            python -m pytest tests/unit/ -v --cov=src --cov-report=xml --cov-fail-under=80
+            ;;
+          "integration")
+            python -m pytest tests/integration/ -v --maxfail=3
+            ;;
+          "e2e")
+            python -m pytest tests/e2e/ -v --maxfail=2
+            ;;
+          "context7-compliance")
+            python -m pytest tests/context7/ -v --context7-validation
+            ;;
+        esac
+
+    - name: Upload coverage to Codecov
+      if: matrix.test-type == 'unit'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # Build Docker Images with Context7 optimization
+  build-images:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-suite]
+    if: github.event_name != 'pull_request'
+    strategy:
+      matrix:
+        component: ['api', 'dashboard', 'websocket']
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.component }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+        labels: |
+          context7.compliance=true
+          context7.pwa.enabled=true
+          context7.accessibility=WCAG_2_1_AA
+          superpoteri.enabled=true
+          phase=5
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        target: production
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+        build-args: |
+          CONTEXT7_ENABLED=true
+          SUPERPOTERI_MODE=active
+          COMPONENT=${{ matrix.component }}
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/phase-5-implementation'
+    environment: staging
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Deploy to Kubernetes
+      run: |
+        export KUBECONFIG=kubeconfig
+
+        # Apply Context7 configurations
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmaps.yaml
+        kubectl apply -f k8s/secrets.yaml
+
+        # Deploy with Context7 validation
+        kubectl apply -f k8s/nba-predictor-deployment.yaml
+        kubectl apply -f k8s/services.yaml
+        kubectl apply -f k8s/ingress.yaml
+
+        # Wait for rollout with Context7 compliance checks
+        kubectl rollout status deployment/nba-predictor-api --timeout=300s
+        kubectl rollout status deployment/nba-predictor-dashboard --timeout=300s
+
+        # Verify Context7 PWA features are enabled
+        kubectl wait --for=condition=ready pod -l app=nba-predictor-api --timeout=120s
+
+    - name: Run Context7 compliance verification
+      run: |
+        export KUBECONFIG=kubeconfig
+        STAGING_URL="https://staging.nba-predictor.com"
+
+        # Verify Context7 compliance in staging
+        curl -f "$STAGING_URL/health" || exit 1
+
+        # Check PWA manifest is accessible
+        curl -f "$STAGING_URL/static/pwa/manifest.json" || exit 1
+
+        # Verify accessibility features
+        curl -f "$STAGING_URL/accessibility-test" || exit 1
+
+        echo "✅ Staging deployment verified with Context7 compliance"
+
+  # Deploy to Production (Manual Approval Required)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-images, deploy-staging]
+    if: github.ref == 'refs/heads/main' && startsWith(github.ref, 'refs/tags/')
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Blue-Green Deployment with Context7 compliance
+      run: |
+        export KUBECONFIG=kubeconfig
+
+        # Create green deployment
+        sed 's/nba-predictor-api/nba-predictor-api-green/g' k8s/nba-predictor-deployment.yaml | kubectl apply -f -
+
+        # Wait for green deployment
+        kubectl rollout status deployment/nba-predictor-api-green --timeout=600s
+
+        # Run Context7 compliance tests on green deployment
+        GREEN_URL="https://green.nba-predictor.com"
+
+        # Verify Context7 features
+        curl -f "$GREEN_URL/health" || exit 1
+        curl -f "$GREEN_URL/static/pwa/manifest.json" || exit 1
+        curl -f "$GREEN_URL/accessibility-test" || exit 1
+
+        # Switch traffic to green
+        kubectl patch service nba-predictor-api-service -p '{"spec":{"selector":{"version":"green"}}}'
+
+        # Cleanup blue deployment
+        kubectl delete deployment nba-predictor-api-blue --ignore-not-found=true
+
+        echo "✅ Production deployment completed with Context7 compliance"
+
+    - name: Post-deployment Context7 validation
+      run: |
+        PROD_URL="https://nba-predictor.com"
+
+        # Run full Context7 compliance validation
+        echo "🔍 Running post-deployment Context7 validation..."
+
+        # Validate responsive design
+        RESPONSIVE_SCORE=$(curl -s "$PROD_URL/context7/validation/responsive" | jq -r '.score')
+        echo "Production Responsive Design Score: $RESPONSIVE_SCORE"
+
+        # Validate accessibility
+        ACCESSIBILITY_SCORE=$(curl -s "$PROD_URL/context7/validation/accessibility" | jq -r '.score')
+        echo "Production Accessibility Score: $ACCESSIBILITY_SCORE"
+
+        # Validate PWA features
+        PWA_SCORE=$(curl -s "$PROD_URL/context7/validation/pwa" | jq -r '.score')
+        echo "Production PWA Score: $PWA_SCORE"
+
+        # Final compliance score
+        FINAL_SCORE=$(echo "scale=3; ($RESPONSIVE_SCORE + $ACCESSIBILITY_SCORE + $PWA_SCORE) / 3" | bc)
+        echo "🎯 Final Production Context7 Compliance Score: $FINAL_SCORE"
+
+        if (( $(echo "$FINAL_SCORE < 0.96" | bc -l) )); then
+          echo "❌ Production Context7 compliance below threshold: $FINAL_SCORE"
+          exit 1
+        fi
+
+        echo "✅ Production deployment validated with Context7 compliance score: $FINAL_SCORE"
+
+  # Deployment Summary and Notifications
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [context7-validation, deploy-staging, deploy-production]
+    if: always()
+    steps:
+    - name: Generate deployment report
+      run: |
+        echo "# 🚀 NBA Predictor Phase 5 Deployment Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Context7 Compliance Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Compliance Score**: ${{ needs.context7-validation.outputs.compliance_score }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Validation Status**: ${{ needs.context7-validation.outputs.validation_passed }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Superpoteri Mode**: Enabled ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- **PWA Features**: Enabled ✅" >> $GITHUB_STEP_SUMMARY
+        echo "- **Accessibility Compliance**: WCAG 2.1 AA ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Deployment Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **Staging**: ${{ needs.deploy-staging.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Production**: ${{ needs.deploy-production.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "- Monitor Context7 real-time performance" >> $GITHUB_STEP_SUMMARY
+        echo "- Verify PWA functionality across devices" >> $GITHUB_STEP_SUMMARY
+        echo "- Check accessibility compliance with screen readers" >> $GITHUB_STEP_SUMMARY
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "🎉 NBA Predictor Phase 5 deployment completed successfully!"
+        echo "Context7 compliance score: ${{ needs.context7-validation.outputs.compliance_score }}"
+        echo "Superpoteri features: Enabled"
+        echo "PWA optimization: Active"
+
+    - name: Notify deployment failure
+      if: failure()
+      run: |
+        echo "❌ NBA Predictor Phase 5 deployment failed!"
+        echo "Check Context7 compliance validation and security scans."

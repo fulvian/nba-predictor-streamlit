@@ -1,0 +1,275 @@
+# NBA Predictor - Production Docker Compose
+# SuperPoteri Context7 PWA with enterprise-grade deployment
+
+services:
+  # ===========================================
+  # NBA Predictor API Service (Production)
+  # ===========================================
+  nba-predictor-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: nba-predictor:5.0.0
+    container_name: nba-predictor-api-prod-1
+    restart: unless-stopped
+    environment:
+      - NBA_PREDICTOR_ENV=production
+      - CONTEXT7_ENABLED=true
+      - PWA_FEATURES=enabled
+      - SUPERPOTERI_MODE=active
+      - CONTEXT7_RESPONSIVE_DESIGN=true
+      - CONTEXT7_ACCESSIBILITY_FEATURES=true
+      - CONTEXT7_REAL_TIME_UPDATES=true
+      - CONTEXT7_INTELLIGENT_CACHE=true
+      - CONTEXT7_ADVANCED_ML_OPERATIONS=true
+      - CONTEXT7_PERFORMANCE_MODE=production
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+      - HEALTH_CHECK_ENABLED=true
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+      - ./ssl:/app/ssl:ro
+      - ./static/pwa:/app/static/pwa:ro
+      - context7-cache-data:/app/cache
+    networks:
+      - nba-network
+    depends_on:
+      - context7-cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ===========================================
+  # NBA Predictor Dashboard (Production)
+  # ===========================================
+  nba-predictor-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: nba-dashboard:5.0.0
+    container_name: nba-predictor-dashboard-prod-1
+    restart: unless-stopped
+    environment:
+      - NBA_PREDICTOR_ENV=production
+      - CONTEXT7_ENABLED=true
+      - PWA_FEATURES=enabled
+      - SUPERPOTERI_MODE=active
+      - DASHBOARD_MODE=true
+      - CONTEXT7_MOBILE_OPTIMIZED=true
+      - CONTEXT7_TOUCH_OPTIMIZED=true
+      - LOG_LEVEL=INFO
+      - METRICS_ENABLED=true
+    ports:
+      - "8502:8502"
+    volumes:
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+      - ./static/pwa:/app/static/pwa:ro
+      - context7-cache-data:/app/cache
+    networks:
+      - nba-network
+    depends_on:
+      - context7-cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8502/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ===========================================
+  # Context7 Intelligent Cache Service (Production)
+  # ===========================================
+  context7-cache:
+    image: redis:7-alpine
+    container_name: context7-intelligent-cache-prod-1
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - context7-cache-data:/data
+    networks:
+      - nba-network
+    secrets:
+      - redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ===========================================
+  # WebSocket Service for Real-time Updates
+  # ===========================================
+  websocket-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+      target: production
+    image: nba-websocket:5.0.0
+    container_name: nba-websocket-service-prod-1
+    restart: unless-stopped
+    environment:
+      - CONTEXT7_REALTIME_ENABLED=true
+      - WEBSOCKET_COMPRESSION=true
+      - NBA_PREDICTOR_ENV=production
+    ports:
+      - "8080:8080"
+    networks:
+      - nba-network
+    depends_on:
+      - nba-predictor-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ===========================================
+  # Load Balancer with Context7 PWA Support
+  # ===========================================
+  nginx-lb:
+    image: nginx:alpine
+    container_name: nba-predictor-lb-prod-1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./static/pwa:/usr/share/nginx/html/pwa:ro
+    networks:
+      - nba-network
+    depends_on:
+      - nba-predictor-api
+      - nba-predictor-dashboard
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 2
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ===========================================
+  # Prometheus Monitoring Service
+  # ===========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nba-prometheus-prod
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - nba-network
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ===========================================
+  # Grafana Dashboard Service
+  # ===========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nba-grafana-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - nba-network
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  nba-network:
+    driver: bridge
+    labels:
+      - "context7.network=production"
+      - "superpoteri.network=optimized"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+volumes:
+  context7-cache-data:
+    driver: local
+    labels:
+      - "context7.volume=intelligent-cache"
+
+  prometheus-data:
+    driver: local
+    labels:
+      - "context7.volume=monitoring"
+
+  grafana-data:
+    driver: local
+    labels:
+      - "context7.volume=visualization"
+
+secrets:
+  nba_api_secret:
+    file: ./secrets/nba_api_secret.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  ssl_certificates:
+    file: ./secrets/ssl_certs.tar.gz

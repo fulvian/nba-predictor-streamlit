@@ -1,0 +1,332 @@
+# NBA Predictor Phase 5 - Kubernetes Deployment with Context7 PWA Features
+# Superpoteri-enabled enterprise orchestration
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nba-predictor-api
+  namespace: nba-predictor
+  labels:
+    app: nba-predictor-api
+    version: v5.0.0
+    context7.compliance: "true"
+    context7.pwa.enabled: "true"
+    context7.accessibility: "WCAG_2_1_AA"
+    context7.responsive: "true"
+    context7.realtime: "true"
+    context7.ml-operations: "true"
+    superpoteri.enabled: "true"
+    phase: "5"
+    component: "production-deployment"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: nba-predictor-api
+  template:
+    metadata:
+      labels:
+        app: nba-predictor-api
+        context7.compliance: "true"
+        context7.pwa.enabled: "true"
+        superpoteri.enabled: "true"
+        version: v5.0.0
+      annotations:
+        context7.performance.optimization: "enabled"
+        context7.mobile.optimization: "enabled"
+        context7.accessibility.screen_reader: "enabled"
+        context7.pwa.offline_support: "enabled"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: nba-predictor-api
+        image: nba-predictor:5.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8501
+          name: http
+          protocol: TCP
+        env:
+        - name: NBA_PREDICTOR_ENV
+          value: "production"
+        - name: CONTEXT7_ENABLED
+          value: "true"
+        - name: PWA_FEATURES
+          value: "enabled"
+        - name: SUPERPOTERI_MODE
+          value: "active"
+        - name: CONTEXT7_RESPONSIVE_DESIGN
+          value: "true"
+        - name: CONTEXT7_ACCESSIBILITY_FEATURES
+          value: "true"
+        - name: CONTEXT7_REAL_TIME_UPDATES
+          value: "true"
+        - name: CONTEXT7_INTELLIGENT_CACHE
+          value: "true"
+        - name: CONTEXT7_ADVANCED_ML_OPERATIONS
+          value: "true"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        resources:
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+            ephemeral-storage: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+            ephemeral-storage: "500Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8501
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8501
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8501
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 30
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+          readOnly: false
+        - name: logs-volume
+          mountPath: /app/logs
+          readOnly: false
+        - name: pwa-static
+          mountPath: /app/static/pwa
+          readOnly: true
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: nba-predictor-data-pvc
+      - name: logs-volume
+        emptyDir: {}
+      - name: pwa-static
+        configMap:
+          name: nba-predictor-pwa-assets
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - nba-predictor-api
+              topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        node-type: application
+        context7.optimized: "true"
+      tolerations:
+      - key: "application"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      terminationGracePeriodSeconds: 30
+
+---
+# NBA Predictor Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nba-predictor-api-hpa
+  namespace: nba-predictor
+  labels:
+    app: nba-predictor-api
+    context7.compliance: "true"
+    superpoteri.enabled: "true"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nba-predictor-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: context7_response_time_seconds
+      target:
+        type: AverageValue
+        averageValue: "500m"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+
+---
+# NBA Predictor Service with Context7 PWA support
+apiVersion: v1
+kind: Service
+metadata:
+  name: nba-predictor-api-service
+  namespace: nba-predictor
+  labels:
+    app: nba-predictor-api
+    context7.compliance: "true"
+    context7.pwa.enabled: "true"
+    superpoteri.enabled: "true"
+  annotations:
+    service.beta.kubernetes.io/load-balancer-source-ranges: "0.0.0.0/0"
+    context7.pwa.cache.headers: "enabled"
+    context7.mobile.optimization: "enabled"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8501
+    targetPort: 8501
+    protocol: TCP
+    name: http
+  selector:
+    app: nba-predictor-api
+  sessionAffinity: None
+
+---
+# NBA Predictor ConfigMap for PWA assets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nba-predictor-pwa-assets
+  namespace: nba-predictor
+  labels:
+    app: nba-predictor-api
+    context7.pwa.assets: "true"
+    superpoteri.enabled: "true"
+data:
+  manifest.json: |
+    {
+      "name": "NBA Predictor",
+      "short_name": "NBA Predictor",
+      "description": "Advanced NBA betting predictions with Context7 PWA features",
+      "start_url": "/",
+      "display": "standalone",
+      "background_color": "#1f77b4",
+      "theme_color": "#1f77b4",
+      "orientation": "portrait-primary",
+      "scope": "/",
+      "lang": "en",
+      "categories": ["sports", "productivity"],
+      "icons": [
+        {
+          "src": "/static/pwa/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "maskable any"
+        },
+        {
+          "src": "/static/pwa/icons/icon-512x512.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "maskable any"
+        }
+      ]
+    }
+  sw.js: |
+    // Context7 PWA Service Worker with Superpoteri optimization
+    const CACHE_NAME = 'nba-predictor-v5.0.0';
+    const CONTEXT7_CACHE_STRATEGIES = ['cacheFirst', 'networkFirst', 'staleWhileRevalidate'];
+
+    self.addEventListener('install', (event) => {
+      event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+          return cache.addAll([
+            '/',
+            '/static/pwa/manifest.json',
+            '/static/pwa/icons/icon-192x192.png',
+            '/static/pwa/icons/icon-512x512.png'
+          ]);
+        })
+      );
+    });
+
+    self.addEventListener('fetch', (event) => {
+      if (event.request.url.includes('/api/') || event.request.url.includes('/health')) {
+        event.respondWith(networkFirst(event.request));
+      } else {
+        event.respondWith(cacheFirst(event.request));
+      }
+    });
+
+    async function networkFirst(request) {
+      try {
+        const response = await fetch(request);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(request, response.clone());
+        return response;
+      } catch (error) {
+        const cached = await caches.match(request);
+        return cached || new Response('Offline', { status: 503 });
+      }
+    }
+
+    async function cacheFirst(request) {
+      const cached = await caches.match(request);
+      return cached || networkFirst(request);
+    }

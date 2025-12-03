@@ -1,0 +1,218 @@
+# NBA Predictor Phase 5 - Docker Compose with Context7 PWA features
+# Superpoteri-enabled production orchestration for enterprise deployment
+
+version: '3.8'
+
+services:
+  # NBA Predictor API Service with Context7 compliance
+  nba-predictor-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: nba-predictor:5.0.0
+    container_name: nba-predictor-api
+    restart: unless-stopped
+    replicas: 3
+    environment:
+      - NBA_PREDICTOR_ENV=production
+      - CONTEXT7_ENABLED=true
+      - PWA_FEATURES=enabled
+      - SUPERPOTERI_MODE=active
+      - CONTEXT7_RESPONSIVE_DESIGN=true
+      - CONTEXT7_ACCESSIBILITY_FEATURES=true
+      - CONTEXT7_REAL_TIME_UPDATES=true
+      - CONTEXT7_INTELLIGENT_CACHE=true
+      - CONTEXT7_ADVANCED_ML_OPERATIONS=true
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./static/pwa:/app/static/pwa
+    networks:
+      - nba-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "context7.compliance=true"
+      - "context7.pwa.enabled=true"
+      - "context7.accessibility=WCAG_2_1_AA"
+      - "context7.responsive=true"
+      - "superpoteri.enabled=true"
+
+  # NBA Predictor Dashboard with Context7 mobile optimization
+  nba-predictor-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: nba-dashboard:5.0.0
+    container_name: nba-predictor-dashboard
+    restart: unless-stopped
+    replicas: 2
+    environment:
+      - NBA_PREDICTOR_ENV=production
+      - CONTEXT7_ENABLED=true
+      - PWA_FEATURES=enabled
+      - SUPERPOTERI_MODE=active
+      - DASHBOARD_MODE=true
+      - CONTEXT7_MOBILE_OPTIMIZED=true
+      - CONTEXT7_TOUCH_OPTIMIZED=true
+    ports:
+      - "8502:8501"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./static/pwa:/app/static/pwa
+    networks:
+      - nba-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 1.5G
+        reservations:
+          cpus: '0.4'
+          memory: 512M
+      replicas: 2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    labels:
+      - "context7.compliance=true"
+      - "context7.pwa.enabled=true"
+      - "context7.mobile.optimized=true"
+
+  # Context7 Intelligent Cache Service
+  context7-cache:
+    image: redis:7-alpine
+    container_name: context7-intelligent-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - context7-cache-data:/data
+    networks:
+      - nba-network
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "context7.service=intelligent-cache"
+      - "context7.performance=optimized"
+
+  # Context7 Real-time Updates with WebSocket support
+  websocket-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket
+    image: nba-websocket:5.0.0
+    container_name: nba-websocket-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - CONTEXT7_REALTIME_ENABLED=true
+      - WEBSOCKET_COMPRESSION=true
+      - NBA_PREDICTOR_ENV=production
+    networks:
+      - nba-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "context7.service=real-time-updates"
+      - "context7.websocket=true"
+
+  # Load Balancer with Context7 PWA support
+  nginx-lb:
+    image: nginx:alpine
+    container_name: nba-predictor-lb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./static/pwa:/usr/share/nginx/html/pwa:ro
+    networks:
+      - nba-network
+    depends_on:
+      - nba-predictor-api
+      - nba-predictor-dashboard
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
+    labels:
+      - "context7.service=load-balancer"
+      - "context7.pwa.proxy=true"
+
+networks:
+  nba-network:
+    driver: bridge
+    labels:
+      - "context7.network=production"
+      - "superpoteri.network=optimized"
+
+volumes:
+  context7-cache-data:
+    driver: local
+    labels:
+      - "context7.volume=intelligent-cache"

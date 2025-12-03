@@ -1,0 +1,861 @@
+"""
+UI Rendering Performance Optimization - Task 3.3.4
+Optimizza il rendering delle UI per performance massime con lazy loading,
+virtualizzazione e component caching.
+"""
+
+import streamlit as st
+import time
+import asyncio
+import threading
+from typing import Dict, List, Any, Optional, Callable, Union
+from dataclasses import dataclass, field
+from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps, lru_cache
+from collections import defaultdict, deque
+import psutil
+import gc
+from contextlib import contextmanager
+import weakref
+from pathlib import Path
+import json
+from datetime import datetime, timedelta
+import logging
+
+from intelligent_cache import get_cache_manager, CacheStrategy
+from real_time_updates import get_event_manager, EventType, UIEvent
+from state_manager import get_state_manager
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class RenderOptimizationLevel(Enum):
+    """Livelli di ottimizzazione rendering"""
+    MINIMAL = "minimal"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+    ULTRA = "ultra"
+
+class ComponentType(Enum):
+    """Tipi di componenti UI"""
+    STATIC = "static"
+    DYNAMIC = "dynamic"
+    INTERACTIVE = "interactive"
+    HEAVY = "heavy"
+    STREAMING = "streaming"
+
+@dataclass
+class RenderMetrics:
+    """Metriche di rendering"""
+    component_id: str
+    render_time: float
+    memory_usage: float
+    cache_hits: int
+    cache_misses: int
+    optimization_level: RenderOptimizationLevel
+    timestamp: datetime = field(default_factory=datetime.now)
+    user_interaction_count: int = 0
+
+@dataclass
+class ComponentSpec:
+    """Specifica di componente per ottimizzazione"""
+    component_id: str
+    component_type: ComponentType
+    priority: int
+    lazy_load: bool = True
+    virtualize: bool = False
+    cache_ttl: int = 300
+    max_retries: int = 3
+    memory_limit_mb: float = 50.0
+    preload_threshold: int = 1000
+
+@dataclass
+class OptimizationConfig:
+    """Configurazione ottimizzazione"""
+    enable_lazy_loading: bool = True
+    enable_virtualization: bool = True
+    enable_component_caching: bool = True
+    enable_memory_optimization: bool = True
+    max_concurrent_renders: int = 10
+    memory_threshold_mb: float = 500.0
+    gc_frequency_seconds: int = 30
+    render_timeout_seconds: float = 5.0
+    optimization_level: RenderOptimizationLevel = RenderOptimizationLevel.BALANCED
+
+class ComponentRenderer:
+    """Renderer componenti con ottimizzazioni"""
+
+    def __init__(self, component_id: str, component_spec: ComponentSpec):
+        self.component_id = component_id
+        self.spec = component_spec
+        self.render_count = 0
+        self.last_render_time = None
+        self.render_times: deque = deque(maxlen=10)
+        self.is_rendering = False
+        self.render_lock = threading.Lock()
+
+    def should_lazy_load(self) -> bool:
+        """Determina se il componente dovrebbe usare lazy loading"""
+        if not self.spec.lazy_load:
+            return False
+
+        # Lazy loading basato su priorità e uso
+        return (
+            self.spec.priority > 3 or
+            self.render_count < self.spec.preload_threshold or
+            self.get_avg_render_time() > 0.5
+        )
+
+    def get_avg_render_time(self) -> float:
+        """Calcola tempo medio di rendering"""
+        if not self.render_times:
+            return 0.0
+        return sum(self.render_times) / len(self.render_times)
+
+    def render(self, render_func: Callable, *args, **kwargs) -> Any:
+        """Esegue rendering con ottimizzazioni"""
+        start_time = time.time()
+
+        with self.render_lock:
+            self.is_rendering = True
+
+            try:
+                # Pre-render checks
+                if self.should_lazy_load():
+                    self._preload_component()
+
+                # Esegui rendering
+                result = render_func(*args, **kwargs)
+
+                # Update metrics
+                render_time = time.time() - start_time
+                self.render_times.append(render_time)
+                self.render_count += 1
+                self.last_render_time = datetime.now()
+
+                return result
+
+            finally:
+                self.is_rendering = False
+
+    def _preload_component(self):
+        """Pre-carica componente per performance migliori"""
+        # Implementazione preloading basata su tipo
+        if self.spec.component_type == ComponentType.HEAVY:
+            self._prepare_heavy_component()
+        elif self.spec.component_type == ComponentType.STREAMING:
+            self._prepare_streaming_component()
+
+    def _prepare_heavy_component(self):
+        """Prepara componenti pesanti*/
+        pass
+
+    def _prepare_streaming_component(self):
+        """Prepara componenti streaming"""
+        pass
+
+class PerformanceMonitor:
+    """Monitor performance del rendering UI"""
+
+    def __init__(self, config: OptimizationConfig):
+        self.config = config
+        self.metrics: Dict[str, RenderMetrics] = {}
+        self.global_metrics = {
+            'total_renders': 0,
+            'total_render_time': 0.0,
+            'memory_usage_history': deque(maxlen=100),
+            'gc_runs': 0,
+            'optimization_savings': 0.0
+        }
+        self.active_renders: Dict[str, float] = {}
+        self.alerts: List[Dict[str, Any]] = []
+        self.monitoring_active = True
+
+    def start_render_monitoring(self, component_id: str) -> float:
+        """Inizia monitoraggio rendering"""
+        start_time = time.time()
+        self.active_renders[component_id] = start_time
+        self.global_metrics['total_renders'] += 1
+
+        return start_time
+
+    def end_render_monitoring(self, component_id: str, start_time: float,
+                            cache_hits: int = 0, cache_misses: int = 0) -> RenderMetrics:
+        """Termina monitoraggio e crea metriche"""
+        end_time = time.time()
+        render_time = end_time - start_time
+
+        # Calcola memoria usata
+        memory_usage = self._get_memory_usage()
+
+        # Crea metriche
+        metrics = RenderMetrics(
+            component_id=component_id,
+            render_time=render_time,
+            memory_usage=memory_usage,
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+            optimization_level=self.config.optimization_level
+        )
+
+        # Aggiorna metriche
+        self.metrics[component_id] = metrics
+        self.global_metrics['total_render_time'] += render_time
+        self.global_metrics['memory_usage_history'].append(memory_usage)
+
+        # Rimuovi da renders attivi
+        self.active_renders.pop(component_id, None)
+
+        # Controlla performance
+        self._check_performance_alerts(metrics)
+
+        return metrics
+
+    def _get_memory_usage(self) -> float:
+        """Ottiene uso memoria in MB"""
+        process = psutil.Process()
+        return process.memory_info().rss / 1024 / 1024
+
+    def _check_performance_alerts(self, metrics: RenderMetrics):
+        """Controlla alert performance"""
+        if metrics.render_time > self.config.render_timeout_seconds:
+            self._create_alert(
+                "SLOW_RENDER",
+                f"Component {metrics.component_id} render time: {metrics.render_time:.2f}s"
+            )
+
+        if metrics.memory_usage > self.config.memory_threshold_mb:
+            self._create_alert(
+                "HIGH_MEMORY",
+                f"Component {metrics.component_id} memory usage: {metrics.memory_usage:.1f}MB"
+            )
+
+    def _create_alert(self, alert_type: str, message: str):
+        """Crea alert performance"""
+        alert = {
+            'type': alert_type,
+            'message': message,
+            'timestamp': datetime.now(),
+            'severity': 'warning'
+        }
+        self.alerts.append(alert)
+        logger.warning(f"Performance Alert: {message}")
+
+    def get_performance_summary(self) -> Dict[str, Any]:
+        """Ottieni riepilogo performance"""
+        avg_render_time = (
+            self.global_metrics['total_render_time'] /
+            max(self.global_metrics['total_renders'], 1)
+        )
+
+        return {
+            'total_renders': self.global_metrics['total_renders'],
+            'avg_render_time_ms': avg_render_time * 1000,
+            'current_memory_mb': self._get_memory_usage(),
+            'active_renders': len(self.active_renders),
+            'alert_count': len(self.alerts),
+            'gc_runs': self.global_metrics['gc_runs'],
+            'cached_components': len([m for m in self.metrics.values() if m.cache_hits > 0])
+        }
+
+class UIPerformanceOptimizer:
+    """Ottimizzatore principale performance UI"""
+
+    def __init__(self, config: OptimizationConfig):
+        self.config = config
+        self.renderers: Dict[str, ComponentRenderer] = {}
+        self.cache_manager = get_cache_manager("ui_performance_cache")
+        self.event_manager = get_event_manager()
+        self.state_manager = get_state_manager()
+        self.performance_monitor = PerformanceMonitor(config)
+        self.executor = ThreadPoolExecutor(max_workers=config.max_concurrent_renders)
+        self.optimization_strategies = self._initialize_strategies()
+        self.component_registry: Dict[str, ComponentSpec] = {}
+
+        # Background optimization
+        self.optimization_thread = threading.Thread(target=self._background_optimization, daemon=True)
+        self.optimization_thread.start()
+
+    def register_component(self, component_spec: ComponentSpec):
+        """Registra componente per ottimizzazione"""
+        self.component_registry[component_spec.component_id] = component_spec
+        self.renderers[component_spec.component_id] = ComponentRenderer(
+            component_spec.component_id, component_spec
+        )
+
+        # Emetti evento di registrazione
+        self.event_manager.emit_event(
+            event_type=EventType.COMPONENT_UPDATE,
+            component_id=component_spec.component_id,
+            data={'action': 'register', 'spec': component_spec}
+        )
+
+    def optimized_render(self, component_id: str, render_func: Callable,
+                        *args, **kwargs) -> Any:
+        """Esegue rendering ottimizzato"""
+        if component_id not in self.renderers:
+            raise ValueError(f"Component {component_id} not registered")
+
+        renderer = self.renderers[component_id]
+
+        # Check cache
+        if self.config.enable_component_caching:
+            cached_result = self._get_cached_component(component_id, args, kwargs)
+            if cached_result is not None:
+                return cached_result
+
+        # Monitor rendering
+        start_time = self.performance_monitor.start_render_monitoring(component_id)
+
+        try:
+            # Esegui rendering ottimizzato
+            result = renderer.render(render_func, *args, **kwargs)
+
+            # Cache result
+            if self.config.enable_component_caching:
+                self._cache_component(component_id, result, args, kwargs)
+
+            # Emit update event
+            self.event_manager.emit_event(
+                event_type=EventType.UI_UPDATE,
+                component_id=component_id,
+                data={'render_time': time.time() - start_time}
+            )
+
+            return result
+
+        finally:
+            # End monitoring
+            self.performance_monitor.end_render_monitoring(
+                component_id, start_time
+            )
+
+    def _get_cached_component(self, component_id: str, args: tuple, kwargs: dict) -> Optional[Any]:
+        """Ottiene componente dalla cache"""
+        cache_key = self._generate_cache_key(component_id, args, kwargs)
+        cached_data = self.cache_manager.get(cache_key)
+
+        if cached_data:
+            self.performance_monitor.metrics[component_id].cache_hits += 1
+            return cached_data['result']
+        else:
+            self.performance_monitor.metrics[component_id].cache_misses += 1
+            return None
+
+    def _cache_component(self, component_id: str, result: Any, args: tuple, kwargs: dict):
+        """Salva componente in cache"""
+        component_spec = self.component_registry.get(component_id)
+        if not component_spec:
+            return
+
+        cache_key = self._generate_cache_key(component_id, args, kwargs)
+
+        # Salva in cache con TTL
+        self.cache_manager.set(
+            cache_key,
+            {'result': result, 'timestamp': datetime.now()},
+            ttl=component_spec.cache_ttl
+        )
+
+    def _generate_cache_key(self, component_id: str, args: tuple, kwargs: dict) -> str:
+        """Genera chiave cache"""
+        import hashlib
+        key_data = f"{component_id}_{str(args)}_{str(sorted(kwargs.items()))}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+
+    def _initialize_strategies(self) -> Dict[str, Callable]:
+        """Inizializza strategie di ottimizzazione"""
+        return {
+            'lazy_loading': self._apply_lazy_loading,
+            'virtualization': self._apply_virtualization,
+            'memory_optimization': self._apply_memory_optimization,
+            'render_caching': self._apply_render_caching,
+            'batch_updates': self._apply_batch_updates
+        }
+
+    def _apply_lazy_loading(self, component_id: str) -> Dict[str, Any]:
+        """Applica lazy loading strategy"""
+        renderer = self.renderers.get(component_id)
+        if not renderer or not renderer.should_lazy_load():
+            return {'applied': False}
+
+        return {
+            'applied': True,
+            'strategy': 'lazy_load',
+            'estimated_savings_ms': renderer.get_avg_render_time() * 1000
+        }
+
+    def _apply_virtualization(self, component_id: str) -> Dict[str, Any]:
+        """Applica virtualizzazione per liste/large data"""
+        spec = self.component_registry.get(component_id)
+        if not spec or not spec.virtualize:
+            return {'applied': False}
+
+        return {
+            'applied': True,
+            'strategy': 'virtualization',
+            'benefit': 'reduced_dom_size'
+        }
+
+    def _apply_memory_optimization(self, component_id: str) -> Dict[str, Any]:
+        """Applica ottimizzazione memoria*/
+        metrics = self.performance_monitor.metrics.get(component_id)
+        if not metrics or metrics.memory_usage < 100:  # < 100MB
+            return {'applied': False}
+
+        # Force garbage collection
+        gc.collect()
+
+        return {
+            'applied': True,
+            'strategy': 'memory_optimization',
+            'memory_freed_mb': max(0, metrics.memory_usage - 80)
+        }
+
+    def _apply_render_caching(self, component_id: str) -> Dict[str, Any]:
+        """Applica cache rendering"""
+        metrics = self.performance_monitor.metrics.get(component_id)
+        if not metrics:
+            return {'applied': False}
+
+        cache_hit_rate = (
+            metrics.cache_hits / max(metrics.cache_hits + metrics.cache_misses, 1)
+        )
+
+        return {
+            'applied': True,
+            'strategy': 'render_caching',
+            'cache_hit_rate': cache_hit_rate
+        }
+
+    def _apply_batch_updates(self, component_id: str) -> Dict[str, Any]:
+        """Applica batch update strategy"""
+        return {
+            'applied': True,
+            'strategy': 'batch_updates',
+            'benefit': 'reduced_recalculations'
+        }
+
+    def _background_optimization(self):
+        """Background thread per ottimizzazioni continue"""
+        while True:
+            try:
+                if not self.performance_monitor.monitoring_active:
+                    time.sleep(1)
+                    continue
+
+                # Memory management
+                if self.config.enable_memory_optimization:
+                    self._perform_memory_optimization()
+
+                # Performance optimization
+                self._perform_performance_optimization()
+
+                # Garbage collection periodica
+                if self.config.gc_frequency_seconds > 0:
+                    time.sleep(self.config.gc_frequency_seconds)
+                    gc.collect()
+                    self.performance_monitor.global_metrics['gc_runs'] += 1
+                else:
+                    time.sleep(5)
+
+            except Exception as e:
+                logger.error(f"Background optimization error: {e}")
+                time.sleep(10)
+
+    def _perform_memory_optimization(self):
+        """Esegui ottimizzazione memoria"""
+        current_memory = self.performance_monitor._get_memory_usage()
+
+        if current_memory > self.config.memory_threshold_mb:
+            # Aggressive cleanup
+            self.cache_manager.cleanup_expired()
+
+            # Clear oldest cached items
+            if hasattr(self.cache_manager, 'evict_lru'):
+                self.cache_manager.evict_lru(int(current_memory * 0.1))
+
+            # Force GC
+            gc.collect()
+
+            logger.info(f"Memory optimization completed. Memory before: {current_memory:.1f}MB")
+
+    def _perform_performance_optimization(self):
+        """Esegui ottimizzazioni performance"""
+        for component_id, renderer in self.renderers.items():
+            if renderer.is_rendering:
+                continue  # Skip active renders
+
+            # Apply optimization strategies
+            optimizations = []
+            for strategy_name, strategy_func in self.optimization_strategies.items():
+                try:
+                    optimization = strategy_func(component_id)
+                    if optimization['applied']:
+                        optimizations.append(optimization)
+                except Exception as e:
+                    logger.warning(f"Strategy {strategy_name} failed for {component_id}: {e}")
+
+            # Update optimization savings
+            if optimizations:
+                self.performance_monitor.global_metrics['optimization_savings'] += len(optimizations)
+
+    def get_optimization_report(self) -> Dict[str, Any]:
+        """Genera report ottimizzazioni"""
+        performance_summary = self.performance_monitor.get_performance_summary()
+
+        # Component optimization status
+        component_status = {}
+        for component_id in self.renderers:
+            metrics = self.performance_monitor.metrics.get(component_id)
+            optimizations = []
+
+            for strategy_name, strategy_func in self.optimization_strategies.items():
+                try:
+                    result = strategy_func(component_id)
+                    if result['applied']:
+                        optimizations.append(result['strategy'])
+                except:
+                    pass
+
+            component_status[component_id] = {
+                'optimizations_applied': optimizations,
+                'render_time_ms': metrics.render_time * 1000 if metrics else 0,
+                'memory_usage_mb': metrics.memory_usage if metrics else 0,
+                'cache_hit_rate': (
+                    metrics.cache_hits / max(metrics.cache_hits + metrics.cache_misses, 1)
+                ) if metrics else 0
+            }
+
+        return {
+            'performance_summary': performance_summary,
+            'component_status': component_status,
+            'global_optimizations': {
+                'memory_optimized': self.performance_monitor.global_metrics['gc_runs'],
+                'optimization_savings': self.performance_monitor.global_metrics['optimization_savings'],
+                'active_optimizations': len(self.optimization_strategies)
+            },
+            'configuration': {
+                'optimization_level': self.config.optimization_level.value,
+                'max_concurrent_renders': self.config.max_concurrent_renders,
+                'memory_threshold_mb': self.config.memory_threshold_mb
+            }
+        }
+
+    def __del__(self):
+        """Cleanup*/
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+
+# Global instance and factory functions
+_performance_optimizer_instance: Optional[UIPerformanceOptimizer] = None
+_performance_lock = threading.Lock()
+
+def get_performance_optimizer(optimization_level: RenderOptimizationLevel = RenderOptimizationLevel.BALANCED) -> UIPerformanceOptimizer:
+    """Ottieni istanza global performance optimizer"""
+    global _performance_optimizer_instance
+
+    if _performance_optimizer_instance is None:
+        with _performance_lock:
+            if _performance_optimizer_instance is None:
+                config = OptimizationConfig(
+                    optimization_level=optimization_level,
+                    max_concurrent_renders=10,
+                    memory_threshold_mb=500.0,
+                    gc_frequency_seconds=30
+                )
+                _performance_optimizer_instance = UIPerformanceOptimizer(config)
+
+    return _performance_optimizer_instance
+
+def register_optimized_component(component_id: str, component_type: ComponentType,
+                                priority: int = 5, **kwargs):
+    """Decorator per registrare componente ottimizzato"""
+    def decorator(func):
+        # Auto-register component
+        optimizer = get_performance_optimizer()
+        component_spec = ComponentSpec(
+            component_id=component_id,
+            component_type=component_type,
+            priority=priority,
+            **kwargs
+        )
+        optimizer.register_component(component_spec)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return optimizer.optimized_render(component_id, func, *args, **kwargs)
+
+        return wrapper
+    return decorator
+
+# Performance analysis tools
+class PerformanceProfiler:
+    """Profiler per analisi performance componenti"""
+
+    def __init__(self):
+        self.profiles: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self.active_profilers: Dict[str, float] = {}
+
+    @contextmanager
+    def profile_component(self, component_id: str):
+        """Context manager per profiling componente"""
+        start_time = time.time()
+        start_memory = psutil.Process().memory_info().rss / 1024 / 1024
+
+        try:
+            self.active_profilers[component_id] = start_time
+            yield
+        finally:
+            end_time = time.time()
+            end_memory = psutil.Process().memory_info().rss / 1024 / 1024
+
+            profile_data = {
+                'component_id': component_id,
+                'duration_seconds': end_time - start_time,
+                'memory_delta_mb': end_memory - start_memory,
+                'start_memory_mb': start_memory,
+                'end_memory_mb': end_memory,
+                'timestamp': datetime.now()
+            }
+
+            self.profiles[component_id].append(profile_data)
+            self.active_profilers.pop(component_id, None)
+
+    def get_component_profile(self, component_id: str) -> Dict[str, Any]:
+        """Ottieni profilo componente"""
+        profiles = self.profiles.get(component_id, [])
+        if not profiles:
+            return {'error': f'No profiles found for {component_id}'}
+
+        durations = [p['duration_seconds'] for p in profiles]
+        memory_deltas = [p['memory_delta_mb'] for p in profiles]
+
+        return {
+            'component_id': component_id,
+            'total_calls': len(profiles),
+            'avg_duration_ms': sum(durations) / len(durations) * 1000,
+            'max_duration_ms': max(durations) * 1000,
+            'min_duration_ms': min(durations) * 1000,
+            'avg_memory_delta_mb': sum(memory_deltas) / len(memory_deltas),
+            'total_memory_delta_mb': sum(memory_deltas),
+            'last_profile': profiles[-1]['timestamp'].isoformat()
+        }
+
+    def get_all_profiles_summary(self) -> Dict[str, Any]:
+        """Ottieni riepilogo tutti i profili"""
+        summary = {}
+
+        for component_id in self.profiles:
+            summary[component_id] = self.get_component_profile(component_id)
+
+        return {
+            'components': summary,
+            'total_components_profiled': len(self.profiles),
+            'total_profile_calls': sum(len(profiles) for profiles in self.profiles.values())
+        }
+
+# Global performance profiler
+_performance_profiler_instance: Optional[PerformanceProfiler] = None
+
+def get_performance_profiler() -> PerformanceProfiler:
+    """Ottieni istanza global performance profiler"""
+    global _performance_profiler_instance
+
+    if _performance_profiler_instance is None:
+        _performance_profiler_instance = PerformanceProfiler()
+
+    return _performance_profiler_instance
+
+def profile_performance(component_id: str):
+    """Decorator per profiling performance"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            profiler = get_performance_profiler()
+            with profiler.profile_component(component_id):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# Streamlit optimization utilities
+def optimize_streamlit_memory():
+    """Ottimizza memoria Streamlit"""
+    # Clear session state non essenziali
+    if hasattr(st, 'session_state'):
+        keys_to_remove = [k for k in st.session_state.keys()
+                         if k.startswith('_temp_') or k.startswith('_cache_')]
+        for key in keys_to_remove:
+            del st.session_state[key]
+
+    # Force garbage collection
+    gc.collect()
+
+def create_performance_dashboard():
+    """Crea dashboard performance per Streamlit"""
+    optimizer = get_performance_optimizer()
+    profiler = get_performance_profiler()
+
+    # Performance metrics
+    st.subheader("🚀 Performance Metrics")
+
+    # Global metrics
+    performance_report = optimizer.get_optimization_report()
+    global_metrics = performance_report['performance_summary']
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Total Renders",
+            global_metrics['total_renders'],
+            delta=f"{global_metrics['avg_render_time_ms']:.1f}ms avg"
+        )
+
+    with col2:
+        st.metric(
+            "Memory Usage",
+            f"{global_metrics['current_memory_mb']:.1f}MB",
+            delta=f"{global_metrics['gc_runs']} GC runs"
+        )
+
+    with col3:
+        st.metric(
+            "Active Renders",
+            global_metrics['active_renders'],
+            delta=f"{global_metrics['alert_count']} alerts"
+        )
+
+    with col4:
+        st.metric(
+            "Cached Components",
+            global_metrics['cached_components'],
+            delta="Optimized"
+        )
+
+    # Component status
+    st.subheader("📊 Component Status")
+
+    component_status = performance_report['component_status']
+    if component_status:
+        for component_id, status in component_status.items():
+            with st.expander(f"Component: {component_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.metric(
+                        "Render Time",
+                        f"{status['render_time_ms']:.1f}ms"
+                    )
+                    st.metric(
+                        "Memory",
+                        f"{status['memory_usage_mb']:.1f}MB"
+                    )
+
+                with col2:
+                    st.metric(
+                        "Cache Hit Rate",
+                        f"{status['cache_hit_rate']:.1%}"
+                    )
+                    st.write("**Optimizations:**")
+                    for opt in status['optimizations_applied']:
+                        st.write(f"- {opt}")
+
+    # Performance profiles
+    st.subheader("📈 Performance Profiles")
+
+    profile_summary = profiler.get_all_profiles_summary()
+
+    if profile_summary['components']:
+        st.write(f"**Total Components Profiled:** {profile_summary['total_components_profiled']}")
+        st.write(f"**Total Profile Calls:** {profile_summary['total_profile_calls']}")
+
+        for component_id, profile in profile_summary['components'].items():
+            with st.expander(f"Profile: {component_id}"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.metric(
+                        "Avg Duration",
+                        f"{profile['avg_duration_ms']:.1f}ms"
+                    )
+                    st.metric(
+                        "Max Duration",
+                        f"{profile['max_duration_ms']:.1f}ms"
+                    )
+                    st.metric(
+                        "Total Calls",
+                        profile['total_calls']
+                    )
+
+                with col2:
+                    st.metric(
+                        "Avg Memory Delta",
+                        f"{profile['avg_memory_delta_mb']:.1f}MB"
+                    )
+                    st.metric(
+                        "Total Memory Delta",
+                        f"{profile['total_memory_delta_mb']:.1f}MB"
+                    )
+
+    # Optimization controls
+    st.subheader("⚙️ Optimization Controls")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🧹 Memory Cleanup"):
+            optimize_streamlit_memory()
+            st.success("Memory optimization completed!")
+
+        if st.button("📊 Force GC"):
+            gc.collect()
+            st.success("Garbage collection completed!")
+
+    with col2:
+        if st.button("🔄 Clear Caches"):
+            optimizer.cache_manager.clear_all()
+            st.success("All caches cleared!")
+
+        if st.button("📈 Update Performance"):
+            st.rerun()
+
+if __name__ == "__main__":
+    # Test performance optimizer
+    print("🚀 Testing UI Performance Optimizer...")
+
+    optimizer = get_performance_optimizer()
+    profiler = get_performance_profiler()
+
+    # Test component registration
+    test_spec = ComponentSpec(
+        component_id="test_component",
+        component_type=ComponentType.DYNAMIC,
+        priority=3
+    )
+    optimizer.register_component(test_spec)
+
+    print(f"✅ Component registered: {test_spec.component_id}")
+
+    # Test performance rendering
+    @register_optimized_component("performance_test", ComponentType.STATIC, priority=2)
+    def test_render_function():
+        time.sleep(0.1)  # Simulate work
+        return {"data": "test_result", "timestamp": datetime.now()}
+
+    # Profile the function
+    with profiler.profile_component("performance_test"):
+        result = test_render_function()
+
+    print(f"✅ Function profiled: {result}")
+
+    # Get performance report
+    report = optimizer.get_optimization_report()
+    print(f"✅ Performance report generated")
+    print(f"   - Total renders: {report['performance_summary']['total_renders']}")
+    print(f"   - Avg render time: {report['performance_summary']['avg_render_time_ms']:.1f}ms")
+    print(f"   - Current memory: {report['performance_summary']['current_memory_mb']:.1f}MB")
+
+    print("🎉 UI Performance Optimizer test completed!")

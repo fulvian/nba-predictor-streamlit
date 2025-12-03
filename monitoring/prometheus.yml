@@ -1,0 +1,83 @@
+# NBA Predictor - Prometheus Configuration
+# Context7 SuperPoteri Monitoring Configuration
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "nba-predictor-prod"
+    environment: "production"
+
+rule_files:
+  # - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # ===========================================
+  # NBA Predictor API Metrics
+  # ===========================================
+  - job_name: "nba-predictor-api"
+    static_configs:
+      - targets: ["nba-predictor-api:8501"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ===========================================
+  # NBA Predictor Dashboard Metrics
+  # ===========================================
+  - job_name: "nba-predictor-dashboard"
+    static_configs:
+      - targets: ["nba-predictor-dashboard:8502"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # ===========================================
+  # Context7 Intelligent Cache Metrics
+  # ===========================================
+  - job_name: "context7-cache"
+    static_configs:
+      - targets: ["context7-cache:6379"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ===========================================
+  # WebSocket Service Metrics
+  # ===========================================
+  - job_name: "websocket-service"
+    static_configs:
+      - targets: ["websocket-service:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    scrape_timeout: 5s
+
+  # ===========================================
+  # Nginx Load Balancer Metrics
+  # ===========================================
+  - job_name: "nginx-lb"
+    static_configs:
+      - targets: ["nginx-lb:9113"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+    scrape_timeout: 5s
+
+  # ===========================================
+  # Prometheus Self-Monitoring
+  # ===========================================
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ===========================================
+  # Node Exporter for System Metrics
+  # ===========================================
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]

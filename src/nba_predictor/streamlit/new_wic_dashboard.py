@@ -34,6 +34,7 @@ from nba_predictor.streamlit.components.enhanced_prediction_bridge_professional 
 )
 from nba_predictor.utils.legacy_risk_manager import LegacyRiskManager
 from nba_predictor.api.data_provider import NBADataProvider
+from nba_predictor.utils.team_normalizer import TeamNameNormalizer
 import polars as pl
 
 # Initialize Managers
@@ -45,85 +46,238 @@ risk_manager = LegacyRiskManager(data_path="data")
 
 def auto_update_and_settle():
     """
-    Step 0: Auto-Update & Settlement
-    Fetches latest results and settles pending bets.
+    Automatically updates game data and settles pending bets on dashboard load.
     """
     try:
-        # 1. Get Pending Bets
+        logger.info("🚀 Starting Auto-Update & Settlement process...")
+        # Get Pending Bets
+        current_user = st.session_state.get("user_id", "test_user_001")
         pending_bets = db_manager.safe_get_user_bets(
-            user_id="current_user",  # TODO: Implement real user ID
+            user_id=current_user,
             status="PENDING",
             limit=100,
         )
 
+        logger.info(
+            f"🔍 Found {len(pending_bets)} pending bets for user '{current_user}'"
+        )
+
         if not pending_bets:
+            logger.info("❌ No pending bets found. Exiting.")
             return
 
-        # 2. Fetch Latest Game Results
+        # 2. Fetch Latest Game Results (Force Refresh)
         try:
+            # Determine date range from pending bets to minimize API calls
+            bet_dates = []
+            for b in pending_bets:
+                try:
+                    d_str = str(b.get("created_at")).split()[0]
+                    d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+                    bet_dates.append(d_obj)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to parse date for bet {b.get('bet_id')}: {e}"
+                    )
+
+            logger.info(f"📅 Bet dates to check: {bet_dates}")
+
+            if bet_dates:
+                # Use a set to avoid duplicate calls
+                unique_dates = sorted(list(set(bet_dates)))
+                provider = NBADataProvider()
+
+                for d in unique_dates:
+                    d_str = d.strftime("%Y-%m-%d")
+                    logger.info(f"🔄 Refreshing data for {d_str}")
+                    fetched_games = provider.get_scheduled_games(specific_date=d_str)
+
+                    if fetched_games:
+                        # Convert to Polars DataFrame for storage
+                        games_data = []
+                        for g in fetched_games:
+                            games_data.append(
+                                {
+                                    "game_id": g.get("game_id"),
+                                    "game_date": g.get("date"),
+                                    "home_team": g.get("home_team"),
+                                    "away_team": g.get("away_team"),
+                                    "season": "2025-26",
+                                    "game_time": g.get("time", "TBD"),
+                                    "status": g.get("status", "Scheduled"),
+                                    "home_score": g.get("home_score", 0),
+                                    "away_score": g.get("away_score", 0),
+                                    "match_id": g.get(
+                                        "match_id"
+                                    ),  # Important: Persist Canonical ID
+                                }
+                            )
+
+                        if games_data:
+                            new_games_df = pl.DataFrame(games_data)
+                            logger.info(
+                                f"   💾 Saving {len(games_data)} games to store for {d_str}"
+                            )
+                            db_manager.data_store.store_games_data(new_games_df, d_str)
+
+                logger.info("✅ Data refresh cycle completed")
+
+            # Now query the Data Store (which reads the updated parquet files)
             all_games = db_manager.data_store.get_games_data()
-            games_dict = {str(g["game_id"]): g for g in all_games.to_dicts()}
-        except Exception:
+            games_list = all_games.to_dicts()
+            games_dict = {str(g["game_id"]): g for g in games_list}
+
+            # Create Canonical ID Index
+            games_by_match_id = {}
+            for g in games_list:
+                if g.get("match_id"):
+                    games_by_match_id[g.get("match_id")] = g
+                else:
+                    # Try to generate on the fly if missing (e.g. old data)
+                    try:
+                        g_date_str = str(g.get("date", ""))
+                        try:
+                            g_date = datetime.strptime(g_date_str, "%Y-%m-%d").date()
+                        except:
+                            g_date = date.today()
+
+                        mid = TeamNameNormalizer.generate_match_id(
+                            g_date, g.get("home_team", ""), g.get("away_team", "")
+                        )
+                        games_by_match_id[mid] = g
+                    except:
+                        pass
+
+            logger.info(f"📚 Loaded {len(games_by_match_id)} games with Canonical IDs")
+
+        except Exception as e:
+            logger.error(f"Failed to refresh game data: {e}")
             games_dict = {}
+            games_by_match_id = {}
 
         settled_count = 0
 
         for bet in pending_bets:
-            game_id = str(bet.get("game_id"))
-            game = games_dict.get(game_id)
+            bet_game_id = str(bet.get("game_id"))
+            logger.debug(f"🧐 Processing bet {bet_game_id}")
+            game = games_dict.get(bet_game_id)
 
-            # Check if game is finished
-            if game and (
-                game.get("status") == "Final" or game.get("status") == "Completed"
-            ):
-                # Determine Outcome
-                outcome = "PENDING"
-                payout = 0.0
-
+            # Fallback: Match by Canonical ID
+            if not game:
                 try:
-                    bet_type = bet.get("bet_type", "")
-                    home_score = int(game.get("home_score", 0))
-                    away_score = int(game.get("away_score", 0))
-                    total_score = home_score + away_score
+                    # 1. Extract details from prediction JSON
+                    raw_pred = bet.get("prediction", "{}")
+                    prediction_data = json.loads(raw_pred)
 
-                    # Simple parsing of bet type (e.g., "OVER 220.5", "Lakers -5.5")
-                    # This is a simplified logic, needs robust parsing in production
-                    if "OVER" in bet_type:
-                        line = float(bet_type.split()[-1])
-                        if total_score > line:
-                            outcome = "WON"
-                        else:
-                            outcome = "LOST"
-                    elif "UNDER" in bet_type:
-                        line = float(bet_type.split()[-1])
-                        if total_score < line:
-                            outcome = "WON"
-                        else:
-                            outcome = "LOST"
-                    # Add more bet types (Moneyline, Spread) here as needed
+                    # Try to find team names
+                    home_team = prediction_data.get("home_team")
+                    away_team = prediction_data.get("away_team")
 
-                    if outcome != "PENDING":
-                        # Update DB
-                        profit_loss = 0.0
-                        if outcome == "WON":
-                            payout = float(bet.get("amount")) * float(bet.get("odds"))
-                            profit_loss = payout - float(bet.get("amount"))
-                            # Update Bankroll
-                            update_bankroll(payout)
-                        else:
-                            profit_loss = -float(bet.get("amount"))
+                    if not home_team or not away_team:
+                        metrics = prediction_data.get("team_metrics", {})
+                        if metrics:
+                            home_team = metrics.get("home", {}).get("team_name")
+                            away_team = metrics.get("away", {}).get("team_name")
 
-                        db_manager.safe_update_bet_status(
-                            bet_id=bet.get("bet_id"),
-                            status=outcome,
-                            result=outcome,
-                            profit_loss=profit_loss,
-                            user_id="test_user_001",
+                    logger.debug(
+                        f"   Extracted teams: Home='{home_team}', Away='{away_team}'"
+                    )
+
+                    # 2. Extract Date
+                    bet_date_str = str(bet.get("created_at")).split()[0]
+                    try:
+                        bet_date = datetime.strptime(bet_date_str, "%Y-%m-%d").date()
+                    except:
+                        bet_date = date.today()
+
+                    # 3. Generate Canonical ID
+                    if home_team and away_team:
+                        canonical_id = TeamNameNormalizer.generate_match_id(
+                            bet_date, home_team, away_team
                         )
-                        settled_count += 1
+
+                        logger.debug(f"   🔍 Looking for Canonical ID '{canonical_id}'")
+
+                        # 4. Lookup
+                        matched_game = games_by_match_id.get(canonical_id)
+
+                        if matched_game:
+                            logger.info(
+                                f"   ✅ MATCH FOUND: {matched_game.get('game_id')}"
+                            )
+                            game = matched_game  # Assign to game variable!
+                        else:
+                            logger.warning(f"   ❌ No match found for '{canonical_id}'")
 
                 except Exception as e:
-                    logger.error(f"Error settling bet {bet.get('bet_id')}: {e}")
+                    logger.error(f"Canonical ID matching failed: {e}")
+
+            # Check if game is finished
+            if game:
+                status = game.get("status")
+                logger.debug(f"   Game found. Status: '{status}'")
+
+                if status in ["Final", "Completed", "Finished"]:
+                    logger.info("   ✅ Game is Final. Attempting settlement...")
+
+                    try:
+                        # Determine Outcome
+                        outcome = "PENDING"
+                        payout = 0.0
+
+                        bet_type = bet.get("bet_type", "")
+                        home_score = float(game.get("home_score", 0))
+                        away_score = float(game.get("away_score", 0))
+                        total_score = home_score + away_score
+
+                        # Simple parsing of bet type (e.g., "OVER 220.5", "Lakers -5.5")
+                        if "OVER" in bet_type.upper():
+                            line = float(bet_type.split()[-1])
+                            if total_score > line:
+                                outcome = "WON"
+                            else:
+                                outcome = "LOST"
+                        elif "UNDER" in bet_type.upper():
+                            line = float(bet_type.split()[-1])
+                            if total_score < line:
+                                outcome = "WON"
+                            else:
+                                outcome = "LOST"
+                        # Add more bet types (Moneyline, Spread) here as needed
+
+                        logger.info(
+                            f"   Outcome: {outcome} (Score: {home_score}-{away_score})"
+                        )
+
+                        if outcome != "PENDING":
+                            # Update DB
+                            profit_loss = 0.0
+                            if outcome == "WON":
+                                payout = float(bet.get("amount")) * float(
+                                    bet.get("odds")
+                                )
+                                profit_loss = payout - float(bet.get("amount"))
+                                # Update Bankroll
+                                update_bankroll(payout)
+                            else:
+                                profit_loss = -float(bet.get("amount"))
+
+                            db_manager.safe_update_bet_status(
+                                bet_id=bet.get("bet_id"),
+                                status=outcome,
+                                result=outcome,
+                                profit_loss=profit_loss,
+                                audit_user="WIC_DASHBOARD",
+                            )
+                            settled_count += 1
+                            logger.info(f"   ✅ Bet settled as {outcome}")
+
+                    except Exception as e:
+                        logger.error(f"   ❌ Settlement Failed: {e}")
+                else:
+                    logger.debug("   ⏳ Game not final. Skipping.")
+            else:
+                logger.warning("   ❌ No game found for bet.")
 
         if settled_count > 0:
             render_toast(
@@ -715,10 +869,11 @@ def main():
     # Render Header
     render_wic_header("Workflow Intelligent Control", current_step)
 
-    # Step 0: Auto-Run (Only once per session or on specific trigger)
-    if "auto_settled" not in st.session_state:
-        auto_update_and_settle()
-        st.session_state["auto_settled"] = True
+    # Step 0: Auto-Run (Force Run for Debugging)
+    # if "auto_settled" not in st.session_state:
+    print("\n\n!!! 🚀 AUTO-SETTLEMENT TRIGGERED !!!\n\n")
+    auto_update_and_settle()
+    st.session_state["auto_settled"] = True
 
     # Workflow Router
     if current_step == 1:

@@ -24,17 +24,15 @@ __version__ = "2.0.0"
 __author__ = "NBA Predictor Team"
 __email__ = "team@example.com"
 __license__ = "MIT"
-__description__ = "Advanced NBA predictive analytics system with real-time data integration"
+__description__ = (
+    "Advanced NBA predictive analytics system with real-time data integration"
+)
 
-# Import core components
+# Import core components only - NO UI components to avoid circular dependencies
 from .core.data_store import UnifiedDataStore
 from .core.sync_engine import AutomaticSyncEngine
-# Import streamlit components
-from .streamlit import create_main_app, render_sync_dashboard, render_analytics_dashboard
+
 __all__ = [
     "UnifiedDataStore",
     "AutomaticSyncEngine",
-    "create_main_app",
-    "render_sync_dashboard",
-    "render_analytics_dashboard",
-]  # Will be populated as components are implemented
+]  # Core components only - UI components imported directly by application files

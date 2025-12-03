@@ -990,7 +990,20 @@ class UnifiedHybridPipeline:
             # Training must be on past games, validation on future games only
             logger.warning("🔧 CRITICAL FIX: Implementing TimeSeriesSplit to prevent temporal data leakage")
 
-            tscv = TimeSeriesSplit(n_splits=5, gap=1, test_size=max(50, int(len(X) * validation_split)))
+            # Ensure we have enough data for TimeSeriesSplit
+            min_samples_for_split = 100
+            if len(X) < min_samples_for_split:
+                # Fallback to simple temporal split for small datasets
+                split_point = max(50, int(len(X) * (1 - validation_split)))
+                X_train, X_val = X.iloc[:split_point], X.iloc[split_point:]
+                y_train, y_val = y.iloc[:split_point], y.iloc[split_point:]
+                logger.warning(f"⚠️ Insufficient data for TimeSeriesSplit, used fallback temporal split at index {split_point}")
+            else:
+                # Use TimeSeriesSplit with proper configuration
+                n_splits = min(5, max(2, len(X) // 50))  # Ensure reasonable splits
+                test_size = max(20, min(50, len(X) // 10))  # Ensure reasonable test size
+                
+                tscv = TimeSeriesSplit(n_splits=n_splits, gap=1, test_size=test_size)
 
             # Get the most recent split for validation (simulates real-world prediction)
             splits = list(tscv.split(X))

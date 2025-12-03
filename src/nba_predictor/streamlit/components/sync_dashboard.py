@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 @st.fragment(run_every=30)
 def render_sync_dashboard(
-    sync_engine: AutomaticSyncEngine,
-    data_store: UnifiedDataStore
+    sync_engine: AutomaticSyncEngine, data_store: UnifiedDataStore
 ) -> None:
     """
     Render data synchronization dashboard with real-time updates.
@@ -53,7 +52,7 @@ def render_sync_dashboard(
         _render_sync_status_overview(sync_stats, sync_engine)
 
         # Render data statistics
-        _render_data_statistics(sync_stats.get("data_statistics", {}))
+        _render_data_statistics(sync_stats.get("data_statistics", {}), data_store)
 
         # Render sync controls
         _render_sync_controls(sync_engine)
@@ -63,10 +62,14 @@ def render_sync_dashboard(
 
     except Exception as e:
         logger.error(f"Failed to render sync dashboard: {e}")
-        raise StreamlitError(f"Dashboard rendering failed: {e}", component="sync_dashboard") from e
+        raise StreamlitError(
+            f"Dashboard rendering failed: {e}", component="sync_dashboard"
+        ) from e
 
 
-def _render_sync_status_overview(sync_stats: Dict[str, Any], sync_engine: AutomaticSyncEngine) -> None:
+def _render_sync_status_overview(
+    sync_stats: Dict[str, Any], sync_engine: AutomaticSyncEngine
+) -> None:
     """Render sync status overview section."""
     st.subheader("📊 Sync Status Overview")
 
@@ -75,7 +78,9 @@ def _render_sync_status_overview(sync_stats: Dict[str, Any], sync_engine: Automa
     with col1:
         is_syncing = sync_stats.get("is_syncing", False)
         status_color = "🟢" if not is_syncing else "🔄"
-        st.metric("Current Status", f"{status_color} {'Syncing' if is_syncing else 'Idle'}")
+        st.metric(
+            "Current Status", f"{status_color} {'Syncing' if is_syncing else 'Idle'}"
+        )
 
     with col2:
         last_sync = sync_stats.get("last_sync")
@@ -84,13 +89,17 @@ def _render_sync_status_overview(sync_stats: Dict[str, Any], sync_engine: Automa
 
     with col3:
         sync_interval = sync_stats.get("configuration", {}).get("sync_interval", 3600)
-        interval_str = f"{sync_interval // 60}m" if sync_interval >= 60 else f"{sync_interval}s"
+        interval_str = (
+            f"{sync_interval // 60}m" if sync_interval >= 60 else f"{sync_interval}s"
+        )
         st.metric("Sync Interval", interval_str)
 
     with col4:
         should_sync = sync_engine.should_sync()
         next_sync_color = "🔴" if should_sync else "🟢"
-        st.metric("Next Sync", f"{next_sync_color} {'Due' if should_sync else 'Scheduled'}")
+        st.metric(
+            "Next Sync", f"{next_sync_color} {'Due' if should_sync else 'Scheduled'}"
+        )
 
     # Progress bar for next sync
     if sync_stats.get("last_sync"):
@@ -99,7 +108,9 @@ def _render_sync_status_overview(sync_stats: Dict[str, Any], sync_engine: Automa
         st.progress(progress, "Time until next sync")
 
 
-def _render_data_statistics(data_stats: Dict[str, Any]) -> None:
+def _render_data_statistics(
+    data_stats: Dict[str, Any], data_store: Optional[UnifiedDataStore] = None
+) -> None:
     """Render data statistics section."""
     st.subheader("📈 Data Statistics")
 
@@ -138,11 +149,13 @@ def _render_data_statistics(data_stats: Dict[str, Any]) -> None:
                     record_count = row[2]
                     last_updated = row[1].strftime("%m-%d %H:%M") if row[1] else "Never"
 
-                    summary_data.append({
-                        "Data Type": table_name,
-                        "Records": f"{record_count:,}",
-                        "Last Updated": last_updated
-                    })
+                    summary_data.append(
+                        {
+                            "Data Type": table_name,
+                            "Records": f"{record_count:,}",
+                            "Last Updated": last_updated,
+                        }
+                    )
 
                 summary_df = pl.DataFrame(summary_data)
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -158,7 +171,11 @@ def _render_sync_controls(sync_engine: AutomaticSyncEngine) -> None:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("🚀 Start Manual Sync", disabled=sync_engine._is_syncing, use_container_width=True):
+        if st.button(
+            "🚀 Start Manual Sync",
+            disabled=sync_engine._is_syncing,
+            use_container_width=True,
+        ):
             with st.spinner("Starting manual sync..."):
                 try:
                     # Create progress callback
@@ -175,17 +192,20 @@ def _render_sync_controls(sync_engine: AutomaticSyncEngine) -> None:
                         asyncio.set_event_loop(loop)
                         result = loop.run_until_complete(
                             sync_engine.sync_all_data(
-                                force_refresh=True,
-                                progress_callback=progress_callback
+                                force_refresh=True, progress_callback=progress_callback
                             )
                         )
                         loop.close()
 
                         # Show results
                         if result["success"]:
-                            st.success(f"✅ Sync completed! {result['duration_seconds']:.1f}s")
+                            st.success(
+                                f"✅ Sync completed! {result['duration_seconds']:.1f}s"
+                            )
                         else:
-                            st.error(f"❌ Sync completed with {len(result['errors'])} errors")
+                            st.error(
+                                f"❌ Sync completed with {len(result['errors'])} errors"
+                            )
 
                         # Clear progress
                         progress_bar.empty()
@@ -210,7 +230,7 @@ def _render_sync_controls(sync_engine: AutomaticSyncEngine) -> None:
                     st.metric("Batch Size", f"{config['batch_size']:,}")
 
                 with col_config2:
-                    st.metric("Retry Attempts", config['retry_attempts'])
+                    st.metric("Retry Attempts", config["retry_attempts"])
 
                 if st.button("🔄 Reset Configuration", key="reset_config"):
                     st.info("Configuration reset functionality coming soon!")
@@ -253,7 +273,7 @@ def _render_activity_log(sync_stats: Dict[str, Any]) -> None:
             ("Games", sync_stats.get("games_count", 0)),
             ("Players", sync_stats.get("players_count", 0)),
             ("Teams", sync_stats.get("teams_count", 0)),
-            ("Odds", sync_stats.get("odds_count", 0))
+            ("Odds", sync_stats.get("odds_count", 0)),
         ]
 
         count_cols = st.columns(4)
@@ -278,16 +298,26 @@ def _render_detailed_activity_log(sync_engine: AutomaticSyncEngine) -> None:
 
     # Mock log data for demonstration
     log_entries = [
-        {"timestamp": datetime.now(), "level": "INFO", "message": "Sync engine initialized"},
-        {"timestamp": datetime.now(), "level": "INFO", "message": "Data store connection established"},
+        {
+            "timestamp": datetime.now(),
+            "level": "INFO",
+            "message": "Sync engine initialized",
+        },
+        {
+            "timestamp": datetime.now(),
+            "level": "INFO",
+            "message": "Data store connection established",
+        },
     ]
 
     if sync_engine._last_sync:
-        log_entries.append({
-            "timestamp": sync_engine._last_sync,
-            "level": "INFO",
-            "message": f"Last sync completed successfully"
-        })
+        log_entries.append(
+            {
+                "timestamp": sync_engine._last_sync,
+                "level": "INFO",
+                "message": f"Last sync completed successfully",
+            }
+        )
 
     if not log_entries:
         st.write("No log entries available")

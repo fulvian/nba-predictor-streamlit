@@ -1,0 +1,90 @@
+[
+  {
+    "game_id": "20250605_IND_OKC",
+    "game_info": {
+      "home_team": "Oklahoma City Thunder",
+      "home_team_abbr": "OKC",
+      "away_team": "Indiana Pacers",
+      "away_team_abbr": "IND",
+      "date": "2025-06-05",
+      "time": "8:30 pm ET",
+      "league": "NBA",
+      "season": "2024-25",
+      "api_game_id": "0042400401",
+      "data_completeness_score": 95
+    },
+    "prediction_date": "2025-06-04T15:37:00.496058",
+    "predicted_total": 231.49432661666668,
+    "bet_recommendation": "NO BET",
+    "bet_stake": null,
+    "bookmaker_line": null,
+    "bookmaker_over_quote": null,
+    "status": "pending_result"
+  },
+  {
+    "game_id": "20250606_IND_OKC",
+    "game_info": {
+      "home_team": "Oklahoma City Thunder",
+      "home_team_abbr": "OKC",
+      "away_team": "Indiana Pacers",
+      "away_team_abbr": "IND",
+      "date": "2025-06-06",
+      "time": "Game Finished",
+      "league": "NBA",
+      "season": "2024-25",
+      "api_game_id": 449753,
+      "data_completeness_score": 75,
+      "data_sources_summary": {
+        "calendario": "api-sports.io",
+        "quote": "Non Trovate",
+        "stats_base_home": "Non Trovate (api-s)",
+        "stats_base_away": "Non Trovate (api-s)",
+        "stats_adv_home": "nba-api (ORtg: 119.2, Pace: 100.9)",
+        "stats_adv_away": "nba-api (ORtg: 115.4, Pace: 100.8)",
+        "stats_l5_home": "nba-api (ORtg_L5: 123.0, Rest: 53)",
+        "stats_l5_away": "nba-api (ORtg_L5: 109.6, Rest: 53)",
+        "h2h": "nba-api (Punteggi: [np.int64(243), np.int64(234)])"
+      }
+    },
+    "prediction_date": "2025-06-06T15:34:28.854037",
+    "predicted_total": 231.49432661666668,
+    "bet_recommendation": "NO BET",
+    "bet_stake": null,
+    "bookmaker_line": null,
+    "bookmaker_over_quote": null,
+    "status": "pending_result"
+  },
+  {
+    "game_id": "20250609_IND_OKC",
+    "game_info": {
+      "home_team": "Oklahoma City Thunder",
+      "home_team_abbr": "OKC",
+      "away_team": "Indiana Pacers",
+      "away_team_abbr": "IND",
+      "date": "2025-06-09",
+      "time": "12:00 AM UTC",
+      "league": "NBA",
+      "season": "2024-25",
+      "api_game_id": 449754,
+      "data_completeness_score": 100,
+      "data_sources_summary": {
+        "calendario": "api-sports.io",
+        "quote": "The Odds API (Trovate: 17 linee)",
+        "stats_base_home": "Non Trovate (api-s)",
+        "stats_base_away": "Non Trovate (api-s)",
+        "stats_adv_home": "nba-api (ORtg: 119.2, Pace: 100.9)",
+        "stats_adv_away": "nba-api (ORtg: 115.4, Pace: 100.8)",
+        "stats_l5_home": "nba-api (ORtg_L5: 123.0, Rest: 56)",
+        "stats_l5_away": "nba-api (ORtg_L5: 109.6, Rest: 56)",
+        "h2h": "nba-api (Punteggi: [np.int64(243), np.int64(234)])"
+      }
+    },
+    "prediction_date": "2025-06-06T15:35:57.412741",
+    "predicted_total": 231.49432661666668,
+    "bet_recommendation": "NO BET",
+    "bet_stake": null,
+    "bookmaker_line": 227.5,
+    "bookmaker_over_quote": 1.91,
+    "status": "pending_result"
+  }
+]

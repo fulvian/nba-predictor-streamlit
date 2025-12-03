@@ -12,14 +12,20 @@ from typing import Any, Optional, Tuple
 
 import streamlit as st
 
-from ..core.data_store import UnifiedDataStore
-from ..core.sync_engine import AutomaticSyncEngine
-from ..utils.exceptions import StreamlitError
-from .components.analytics_dashboard import render_analytics_dashboard
-from .components.sync_dashboard import render_sync_dashboard
-from .components.predictions_dashboard import render_predictions_dashboard
-from .utils.cache_manager import setup_caching_for_app
-from .config.deployment_config import load_config, setup_environment_config
+from nba_predictor.core.data_store import UnifiedDataStore
+from nba_predictor.core.sync_engine import AutomaticSyncEngine
+from nba_predictor.utils.exceptions import StreamlitError
+
+# Removed duplicate dashboard components - using main betting_workflow_dashboard instead
+from nba_predictor.streamlit.components.sync_dashboard import render_sync_dashboard
+from nba_predictor.streamlit.betting_workflow_dashboard import (
+    render_betting_workflow_dashboard as _render_main_dashboard,
+)
+from nba_predictor.streamlit.utils.cache_manager import setup_caching_for_app
+from nba_predictor.streamlit.config.deployment_config import (
+    load_config,
+    setup_environment_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +75,10 @@ def _configure_page(config) -> None:
         layout="wide",
         initial_sidebar_state="expanded",
         menu_items={
-            'Get help': 'https://github.com/your-org/nba-predictor',
-            'Report a bug': 'https://github.com/your-org/nba-predictor/issues',
-            'About': f'NBA Predictor Analytics v2.0 - Advanced NBA predictions with ML (Env: {config.env})'
-        }
+            "Get help": "https://github.com/your-org/nba-predictor",
+            "Report a bug": "https://github.com/your-org/nba-predictor/issues",
+            "About": f"NBA Predictor Analytics v2.0 - Advanced NBA predictions with ML (Env: {config.env})",
+        },
     )
 
 
@@ -84,8 +90,7 @@ def _initialize_core_components(config) -> Tuple[UnifiedDataStore, AutomaticSync
         data_dir.mkdir(exist_ok=True)
 
     data_store = UnifiedDataStore(
-        base_path=str(data_dir),
-        cache_enabled=config.cache_enabled
+        base_path=str(data_dir), cache_enabled=config.cache_enabled
     )
     data_store.initialize()
 
@@ -96,53 +101,39 @@ def _initialize_core_components(config) -> Tuple[UnifiedDataStore, AutomaticSync
             data_store=data_store,
             sync_interval=config.sync_interval_minutes * 60,  # Convert to seconds
             retry_attempts=3,
-            batch_size=1000
+            batch_size=1000,
         )
 
     return data_store, sync_engine
 
 
-def _render_main_navigation(data_store: UnifiedDataStore, sync_engine, config, cache_manager) -> None:
+def _render_main_navigation(
+    data_store: UnifiedDataStore, sync_engine, config, cache_manager
+) -> None:
     """Render main navigation with tabs and prediction integration."""
 
     # Sidebar with app information
     _render_sidebar(data_store, sync_engine, config, cache_manager)
 
-    # Main content area with tabs - now includes Predictions
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏀 Dashboard",
-        "🎯 Predictions",
-        "📊 Analytics",
-        "🔄 Data Sync",
-        "⚙️ Settings"
-    ])
+    # Main content area with tabs - simplified to use main dashboard
+    tab1, tab2, tab3 = st.tabs(["🏀 Dashboard", "🔄 Data Sync", "⚙️ Settings"])
 
     with tab1:
         _render_main_dashboard(data_store, sync_engine, config)
 
     with tab2:
-        if config.enable_predictions:
-            render_predictions_dashboard(data_store, sync_engine)
-        else:
-            st.warning("🚫 Predictions are disabled in current configuration")
-
-    with tab3:
-        if config.enable_analytics:
-            render_analytics_dashboard(data_store)
-        else:
-            st.warning("🚫 Analytics are disabled in current configuration")
-
-    with tab4:
         if sync_engine:
             render_sync_dashboard(sync_engine, data_store)
         else:
             st.info("ℹ️ Data sync is disabled in current configuration")
 
-    with tab5:
+    with tab3:
         _render_settings_page(data_store, sync_engine, config, cache_manager)
 
 
-def _render_sidebar(data_store: UnifiedDataStore, sync_engine, config, cache_manager) -> None:
+def _render_sidebar(
+    data_store: UnifiedDataStore, sync_engine, config, cache_manager
+) -> None:
     """Render sidebar with app information and quick actions."""
     with st.sidebar:
         st.title("🏀 NBA Predictor")
@@ -163,7 +154,9 @@ def _render_sidebar(data_store: UnifiedDataStore, sync_engine, config, cache_man
 
             with col2:
                 predictions_status = "🟢" if config.enable_predictions else "🔴"
-                st.write(f"{predictions_status} {'ML On' if config.enable_predictions else 'ML Off'}")
+                st.write(
+                    f"{predictions_status} {'ML On' if config.enable_predictions else 'ML Off'}"
+                )
 
             # Data statistics
             if sync_engine:
@@ -216,7 +209,9 @@ def _render_sidebar(data_store: UnifiedDataStore, sync_engine, config, cache_man
 
         st.write(f"**Version**: 2.0.0")
         st.write(f"**Environment**: {config.env.title()}")
-        st.write(f"**Predictions**: {'Enabled' if config.enable_predictions else 'Disabled'}")
+        st.write(
+            f"**Predictions**: {'Enabled' if config.enable_predictions else 'Disabled'}"
+        )
 
         # Feature flags
         st.divider()
@@ -225,7 +220,7 @@ def _render_sidebar(data_store: UnifiedDataStore, sync_engine, config, cache_man
             ("Predictions", config.enable_predictions),
             ("Analytics", config.enable_analytics),
             ("Real-time Data", config.enable_real_time_data),
-            ("ML Explanations", config.enable_ml_explanations)
+            ("ML Explanations", config.enable_ml_explanations),
         ]
 
         for feature, enabled in features:
@@ -261,7 +256,9 @@ def _render_main_dashboard(data_store: UnifiedDataStore, sync_engine, config) ->
     _render_featured_analytics(data_store, config)
 
 
-def _render_dashboard_metrics(data_store: UnifiedDataStore, sync_engine, config) -> None:
+def _render_dashboard_metrics(
+    data_store: UnifiedDataStore, sync_engine, config
+) -> None:
     """Render key dashboard metrics with prediction integration."""
     try:
         # Create metrics
@@ -281,21 +278,23 @@ def _render_dashboard_metrics(data_store: UnifiedDataStore, sync_engine, config)
             st.metric(
                 "Total Games",
                 f"{games_count:,}",
-                delta=f"Data available" if games_count > 0 else "No data"
+                delta=f"Data available" if games_count > 0 else "No data",
             )
 
         with col2:
             st.metric(
                 "ML Predictions",
                 "🤖 Active" if config.enable_predictions else "❌ Disabled",
-                delta="Context7 compliant" if config.enable_predictions else "Enable in settings"
+                delta="Context7 compliant"
+                if config.enable_predictions
+                else "Enable in settings",
             )
 
         with col3:
             st.metric(
                 "Environment",
                 config.env.title(),
-                delta="Debug" if config.debug else "Production"
+                delta="Debug" if config.debug else "Production",
             )
 
         with col4:
@@ -303,7 +302,9 @@ def _render_dashboard_metrics(data_store: UnifiedDataStore, sync_engine, config)
             st.metric(
                 "Cache",
                 cache_status,
-                delta="Performance optimized" if config.cache_enabled else "Slower loading"
+                delta="Performance optimized"
+                if config.cache_enabled
+                else "Slower loading",
             )
 
     except Exception as e:
@@ -319,7 +320,9 @@ def _render_recent_activity(sync_engine: AutomaticSyncEngine) -> None:
         sync_results = sync_stats.get("sync_stats", {})
 
         if last_sync:
-            st.success(f"✅ Last sync completed at {last_sync.strftime('%Y-%m-%d %H:%M:%S')}")
+            st.success(
+                f"✅ Last sync completed at {last_sync.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
 
             # Show sync results
             if sync_results:
@@ -335,7 +338,9 @@ def _render_recent_activity(sync_engine: AutomaticSyncEngine) -> None:
                     st.write("**Performance:**")
                     duration = sync_results.get("duration_seconds", 0)
                     st.write(f"• Duration: {duration:.1f}s")
-                    st.write(f"• Status: {'Success' if sync_results.get('success') else 'Errors'}")
+                    st.write(
+                        f"• Status: {'Success' if sync_results.get('success') else 'Errors'}"
+                    )
 
                     errors = sync_results.get("errors", [])
                     if errors:
@@ -357,11 +362,13 @@ def _render_quick_insights(data_store: UnifiedDataStore, config) -> None:
             "🔥 Top performing teams show 15% improvement",
             "📈 Scoring trends up 3.2% this month",
             "🏠 Home teams maintain 58% win advantage",
-            "⚡ Overtime games decreasing from average"
+            "⚡ Overtime games decreasing from average",
         ]
 
         if config.enable_predictions:
-            insights.insert(0, "🎯 Predictions engine operational with Context7 compliance")
+            insights.insert(
+                0, "🎯 Predictions engine operational with Context7 compliance"
+            )
 
         for insight in insights:
             st.write(f"• {insight}")
@@ -384,11 +391,7 @@ def _render_featured_analytics(data_store: UnifiedDataStore, config) -> None:
 
         if distribution_data is not None and len(distribution_data) > 0:
             st.write("**Game Distribution (Last 7 Days)**")
-            st.bar_chart(
-                distribution_data.to_dict(),
-                x="date",
-                y="games_count"
-            )
+            st.bar_chart(distribution_data.to_dict(), x="date", y="games_count")
         else:
             st.info("No data available for the selected period")
 
@@ -398,9 +401,7 @@ def _render_featured_analytics(data_store: UnifiedDataStore, config) -> None:
 
         if team_data is not None and len(team_data) > 0:
             st.dataframe(
-                team_data.to_pandas(),
-                use_container_width=True,
-                hide_index=True
+                team_data.to_pandas(), use_container_width=True, hide_index=True
             )
         else:
             st.info("No team performance data available")
@@ -430,7 +431,9 @@ def _render_featured_analytics(data_store: UnifiedDataStore, config) -> None:
         logger.error(f"Failed to render featured analytics: {e}")
 
 
-def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cache_manager) -> None:
+def _render_settings_page(
+    data_store: UnifiedDataStore, sync_engine, config, cache_manager
+) -> None:
     """Render settings page with configuration management."""
     st.header("⚙️ Settings")
     st.caption("Configure application settings and preferences")
@@ -454,7 +457,7 @@ def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cac
         st.metric("Sync Interval", f"{config.sync_interval_minutes} min")
         if cache_manager:
             cache_stats = cache_manager.get_cache_statistics()
-            st.metric("Cache Hit Rate", cache_stats['hit_rate'])
+            st.metric("Cache Hit Rate", cache_stats["hit_rate"])
 
     st.divider()
 
@@ -470,7 +473,7 @@ def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cac
             "ML Predictions": config.enable_predictions,
             "Analytics Dashboard": config.enable_analytics,
             "Real-time Data": config.enable_real_time_data,
-            "ML Explanations": config.enable_ml_explanations
+            "ML Explanations": config.enable_ml_explanations,
         }
 
         for feature, enabled in feature_status.items():
@@ -483,7 +486,7 @@ def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cac
             "Background Sync": config.background_sync_enabled,
             "Cache System": config.cache_enabled,
             "Performance Monitoring": config.monitoring.enable_metrics,
-            "API Rate Limiting": True
+            "API Rate Limiting": True,
         }
 
         for feature, enabled in system_features.items():
@@ -527,7 +530,9 @@ def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cac
         st.write(f"• Rate Limit: {config.api.rate_limit_per_minute} requests/minute")
         st.write(f"• Timeout: {config.api.timeout_seconds} seconds")
         st.write(f"• Retry Attempts: {config.api.retry_attempts}")
-        st.write(f"• NBA API Key: {'Configured' if config.get_nba_api_key() else 'Not configured'}")
+        st.write(
+            f"• NBA API Key: {'Configured' if config.get_nba_api_key() else 'Not configured'}"
+        )
 
     st.divider()
 
@@ -540,7 +545,7 @@ def _render_settings_page(data_store: UnifiedDataStore, sync_engine, config, cac
         "Polars Version": "1.0.0+",
         "DuckDB Version": "0.9.0+",
         "Environment": config.env.title(),
-        "Configuration": "Context7 Compliant"
+        "Configuration": "Context7 Compliant",
     }
 
     col1, col2 = st.columns(2)
@@ -584,8 +589,7 @@ def _trigger_manual_sync(sync_engine: AutomaticSyncEngine) -> None:
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(
                 sync_engine.sync_all_data(
-                    force_refresh=True,
-                    progress_callback=progress_callback
+                    force_refresh=True, progress_callback=progress_callback
                 )
             )
             loop.close()
@@ -608,10 +612,15 @@ def _trigger_manual_sync(sync_engine: AutomaticSyncEngine) -> None:
         logger.error(f"Manual sync failed: {e}")
 
 
-def _get_game_distribution_preview(data_store: UnifiedDataStore, date_range: Tuple[date, date]) -> Optional[Any]:
+def _get_game_distribution_preview(
+    data_store: UnifiedDataStore, date_range: Tuple[date, date]
+) -> Optional[Any]:
     """Get game distribution data for preview."""
     try:
-        start_date_str, end_date_str = date_range[0].isoformat(), date_range[1].isoformat()
+        start_date_str, end_date_str = (
+            date_range[0].isoformat(),
+            date_range[1].isoformat(),
+        )
 
         query = f"""
         SELECT
@@ -628,10 +637,15 @@ def _get_game_distribution_preview(data_store: UnifiedDataStore, date_range: Tup
         return None
 
 
-def _get_top_teams_preview(data_store: UnifiedDataStore, date_range: Tuple[date, date]) -> Optional[Any]:
+def _get_top_teams_preview(
+    data_store: UnifiedDataStore, date_range: Tuple[date, date]
+) -> Optional[Any]:
     """Get top teams performance for preview."""
     try:
-        start_date_str, end_date_str = date_range[0].isoformat(), date_range[1].isoformat()
+        start_date_str, end_date_str = (
+            date_range[0].isoformat(),
+            date_range[1].isoformat(),
+        )
 
         query = f"""
         WITH team_stats AS (
@@ -673,3 +687,6 @@ def _get_top_teams_preview(data_store: UnifiedDataStore, date_range: Tuple[date,
 
 # Import required modules
 from datetime import timedelta
+
+if __name__ == "__main__":
+    create_main_app()

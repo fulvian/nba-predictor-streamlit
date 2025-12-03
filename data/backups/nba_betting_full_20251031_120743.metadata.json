@@ -1,0 +1,55 @@
+{
+  "backup_type": "initialization",
+  "created_at": "2025-10-31T12:07:43.501493",
+  "database_path": "data/nba_betting.duckdb",
+  "database_size_bytes": 12288,
+  "file_checksum": "a71a5d75c93d9308cfb1210f03b268b38bef17dea8aaf83224b034a4e68e5567",
+  "table_checksums": {
+    "bankroll": "0fb9f78d87bd25dacf8869f197cda0101fdb8305043e347e8098b9222f5371ea",
+    "bets": "f21096f84bbc46ed6766e55fcb6c9cec36573d5800c07340ddedf27f70d3e28a",
+    "betting_analysis": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "game_results": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "games": "4ae0a10d85895695d91302a5b54c57f2bef6f8ee433c6d3761584a3afc664112"
+  },
+  "database_version": "1.0.0",
+  "duckdb_version": "1.4.1",
+  "python_version": "3.11.13 (main, Jun  3 2025, 18:38:25) [Clang 17.0.0 (clang-1700.0.13.3)]",
+  "hostname": "MacBook-Pro-di-Fulvio-2.local",
+  "user": "fulvioventura",
+  "backup_format": "duckdb_native",
+  "compression": "gzip",
+  "table_statistics": {
+    "bankroll": {
+      "row_count": 5,
+      "estimated_size": 500
+    },
+    "bets": {
+      "row_count": 4,
+      "estimated_size": 400
+    },
+    "betting_analysis": {
+      "row_count": 0,
+      "estimated_size": 0
+    },
+    "games": {
+      "row_count": 7,
+      "estimated_size": 700
+    },
+    "game_results": {
+      "row_count": 0,
+      "estimated_size": 0
+    },
+    "active_bets": {
+      "row_count": 4,
+      "estimated_size": 400
+    },
+    "bankroll_summary": {
+      "row_count": 5,
+      "estimated_size": 500
+    },
+    "betting_performance": {
+      "row_count": 1,
+      "estimated_size": 100
+    }
+  }
+}

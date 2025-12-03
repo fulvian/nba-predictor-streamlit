@@ -2,13 +2,10 @@
 developmentMode = false
 
 [server]
-headless = true
+headless = false
 port = 8501
-enableCORS = false
+enableCORS = true
 enableXsrfProtection = false
-
-[browser]
-gatherUsageStats = false
 
 [theme]
 primaryColor = "#1f77b4"
@@ -18,4 +15,7 @@ textColor = "#262730"
 font = "sans serif"
 
 [client]
-showErrorDetails = false 
+showErrorDetails = true
+
+[browser]
+gatherUsageStats = false

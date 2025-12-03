@@ -1,0 +1,373 @@
+# AlertManager Configuration with Context7 Compliance
+# NBA Predictor Production Alerting
+
+global:
+  smtp_smarthost: 'smtp.example.com:587'
+  smtp_from: 'alerts@nba-predictor.com'
+  smtp_auth_username: 'alerts@nba-predictor.com'
+  smtp_auth_password: 'password'
+
+  # Context7 global settings
+  context7_config:
+    accessibility_enabled: true
+    real_time_alerts: true
+    intelligent_grouping: true
+    adaptive_severity: true
+    compliance_monitoring: true
+
+# Templates for alert formatting
+templates:
+  - '/etc/alertmanager/templates/context7.tmpl'
+
+# Route configuration
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+  routes:
+
+  # Critical system alerts
+  - match:
+      severity: critical
+    receiver: 'critical-alerts'
+    group_wait: 5s
+    repeat_interval: 5m
+    routes:
+    - match:
+        service: nba-predictor-api
+      receiver: 'api-critical-alerts'
+    - match:
+        service: nba-predictor-dashboard
+      receiver: 'dashboard-critical-alerts'
+
+  # Context7 compliance alerts
+  - match:
+      context7_pattern: compliance
+    receiver: 'context7-compliance-alerts'
+    group_wait: 30s
+    repeat_interval: 15m
+    routes:
+    - match:
+        context7_pattern: accessibility
+      receiver: 'accessibility-compliance-alerts'
+    - match:
+        context7_pattern: responsive_design
+      receiver: 'responsive-design-alerts'
+
+  # Performance alerts
+  - match:
+      severity: warning
+    receiver: 'performance-alerts'
+    group_wait: 30s
+    repeat_interval: 30m
+
+  # Business metrics alerts
+  - match:
+      alert_type: business
+    receiver: 'business-alerts'
+    group_wait: 60s
+    repeat_interval: 1h
+
+# Inhibition rules
+inhibit_rules:
+  # Inhibit info alerts if critical alert is firing
+  - source_match:
+      severity: critical
+    target_match:
+      severity: info
+    equal: ['alertname', 'cluster']
+
+  # Inhibit warning alerts if critical alert is firing
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'cluster']
+
+  # Context7-specific inhibition rules
+  - source_match:
+      context7_severity: critical
+    target_match:
+      context7_severity: warning
+    equal: ['context7_pattern']
+
+# Receivers
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'ops-team@example.com'
+        subject: '[{{ .Status | toUpper }}] NBA Predictor Alert'
+        body: |
+          {{ template "context7.alert" . }}
+        context7_config:
+          accessibility: true
+          plain_text_fallback: true
+
+  # Critical alerts receiver
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'critical-alerts@example.com'
+        subject: '🚨 CRITICAL: NBA Predictor Production Alert'
+        body: |
+          {{ template "context7.critical_alert" . }}
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#critical-alerts'
+        title: '🚨 Critical NBA Predictor Alert'
+        text: |
+          {{ template "context7.slack_alert" . }}
+        send_resolved: true
+        context7_config:
+          accessibility_emoji: true
+          screen_reader_friendly: true
+    pagerduty_configs:
+      - routing_key: 'YOUR_PAGERDUTY_KEY'
+        description: '{{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          context7_compliance: '{{ .CommonLabels.context7_compliance }}'
+
+  # API critical alerts
+  - name: 'api-critical-alerts'
+    email_configs:
+      - to: 'api-team@example.com'
+        subject: '🚨 API CRITICAL: NBA Predictor API Alert'
+        body: |
+          {{ template "context7.api_alert" . }}
+    webhook_configs:
+      - url: 'http://nba-predictor-api:8000/webhooks/alerts'
+        send_resolved: true
+        http_config:
+          bearer_token: 'YOUR_WEBHOOK_TOKEN'
+
+  # Dashboard critical alerts
+  - name: 'dashboard-critical-alerts'
+    email_configs:
+      - to: 'frontend-team@example.com'
+        subject: '🚨 DASHBOARD CRITICAL: NBA Predictor Dashboard Alert'
+        body: |
+          {{ template "context7.dashboard_alert" . }}
+
+  # Context7 compliance alerts
+  - name: 'context7-compliance-alerts'
+    email_configs:
+      - to: 'compliance-team@example.com'
+        subject: '⚠️ Context7 Compliance Alert: NBA Predictor'
+        body: |
+          {{ template "context7.compliance_alert" . }}
+        context7_config:
+          accessibility_level: "WCAG_2_1_AA"
+          compliance_tracking: true
+
+  # Accessibility compliance alerts
+  - name: 'accessibility-compliance-alerts'
+    email_configs:
+      - to: 'accessibility-team@example.com'
+        subject: '♿ Accessibility Compliance Alert: NBA Predictor'
+        body: |
+          {{ template "context7.accessibility_alert" . }}
+        context7_config:
+          screen_reader_optimized: true
+          high_contrast_mode: true
+
+  # Responsive design alerts
+  - name: 'responsive-design-alerts'
+    email_configs:
+      - to: 'frontend-team@example.com'
+        subject: '📱 Responsive Design Alert: NBA Predictor'
+        body: |
+          {{ template "context7.responsive_alert" . }}
+
+  # Performance alerts
+  - name: 'performance-alerts'
+    email_configs:
+      - to: 'performance-team@example.com'
+        subject: '⚡ Performance Alert: NBA Predictor'
+        body: |
+          {{ template "context7.performance_alert" . }}
+
+  # Business metrics alerts
+  - name: 'business-alerts'
+    email_configs:
+      - to: 'business-team@example.com'
+        subject: '📊 Business Metrics Alert: NBA Predictor'
+        body: |
+          {{ template "context7.business_alert" . }}
+
+# Time intervals
+time_intervals:
+  - name: 'business-hours'
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+
+  - name: 'weekend'
+    time_intervals:
+      - weekdays: ['saturday', 'sunday']
+
+  - name: 'after-hours'
+    time_intervals:
+      - times:
+          - start_time: '17:01'
+            end_time: '08:59'
+        weekdays: ['monday:friday']
+
+# Mute time intervals
+mute_time_intervals:
+  - name: 'planned-maintenance'
+    time_intervals:
+      - start_time: '2024-01-01T02:00:00Z'
+        end_time: '2024-01-01T04:00:00Z'
+
+# Context7-specific configuration
+context7_rules:
+  # Responsive design monitoring
+  - name: responsive_design_monitoring
+    interval: 60s
+    rules:
+      - alert: ResponsiveDesignScoreLow
+        expr: context7_responsive_design_score < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          context7_pattern: responsive_design
+          context7_severity: warning
+        annotations:
+          summary: "Responsive design score is below threshold"
+          description: "Responsive design score is {{ $value }}, below the required 0.90 threshold"
+          context7_impact: "Mobile user experience may be degraded"
+          accessibility_note: "This may affect users with accessibility needs on mobile devices"
+
+      - alert: ResponsiveDesignScoreCritical
+        expr: context7_responsive_design_score < 0.80
+        for: 2m
+        labels:
+          severity: critical
+          context7_pattern: responsive_design
+          context7_severity: critical
+        annotations:
+          summary: "CRITICAL: Responsive design score is critically low"
+          description: "Responsive design score is {{ $value }}, critically below the 0.80 threshold"
+          context7_impact: "Mobile user experience is severely degraded"
+          accessibility_note: "Users with accessibility needs on mobile devices will be significantly affected"
+
+  # Accessibility monitoring
+  - name: accessibility_monitoring
+    interval: 60s
+    rules:
+      - alert: AccessibilityScoreLow
+        expr: context7_accessibility_score < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          context7_pattern: accessibility
+          context7_severity: warning
+        annotations:
+          summary: "Accessibility compliance score is below threshold"
+          description: "Accessibility score is {{ $value }}, below the required 0.95 threshold"
+          context7_impact: "Accessibility compliance may be compromised"
+          wcag_level: "AA"
+          screen_reader_impact: "Screen reader users may experience issues"
+
+      - alert: AccessibilityScoreCritical
+        expr: context7_accessibility_score < 0.90
+        for: 2m
+        labels:
+          severity: critical
+          context7_pattern: accessibility
+          context7_severity: critical
+        annotations:
+          summary: "CRITICAL: Accessibility compliance is critically low"
+          description: "Accessibility score is {{ $value }}, critically below the 0.90 threshold"
+          context7_impact: "Accessibility compliance is severely compromised"
+          wcag_level: "AA"
+          screen_reader_impact: "Screen reader users will experience significant issues"
+
+  # Real-time updates monitoring
+  - name: realtime_monitoring
+    interval: 30s
+    rules:
+      - alert: RealTimeLatencyHigh
+        expr: context7_real_time_latency > 1000
+        for: 3m
+        labels:
+          severity: warning
+          context7_pattern: real_time_updates
+          context7_severity: warning
+        annotations:
+          summary: "Real-time update latency is high"
+          description: "Real-time update latency is {{ $value }}ms, above the 1000ms threshold"
+          context7_impact: "Real-time features may appear slow to users"
+
+      - alert: RealTimeLatencyCritical
+        expr: context7_real_time_latency > 5000
+        for: 1m
+        labels:
+          severity: critical
+          context7_pattern: real_time_updates
+          context7_severity: critical
+        annotations:
+          summary: "CRITICAL: Real-time update latency is critically high"
+          description: "Real-time update latency is {{ $value }}ms, critically above the 5000ms threshold"
+          context7_impact: "Real-time features are significantly degraded"
+
+  # PWA features monitoring
+  - name: pwa_monitoring
+    interval: 120s
+    rules:
+      - alert: PWAOfflineAccessLow
+        expr: context7_pwa_offline_access < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          context7_pattern: pwa_features
+          context7_severity: warning
+        annotations:
+          summary: "PWA offline accessibility is degraded"
+          description: "PWA offline accessibility score is {{ $value }}, below the 0.90 threshold"
+          context7_impact: "Offline functionality may not work properly"
+
+      - alert: PWABackgroundSyncFailing
+        expr: context7_pwa_background_sync < 0.85
+        for: 3m
+        labels:
+          severity: warning
+          context7_pattern: pwa_features
+          context7_severity: warning
+        annotations:
+          summary: "PWA background sync is failing"
+          description: "PWA background sync success rate is {{ $value }}, below the 0.85 threshold"
+          context7_impact: "Background data synchronization may not work"
+
+  # Overall Context7 compliance monitoring
+  - name: context7_compliance_monitoring
+    interval: 60s
+    rules:
+      - alert: Context7ComplianceLow
+        expr: context7_compliance_score < 0.93
+        for: 5m
+        labels:
+          severity: warning
+          context7_pattern: compliance
+          context7_severity: warning
+        annotations:
+          summary: "Context7 compliance score is below threshold"
+          description: "Overall Context7 compliance score is {{ $value }}, below the 0.93 threshold"
+          context7_impact: "Overall system compliance may be compromised"
+
+      - alert: Context7ComplianceCritical
+        expr: context7_compliance_score < 0.85
+        for: 2m
+        labels:
+          severity: critical
+          context7_pattern: compliance
+          context7_severity: critical
+        annotations:
+          summary: "CRITICAL: Context7 compliance is critically low"
+          description: "Overall Context7 compliance score is {{ $value }}, critically below the 0.85 threshold"
+          context7_impact: "System compliance is severely compromised"

@@ -1,0 +1,273 @@
+# Prometheus Deployment with Context7 Compliance
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: prod
+  labels:
+    app: prometheus
+    monitoring: core
+    context7_compliant: "true"
+    context7_patterns: "real_time_updates,intelligent_cache"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        context7_compliant: "true"
+        context7_patterns: "real_time_updates,intelligent_cache,accessibility_features"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        context7.com/monitoring-optimization: "enabled"
+        context7.com/responsive-dashboard: "enabled"
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.40.0
+        args:
+          - '--config.file=/etc/prometheus/prometheus.yml'
+          - '--storage.tsdb.path=/prometheus'
+          - '--web.console.libraries=/etc/prometheus/console_libraries'
+          - '--web.console.templates=/etc/prometheus/consoles'
+          - '--storage.tsdb.retention.time=15d'
+          - '--storage.tsdb.retention.size=50GB'
+          - '--web.enable-lifecycle'
+          - '--web.enable-admin-api'
+          - '--web.external-url=http://prometheus.prod.svc.cluster.local:9090'
+        ports:
+        - containerPort: 9090
+          name: web
+        env:
+        - name: CONTEXT7_ENABLED
+          value: "true"
+        - name: CONTEXT7_REAL_TIME_UPDATES
+          value: "true"
+        - name: CONTEXT7_INTELLIGENT_CACHE
+          value: "true"
+        - name: CONTEXT7_ACCESSIBILITY
+          value: "true"
+        volumeMounts:
+        - name: prometheus-config-volume
+          mountPath: /etc/prometheus/
+        - name: prometheus-storage-volume
+          mountPath: /prometheus/
+        - name: context7-config
+          mountPath: /etc/context7/
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      - name: context7-sidecar
+        image: context7/sidecar:latest
+        args:
+          - "--prometheus.url=http://localhost:9090"
+          - "--context7.enabled=true"
+          - "--context7.real-time-updates=true"
+          - "--context7.intelligent-cache=true"
+          - "--context7.accessibility=true"
+        ports:
+        - containerPort: 9100
+          name: context7-metrics
+        env:
+        - name: CONTEXT7_COMPLIANCE_MODE
+          value: "production"
+        - name: CONTEXT7_ACCESSIBILITY_LEVEL
+          value: "WCAG_2_1_AA"
+        - name: CONTEXT7_REAL_TIME_LATENCY_TARGET
+          value: "100"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+      volumes:
+      - name: prometheus-config-volume
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage-volume
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
+      - name: context7-config
+        configMap:
+          name: context7-monitoring-config
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: prod
+  labels:
+    app: prometheus
+    monitoring: core
+    context7_compliant: "true"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    context7.com/service-optimization: "enabled"
+    context7.com/load-balancing: "intelligent"
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: web
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: context7-metrics
+    port: 9100
+    targetPort: 9100
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: prod
+  labels:
+    app: prometheus
+    context7_compliant: "true"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+    context7_compliant: "true"
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/metrics
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+    context7_compliant: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: prod
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc
+  namespace: prod
+  labels:
+    app: prometheus
+    context7_compliant: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gp3
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: context7-monitoring-config
+  namespace: prod
+  labels:
+    app: prometheus
+    context7_compliant: "true"
+data:
+  context7.yml: |
+    # Context7 Monitoring Configuration
+    context7:
+      enabled: true
+      real_time_updates:
+        enabled: true
+        latency_target_ms: 100
+        update_interval: 30
+      intelligent_cache:
+        enabled: true
+        cache_size_mb: 512
+        ttl_seconds: 300
+        hit_rate_target: 0.90
+      accessibility_features:
+        enabled: true
+        wcag_level: "AA"
+        screen_reader_support: true
+        keyboard_navigation: true
+        high_contrast_mode: true
+      responsive_design:
+        enabled: true
+        breakpoints:
+          mobile: 768
+          tablet: 1024
+          desktop: 1440
+      pwa_features:
+        enabled: true
+        offline_capability: true
+        background_sync: true
+        push_notifications: true
+      advanced_ml_operations:
+        enabled: true
+        predictive_analytics: true
+        anomaly_detection: true
+        automated_insights: true
+        model_monitoring: true
+
+    compliance_targets:
+      responsive_design_score: 0.96
+      accessibility_score: 0.98
+      adaptive_ui_score: 0.94
+      pwa_features_score: 0.95
+      real_time_updates_score: 0.99
+      intelligent_cache_score: 0.92
+      advanced_ml_ops_score: 0.97
+      overall_score: 0.96
+
+    alerting:
+      context7_compliance_threshold: 0.95
+      real_time_latency_threshold_ms: 100
+      cache_hit_rate_threshold: 0.90
+      accessibility_compliance_threshold: 0.95

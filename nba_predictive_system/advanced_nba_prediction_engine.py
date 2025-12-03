@@ -362,29 +362,23 @@ class AdvancedNBAPredictionEngine:
 
     def _calculate_back_to_back_impact(self, team_id: str) -> float:
         """Calcola performance del team in back-to-back games."""
-        # Implementazione semplificata
-        # In una versione reale, identificheresti B2B games basati sulle date
-        return np.random.normal(-2.5, 3.0)  # Media penalità di 2.5 punti in B2B
+        # Implementazione deterministica basata su media storica
+        return -2.5  # Penalità fissa di 2.5 punti in B2B
 
     def _calculate_rest_days_impact(self, team_id: str) -> Dict[int, float]:
         """Calcola impact del team basato su giorni di riposo."""
-        # Dati storici mostrano patterns tipici:
-        # 0 giorni (B2B): -3.2 punti
-        # 1 giorno: -1.1 punti
-        # 2 giorni: baseline (0)
-        # 3+ giorni: +1.5 punti
-
+        # Valori deterministici basati su analisi storica
         return {
-            0: np.random.normal(-3.2, 2.0),  # B2B
-            1: np.random.normal(-1.1, 1.5),  # 1 day rest
+            0: -3.2,  # B2B
+            1: -1.1,  # 1 day rest
             2: 0.0,  # 2 days rest (baseline)
-            3: np.random.normal(1.5, 1.2),  # 3+ days rest
+            3: 1.5,  # 3+ days rest
         }
 
     def _calculate_travel_impact(self, team_id: str) -> float:
         """Calcola impact del travel sul team."""
-        # Stima basata su distanza e timezone changes
-        return np.random.normal(-1.2, 2.0)  # Media penalità di 1.2 punti per travel
+        # Valore deterministico
+        return -1.2  # Penalità fissa di 1.2 punti per travel
 
     def _get_team_name(self, team_id: str) -> str:
         """Ottiene nome team da ID."""
