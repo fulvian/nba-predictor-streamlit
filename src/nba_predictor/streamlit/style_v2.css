@@ -1,0 +1,226 @@
+/* 
+   🏀 NBA Predictor - Modern Clean Theme (v2)
+   Style: Professional SaaS, Slate/Zinc Palette, Clean Typography
+*/
+
+/* --- Variables & Palette (Slate/Zinc inspired) --- */
+:root {
+    /* Backgrounds */
+    --bg-app: #0f172a;
+    /* Slate 900 */
+    --bg-sidebar: #1e293b;
+    /* Slate 800 */
+    --bg-card: #1e293b;
+    /* Slate 800 */
+    --bg-card-hover: #334155;
+    /* Slate 700 */
+
+    /* Text */
+    --text-primary: #f8fafc;
+    /* Slate 50 */
+    --text-secondary: #94a3b8;
+    /* Slate 400 */
+    --text-accent: #38bdf8;
+    /* Sky 400 */
+
+    /* Accents */
+    --primary: #3b82f6;
+    /* Blue 500 */
+    --primary-hover: #2563eb;
+    /* Blue 600 */
+    --success: #10b981;
+    /* Emerald 500 */
+    --danger: #ef4444;
+    /* Red 500 */
+    --warning: #f59e0b;
+    /* Amber 500 */
+
+    /* Borders */
+    --border-subtle: #334155;
+    /* Slate 700 */
+    --border-focus: #3b82f6;
+    /* Blue 500 */
+
+    /* Spacing & Radius */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+}
+
+/* --- Global Reset & Typography --- */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    /* Tight tracking for modern feel */
+    color: var(--text-primary) !important;
+}
+
+/* --- Streamlit Overrides --- */
+.stApp {
+    background-color: var(--bg-app);
+}
+
+section[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+}
+
+/* Buttons (Modern Flat) */
+.stButton>button {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.stButton>button:hover {
+    background-color: var(--primary-hover);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Metrics */
+div[data-testid="stMetric"] {
+    background-color: var(--bg-card);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+}
+
+div[data-testid="stMetricLabel"] {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+div[data-testid="stMetricValue"] {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+/* --- Game Card Component (v2) --- */
+.game-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    border-color: var(--border-focus);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 1rem;
+}
+
+.team-names {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.game-status {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-accent);
+    background-color: rgba(56, 189, 248, 0.1);
+    /* Sky 400 with opacity */
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    /* Pill shape */
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    text-align: center;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    /* Better alignment for numbers */
+}
+
+/* Edge/EV Badge */
+.edge-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.edge-positive {
+    background-color: rgba(16, 185, 129, 0.1);
+    /* Emerald with opacity */
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.edge-negative {
+    background-color: rgba(239, 68, 68, 0.1);
+    /* Red with opacity */
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Recommendation Box */
+.rec-box {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rec-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.rec-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--primary);
+}

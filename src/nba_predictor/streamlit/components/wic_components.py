@@ -102,31 +102,33 @@ def render_prediction_summary(prediction: Dict[str, Any]):
     ev_class = "ev-positive" if ev > 0 else "ev-negative"
     ev_display = f"+{ev:.1f}%" if ev > 0 else f"{ev:.1f}%"
 
-    # Create HTML Card
+    # Create HTML Card (Modern Clean v2)
     card_html = f"""
 <div class="game-card">
-<div class="card-header">
-<div class="team-name">{away_team} @ {home_team}</div>
-<div class="game-time">Live Analysis</div>
-</div>
-<div class="odds-section">
-<div class="odds-box">
-<div class="odds-label">Predicted Total</div>
-<div class="odds-value">{predicted_total:.1f}</div>
-</div>
-<div class="odds-box">
-<div class="odds-label">Confidence</div>
-<div class="odds-value">{confidence:.1f}%</div>
-</div>
-<div class="odds-box">
-<div class="odds-label">Edge</div>
-<div class="odds-value"><span class="ev-badge {ev_class}">{ev_display}</span></div>
-</div>
-</div>
-<div style="text-align: center; margin-top: 10px;">
-<div class="odds-label">Recommendation</div>
-<div style="font-size: 1.2rem; font-weight: 700; color: var(--primary-color);">{recommendation}</div>
-</div>
+    <div class="card-header">
+        <div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 400;">@</span> {home_team}</div>
+        <div class="game-status">Live Analysis</div>
+    </div>
+    
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Predicted Total</div>
+            <div class="stat-value">{predicted_total:.1f}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Confidence</div>
+            <div class="stat-value">{confidence:.1f}%</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Edge</div>
+            <div class="edge-badge {ev_class}">{ev_display}</div>
+        </div>
+    </div>
+    
+    <div class="rec-box">
+        <div class="rec-label">Recommendation</div>
+        <div class="rec-value">{recommendation}</div>
+    </div>
 </div>
 """
 
