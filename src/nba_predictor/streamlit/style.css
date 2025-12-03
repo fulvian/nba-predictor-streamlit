@@ -1,0 +1,146 @@
+/* Global Theme Overrides */
+:root {
+    --primary-color: #2962FF;
+    --secondary-color: #78909C;
+    --background-color: #0E1117;
+    --card-background: #1E2329;
+    --text-color: #E0E0E0;
+    --accent-green: #00C853;
+    --accent-amber: #FFAB00;
+    --accent-red: #D50000;
+}
+
+/* Main App Background */
+.stApp {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Inter', sans-serif;
+}
+
+/* Game Card Container */
+.game-card {
+    background-color: var(--card-background);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #333;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+    border-color: var(--primary-color);
+}
+
+/* Card Header */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.team-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.game-time {
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+}
+
+/* Odds & Prediction Section */
+.odds-section {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.odds-box {
+    text-align: center;
+    padding: 10px;
+    background-color: #262B33;
+    border-radius: 8px;
+    flex: 1;
+    margin: 0 5px;
+}
+
+.odds-label {
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.odds-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+/* EV Badge */
+.ev-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.ev-positive {
+    background-color: rgba(0, 200, 83, 0.2);
+    color: var(--accent-green);
+    border: 1px solid var(--accent-green);
+}
+
+.ev-negative {
+    background-color: rgba(213, 0, 0, 0.2);
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+/* Action Button Area */
+.action-area {
+    margin-top: 15px;
+    text-align: right;
+}
+
+/* Custom Streamlit Metric Styling */
+div[data-testid="stMetric"] {
+    background-color: var(--card-background);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+div[data-testid="stMetricLabel"] {
+    color: var(--secondary-color);
+}
+
+div[data-testid="stMetricValue"] {
+    color: var(--primary-color);
+}
+
+/* Sidebar Styling */
+section[data-testid="stSidebar"] {
+    background-color: #161920;
+    border-right: 1px solid #333;
+}
+
+/* Headers */
+h1, h2, h3 {
+    color: #FFFFFF;
+    font-weight: 700;
+}
+
+h1 {
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+    margin-bottom: 30px;
+}

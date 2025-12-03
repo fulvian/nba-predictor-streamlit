@@ -918,15 +918,42 @@ def render_step_5_portfolio():
         st.rerun()
 
 
+# --- UI Configuration ---
+from pathlib import Path
+
+
+def load_css():
+    """Load custom CSS for modern UI."""
+    css_file = Path(__file__).parent / "style.css"
+    if css_file.exists():
+        with open(css_file) as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    else:
+        st.warning("style.css not found. Using default theme.")
+
+
 def main():
-    st.set_page_config(page_title="WIC Dashboard", layout="wide")
+    """
+    Main entry point for the Streamlit dashboard.
+    """
+    # Initialize Page Config
+    st.set_page_config(
+        page_title="NBA Predictor Professional",
+        page_icon="🏀",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    # Load Custom CSS
+    load_css()
 
     # Initialize State
     WICState.initialize()
 
-    # Sidebar Navigation
+    # --- Sidebar ---
     with st.sidebar:
-        st.title("Navigation")
+        st.title("🏀 NBA Pro")
+        st.markdown("---")
         if st.button("🏠 New Analysis", use_container_width=True):
             WICState.reset()
             st.rerun()

@@ -77,33 +77,88 @@ def render_game_card(game: Dict[str, Any], on_analyze: Callable[[str], None]):
 
 def render_prediction_summary(prediction: Dict[str, Any]):
     """
-    Renders the ML prediction summary.
+    Render a modern, card-based prediction summary.
     """
-    st.subheader("🤖 System Prediction")
+    if not prediction:
+        return
 
-    col1, col2, col3 = st.columns(3)
+    # Extract data with correct keys
+    home_team = prediction.get("home_team", "Home Team")
+    away_team = prediction.get("away_team", "Away Team")
+    predicted_total = prediction.get("predicted_total", 0)
 
-    with col1:
-        st.metric(
-            label="Winner Prediction",
-            value=prediction.get("predicted_winner", "N/A"),
-            delta=f"{prediction.get('win_probability', 0):.1%} Conf.",
-        )
+    # Confidence: model_confidence is 0-1, so multiply by 100
+    confidence = prediction.get("model_confidence", 0) * 100
 
-    with col2:
-        st.metric(
-            label="Predicted Spread",
-            value=f"{prediction.get('predicted_spread', 0):+.1f}",
-        )
+    # Expected Value / Edge
+    # Extract from professional_analysis if available
+    prof_analysis = prediction.get("professional_analysis", {})
+    edge_analysis = prof_analysis.get("edge_analysis", {})
+    ev = edge_analysis.get("edge_percentage", 0)
 
-    with col3:
-        st.metric(
-            label="Predicted Total", value=f"{prediction.get('predicted_total', 0):.1f}"
-        )
+    recommendation = prediction.get("recommendation", "No Bet")
 
-    if "explanation" in prediction:
-        with st.expander("See Analysis Details"):
-            st.write(prediction["explanation"])
+    # Determine styles based on EV
+    ev_class = "ev-positive" if ev > 0 else "ev-negative"
+    ev_display = f"+{ev:.1f}%" if ev > 0 else f"{ev:.1f}%"
+
+    # Create HTML Card
+    card_html = f"""
+    <div class="game-card">
+        <div class="card-header">
+            <div class="team-name">{away_team} @ {home_team}</div>
+            <div class="game-time">Live Analysis</div>
+        </div>
+        
+        <div class="odds-section">
+            <div class="odds-box">
+                <div class="odds-label">Predicted Total</div>
+                <div class="odds-value">{predicted_total:.1f}</div>
+            </div>
+            <div class="odds-box">
+                <div class="odds-label">Confidence</div>
+                <div class="odds-value">{confidence:.1f}%</div>
+            </div>
+             <div class="odds-box">
+                <div class="odds-label">Edge</div>
+                <div class="odds-value"><span class="ev-badge {ev_class}">{ev_display}</span></div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 10px;">
+            <div class="odds-label">Recommendation</div>
+            <div style="font-size: 1.2rem; font-weight: 700; color: var(--primary-color);">{recommendation}</div>
+        </div>
+    </div>
+    """
+
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    # Detailed Stats Expanders
+    with st.expander("📊 Advanced Analytics & Factors", expanded=False):
+        cols = st.columns(2)
+        with cols[0]:
+            st.markdown("#### 📈 Momentum Factors")
+            # Check for situational factors
+            sit_factors = prediction.get("situational_factors", {})
+            if sit_factors:
+                for factor, value in sit_factors.items():
+                    # Normalize value for progress bar if needed, or just display text
+                    st.text(f"{factor}: {value}")
+
+            # Also check 'factors' if it exists (legacy)
+            if "factors" in prediction:
+                for factor, value in prediction["factors"].items():
+                    st.progress(min(max(value, 0.0), 1.0), text=f"{factor}")
+
+        with cols[1]:
+            st.markdown("#### 🧠 Model Confidence")
+            st.metric("Model Certainty", f"{confidence:.1f}%")
+
+            # Show insights
+            if "insights" in prof_analysis:
+                for insight in prof_analysis["insights"]:
+                    st.info(insight)
 
 
 def render_betting_card(
