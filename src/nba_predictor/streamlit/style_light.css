@@ -1,0 +1,234 @@
+/* 
+   🏀 NBA Predictor - Light Minimalist Theme (v4)
+   Style: Clean, White/Black, Linear Icons, Sleek Typography
+*/
+
+/* --- Variables & Palette (Light Mode) --- */
+:root {
+    /* Backgrounds */
+    --bg-app: #ffffff;
+    /* Pure White */
+    --bg-sidebar: #f8fafc;
+    /* Slate 50 */
+    --bg-card: #ffffff;
+    /* White */
+    --bg-card-hover: #f8fafc;
+    /* Slate 50 */
+
+    /* Text */
+    --text-primary: #0f172a;
+    /* Slate 900 (Almost Black) */
+    --text-secondary: #64748b;
+    /* Slate 500 */
+    --text-accent: #0f172a;
+    /* Slate 900 */
+
+    /* Accents */
+    --primary: #0f172a;
+    /* Slate 900 (Black Accent) */
+    --primary-hover: #334155;
+    /* Slate 700 */
+    --success: #10b981;
+    /* Emerald 500 */
+    --danger: #ef4444;
+    /* Red 500 */
+    --warning: #f59e0b;
+    /* Amber 500 */
+
+    /* Borders */
+    --border-subtle: #e2e8f0;
+    /* Slate 200 */
+    --border-focus: #94a3b8;
+    /* Slate 400 */
+
+    /* Spacing & Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+/* --- Global Reset & Typography --- */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-weight: 300;
+    /* Light weight by default */
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 500;
+    /* Medium weight for headings */
+    letter-spacing: -0.03em;
+    color: var(--text-primary) !important;
+}
+
+/* --- Streamlit Overrides --- */
+.stApp {
+    background-color: var(--bg-app);
+}
+
+section[data-testid="stSidebar"] {
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+}
+
+/* Buttons (Minimalist Outline) */
+.stButton>button {
+    background-color: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 1rem;
+    font-weight: 400;
+    transition: all 0.2s ease;
+}
+
+.stButton>button:hover {
+    border-color: var(--text-primary);
+    background-color: var(--bg-card-hover);
+}
+
+/* Metrics */
+div[data-testid="stMetric"] {
+    background-color: var(--bg-card);
+    padding: 0;
+    /* Minimalist, no padding/border box */
+    border: none;
+}
+
+div[data-testid="stMetricLabel"] {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+div[data-testid="stMetricValue"] {
+    color: var(--text-primary);
+    font-weight: 300;
+    /* Light weight numbers */
+    font-size: 1.8rem;
+}
+
+/* --- Game Card Component (v4) --- */
+.game-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: box-shadow 0.2s ease;
+}
+
+.game-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.team-names {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.game-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    text-align: left;
+    /* Clean left alignment */
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 300;
+    /* Light sleek numbers */
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+/* Edge/EV Badge (Minimalist) */
+.edge-badge {
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.edge-positive {
+    color: var(--success);
+}
+
+.edge-negative {
+    color: var(--danger);
+}
+
+/* Recommendation Box */
+.rec-box {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rec-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.rec-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Icons */
+.icon-svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+}

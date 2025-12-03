@@ -923,13 +923,13 @@ from pathlib import Path
 
 
 def load_css():
-    """Load custom CSS for modern UI (v2)."""
-    css_file = Path(__file__).parent / "style_v2.css"
+    """Load custom CSS for modern UI (v4 - Light)."""
+    css_file = Path(__file__).parent / "style_light.css"
     if css_file.exists():
         with open(css_file) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     else:
-        st.warning("style_v2.css not found. Using default theme.")
+        st.warning("style_light.css not found. Using default theme.")
 
 
 def main():

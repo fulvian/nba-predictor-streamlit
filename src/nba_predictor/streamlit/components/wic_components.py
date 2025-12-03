@@ -102,24 +102,30 @@ def render_prediction_summary(prediction: Dict[str, Any]):
     ev_class = "ev-positive" if ev > 0 else "ev-negative"
     ev_display = f"+{ev:.1f}%" if ev > 0 else f"{ev:.1f}%"
 
-    # Create HTML Card (Deep Green & Gold v3)
+    # Create HTML Card (Light Minimalist v4)
+    # SVG Icons
+    icon_basketball = '<svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M5.6 5.6l12.8 12.8"></path><path d="M18.4 5.6l-12.8 12.8"></path></svg>'
+    icon_chart = '<svg class="icon-svg" viewBox="0 0 24 24"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>'
+    icon_money = '<svg class="icon-svg" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>'
+    icon_check = '<svg class="icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+
     card_html = f"""
 <div class="game-card">
 <div class="card-header">
-<div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 400;">@</span> {home_team}</div>
-<div class="game-status">Live Analysis</div>
+<div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 300;">@</span> {home_team}</div>
+<div class="game-status">{icon_basketball} Live Analysis</div>
 </div>
 <div class="stats-grid">
 <div class="stat-box">
-<div class="stat-label">Predicted Total</div>
+<div class="stat-label">{icon_chart} Predicted Total</div>
 <div class="stat-value">{predicted_total:.1f}</div>
 </div>
 <div class="stat-box">
-<div class="stat-label">Confidence</div>
+<div class="stat-label">{icon_check} Confidence</div>
 <div class="stat-value">{confidence:.1f}%</div>
 </div>
 <div class="stat-box">
-<div class="stat-label">Edge</div>
+<div class="stat-label">{icon_money} Edge</div>
 <div class="edge-badge {ev_class}">{ev_display}</div>
 </div>
 </div>
