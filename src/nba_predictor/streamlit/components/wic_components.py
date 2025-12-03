@@ -102,33 +102,31 @@ def render_prediction_summary(prediction: Dict[str, Any]):
     ev_class = "ev-positive" if ev > 0 else "ev-negative"
     ev_display = f"+{ev:.1f}%" if ev > 0 else f"{ev:.1f}%"
 
-    # Create HTML Card (Modern Clean v2)
+    # Create HTML Card (Deep Green & Gold v3)
     card_html = f"""
 <div class="game-card">
-    <div class="card-header">
-        <div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 400;">@</span> {home_team}</div>
-        <div class="game-status">Live Analysis</div>
-    </div>
-    
-    <div class="stats-grid">
-        <div class="stat-box">
-            <div class="stat-label">Predicted Total</div>
-            <div class="stat-value">{predicted_total:.1f}</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-label">Confidence</div>
-            <div class="stat-value">{confidence:.1f}%</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-label">Edge</div>
-            <div class="edge-badge {ev_class}">{ev_display}</div>
-        </div>
-    </div>
-    
-    <div class="rec-box">
-        <div class="rec-label">Recommendation</div>
-        <div class="rec-value">{recommendation}</div>
-    </div>
+<div class="card-header">
+<div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 400;">@</span> {home_team}</div>
+<div class="game-status">Live Analysis</div>
+</div>
+<div class="stats-grid">
+<div class="stat-box">
+<div class="stat-label">Predicted Total</div>
+<div class="stat-value">{predicted_total:.1f}</div>
+</div>
+<div class="stat-box">
+<div class="stat-label">Confidence</div>
+<div class="stat-value">{confidence:.1f}%</div>
+</div>
+<div class="stat-box">
+<div class="stat-label">Edge</div>
+<div class="edge-badge {ev_class}">{ev_display}</div>
+</div>
+</div>
+<div class="rec-box">
+<div class="rec-label">Recommendation</div>
+<div class="rec-value">{recommendation}</div>
+</div>
 </div>
 """
 
