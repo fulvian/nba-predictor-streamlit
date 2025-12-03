@@ -968,10 +968,10 @@ def main():
     render_wic_header("Workflow Intelligent Control", current_step)
 
     # Step 0: Auto-Run (Force Run for Debugging)
-    # if "auto_settled" not in st.session_state:
-    print("\n\n!!! 🚀 AUTO-SETTLEMENT TRIGGERED !!!\n\n")
-    auto_update_and_settle()
-    st.session_state["auto_settled"] = True
+    if "auto_settled" not in st.session_state:
+        print("\n\n!!! 🚀 AUTO-SETTLEMENT TRIGGERED !!!\n\n")
+        auto_update_and_settle()
+        st.session_state["auto_settled"] = True
 
     # Workflow Router
     if current_step == 1:
