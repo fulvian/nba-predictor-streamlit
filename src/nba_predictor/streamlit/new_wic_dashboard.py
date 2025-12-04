@@ -21,6 +21,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
 # Import Components & Utils
+from nba_predictor.streamlit import assets
 from nba_predictor.streamlit.components.wic_components import (
     render_wic_header,
     render_game_card,
@@ -40,8 +41,13 @@ from nba_predictor.utils.team_normalizer import TeamNameNormalizer
 import polars as pl
 
 # Initialize Managers
-db_manager = get_secure_database_manager()
+# Initialize Managers
 data_store = UnifiedDataStore(base_path="data")
+data_store.initialize()  # Ensure connection is ready
+
+db_manager = get_secure_database_manager()
+# Inject initialized data_store into db_manager
+db_manager.data_store = data_store
 ml_bridge = get_enhanced_prediction_bridge_professional()
 risk_manager = LegacyRiskManager(data_path="data")
 
@@ -287,6 +293,11 @@ def auto_update_and_settle():
     """
     try:
         logger.info("🚀 Starting Enhanced Auto-Update & Settlement process...")
+
+        # Ensure DataStore is initialized
+        if db_manager.data_store and db_manager.data_store._duckdb_conn is None:
+            logger.info("🔄 Re-initializing DataStore connection in auto-settlement...")
+            db_manager.data_store.initialize()
 
         # Get Pending Bets
         current_user = st.session_state.get("user_id", "test_user_001")
@@ -647,7 +658,7 @@ def render_step_1_scheduler():
     """
     Step 1: Game Selection (Scheduler)
     """
-    st.subheader("📅 Games Schedule")
+    st.markdown(f"### {assets.ICON_CALENDAR} Games Schedule", unsafe_allow_html=True)
 
     # Date Filter
     col1, col2 = st.columns([2, 1])
@@ -675,11 +686,73 @@ def render_step_1_scheduler():
         # Fetch games from store
         games_df = data_store.get_games_data(date_range=(s_str, e_str))
 
+        # --- SMART REFRESH LOGIC ---
+        # 1. Check for staleness
+        is_stale = False
+        stale_reason = ""
+
+        if not games_df.is_empty():
+            # Check if any "Scheduled" game is actually in the past (stale)
+            # We use a 4-hour buffer to allow for game duration
+            now = datetime.now()
+
+            # Convert to list of dicts for easier iteration
+            temp_games = games_df.to_dicts()
+            for g in temp_games:
+                if g.get("status") == "Scheduled":
+                    # Parse game date/time
+                    try:
+                        # Combine date and time if possible, or just use date
+                        # Assuming game_date is YYYY-MM-DD
+                        g_date_str = g.get("game_date")
+                        g_time_str = g.get("game_time", "")
+
+                        # Simple check: if date is yesterday or older, it's definitely stale
+                        g_date = datetime.strptime(g_date_str, "%Y-%m-%d").date()
+                        if g_date < now.date():
+                            is_stale = True
+                            stale_reason = (
+                                f"Found scheduled game from {g_date_str} (past)"
+                            )
+                            break
+
+                        # If date is today, check time if available (more complex, skipping for now to be safe)
+                        # We rely on "Force Update" for intra-day updates if needed
+                    except Exception:
+                        continue
+
+        # 2. Force Update Button
+        col_btn, _ = st.columns([1, 3])
+        with col_btn:
+            # Custom SVG Icon + Button
+            c_icon, c_b = st.columns([1, 4])
+            with c_icon:
+                st.markdown(
+                    assets.ICON_FORCE_UPDATE.replace(
+                        'width="24"', 'width="20"'
+                    ).replace('height="24"', 'height="20"'),
+                    unsafe_allow_html=True,
+                )
+            with c_b:
+                force_update = st.button(
+                    "Force Update", help="Force refresh of game data from API"
+                )
+
+        # 3. Conditional Fetch
+        should_fetch = False
         if games_df.is_empty():
             st.info(
                 f"Local store empty. Fetching fresh data from API for {s_str} to {e_str}..."
             )
+            should_fetch = True
+        elif is_stale:
+            st.warning(f"⚠️ Data appears stale ({stale_reason}). Auto-refreshing...")
+            should_fetch = True
+        elif force_update:
+            st.info("🔄 Force update requested. Fetching fresh data...")
+            should_fetch = True
 
+        if should_fetch:
             try:
                 # Initialize provider
                 provider = NBADataProvider()
@@ -732,13 +805,18 @@ def render_step_1_scheduler():
                             "Fetched games but failed to retrieve from store. Showing fetched data directly."
                         )
                         games_df = new_games_df
+
+                    st.success("✅ Data updated successfully!")
+
                 else:
                     st.warning(f"No games found from API between {s_str} and {e_str}.")
-                    return
+                    if games_df.is_empty():
+                        return
 
             except Exception as api_error:
                 st.error(f"Failed to fetch from API: {str(api_error)}")
-                return
+                if games_df.is_empty():
+                    return
 
         # Convert to list of dicts for rendering
         games = games_df.to_dicts()
@@ -775,12 +853,15 @@ def render_step_2_predictor():
     game = WICState.get_selected_game()
     if not game:
         st.error("No game selected. Please go back to Schedule.")
-        if st.button("Back to Schedule"):
+        if st.button("Back", key="btn_back_pred"):
             WICState.set_step(1)
             st.rerun()
         return
 
-    st.subheader(f"🔮 Prediction: {game.get('away_team')} @ {game.get('home_team')}")
+    st.markdown(
+        f"### {assets.ICON_WAND} Prediction: {game.get('away_team')} @ {game.get('home_team')}",
+        unsafe_allow_html=True,
+    )
 
     # Check if prediction already exists in state to avoid re-running ML on every rerun
     prediction = WICState.get_prediction()
@@ -817,11 +898,15 @@ def render_step_2_predictor():
     st.markdown("---")
     col1, col2 = st.columns([1, 5])
     with col1:
-        if st.button("⬅ Back"):
+        if st.button("Back", key="btn_back_predictor"):
             WICState.prev_step()
             st.rerun()
     with col2:
-        if st.button("Next: Analyze Betting ➡", type="primary"):
+        if st.button(
+            "Next: Analyze Betting",
+            key="btn_next_analysis",
+            type="primary",
+        ):
             WICState.next_step()
             st.rerun()
 
@@ -835,16 +920,19 @@ def render_step_3_analyst():
 
     if not game or not prediction:
         st.error("Missing game or prediction data. Please go back.")
-        if st.button("Back to Predictor"):
+        if st.button("Back", key="btn_back_analyst"):
             WICState.set_step(2)
             st.rerun()
         return
 
-    st.subheader(f"📊 Analysis: {game.get('away_team')} @ {game.get('home_team')}")
+    st.markdown(
+        f"### {assets.ICON_NAV_CHART} Analysis: {game.get('away_team')} @ {game.get('home_team')}",
+        unsafe_allow_html=True,
+    )
 
     # 1. Get Manual Input (Central Line)
+    st.markdown(f"#### {assets.ICON_TARGET} Market Input", unsafe_allow_html=True)
     st.markdown("""
-    ### 🎯 Market Input
     Enter **Central Line** from bookmaker (the point total where Over/Under odds are ~2.00).
     """)
 
@@ -869,17 +957,24 @@ def render_step_3_analyst():
         }
 
         # Generate and analyze opportunities
+        # Use Total Bankroll for sizing
+        bk_summary = db_manager.get_bankroll_summary("test_user_001")
+        total_bankroll = bk_summary["total_bankroll"]
+
         opportunities = risk_manager.analyze_betting_opportunities(
             distribution=distribution,
             central_line=central_line,
-            bankroll=risk_manager.current_bankroll,
+            bankroll=total_bankroll,
         )
 
         # Get Optimal Bet
         optimal_bet = risk_manager.calculate_optimal_bet(opportunities)
 
         if optimal_bet:
-            st.markdown("### 💡 System Recommendation (Optimal Bet)")
+            st.markdown(
+                f"### {assets.ICON_LIGHTBULB} System Recommendation (Optimal Bet)",
+                unsafe_allow_html=True,
+            )
 
             # Display Optimal Bet Card
             opt_col1, opt_col2, opt_col3, opt_col4 = st.columns(4)
@@ -913,7 +1008,7 @@ def render_step_3_analyst():
                 )
 
             # Detailed Breakdown
-            with st.expander("🔍 Detailed Analysis Metrics", expanded=True):
+            with st.expander("Detailed Analysis Metrics", expanded=True):
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Model Probability", f"{optimal_bet['probability']:.1%}")
                 m2.metric(
@@ -935,7 +1030,7 @@ def render_step_3_analyst():
             st.session_state[WICState.KEY_RECOMMENDED_BET] = None
 
         # Show other opportunities table
-        with st.expander("📋 All Opportunities (Ranked by Quality)"):
+        with st.expander("All Opportunities", expanded=True):
             if opportunities:
                 df_opps = pd.DataFrame(opportunities)
                 # Format for display
@@ -964,13 +1059,17 @@ def render_step_3_analyst():
     st.markdown("---")
     col1, col2 = st.columns([1, 5])
     with col1:
-        if st.button("⬅ Back"):
+        if st.button("Back", key="btn_back_analyst_nav"):
             WICState.prev_step()
             st.rerun()
     with col2:
         # Only enable Next if a valid recommendation exists
         if st.session_state.get(WICState.KEY_RECOMMENDED_BET):
-            if st.button("Next: Place Bet ➡", type="primary"):
+            if st.button(
+                "Next: Place Bet",
+                key="btn_next_trade",
+                type="primary",
+            ):
                 WICState.next_step()
                 st.rerun()
         else:
@@ -986,16 +1085,21 @@ def render_step_4_trader():
 
     if not game or not rec:
         st.error("Missing bet recommendation. Please go back.")
-        if st.button("Back to Analyst"):
+        if st.button("Back", key="btn_back_analysis"):
             WICState.set_step(3)
             st.rerun()
         return
 
-    st.subheader(f"💰 Place Bet: {game.get('away_team')} @ {game.get('home_team')}")
+    st.markdown(
+        f"### {assets.ICON_WALLET} Place Bet: {game.get('away_team')} @ {game.get('home_team')}",
+        unsafe_allow_html=True,
+    )
 
     # Bet Placement Form
     with st.form("place_bet_form"):
-        st.markdown("### Confirm Bet Details")
+        st.markdown(
+            f"### {assets.ICON_WALLET} Confirm Bet Details", unsafe_allow_html=True
+        )
 
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -1019,7 +1123,7 @@ def render_step_4_trader():
             f"Reasoning: Quality Score {rec.get('quality_score') * 100:.1f}/100 | Edge {rec.get('edge'):.1%}"
         )
 
-        submitted = st.form_submit_button("✅ Confirm & Place Bet", type="primary")
+        submitted = st.form_submit_button("Confirm & Place Bet", type="primary")
 
         if submitted:
             if amount <= 0:
@@ -1027,7 +1131,7 @@ def render_step_4_trader():
             else:
                 try:
                     # Insert into Database
-                    bet_id = db_manager.safe_insert_bet(
+                    bet_id = db_manager.safe_place_bet(
                         user_id="test_user_001",  # Fixed User ID for testing
                         game_id=game.get("game_id"),
                         bet_type=bet_desc,
@@ -1039,24 +1143,20 @@ def render_step_4_trader():
                     )
 
                     if bet_id:
-                        # Deduct stake from bankroll
-                        if update_bankroll(-amount):
-                            render_toast(
-                                f"Bet Placed Successfully! ID: {bet_id}", "success"
-                            )
-                            time.sleep(1)  # Give time for toast
-                            WICState.next_step()
-                            st.rerun()
-                        else:
-                            st.error("Bet placed but failed to update bankroll.")
+                        # Bankroll is automatically updated by safe_place_bet
+                        render_toast(f"Bet Placed Successfully! ID: {bet_id}")
+                        time.sleep(1)
+                        # Reset
+                        WICState.reset()
+                        st.rerun()
                     else:
-                        st.error("Failed to place bet. Database error.")
+                        st.error("Failed to place bet. Check logs or bankroll.")
 
                 except Exception as e:
                     st.error(f"Error placing bet: {str(e)}")
 
     # Navigation
-    if st.button("⬅ Back"):
+    if st.button("Back", key="btn_back_trader"):
         WICState.prev_step()
         st.rerun()
 
@@ -1065,7 +1165,9 @@ def render_step_5_portfolio():
     """
     Step 5: Portfolio Management (Portfolio)
     """
-    st.subheader("📈 Betting Portfolio")
+    st.markdown(
+        f"### {assets.ICON_NAV_CHART} Betting Portfolio", unsafe_allow_html=True
+    )
 
     # 1. KPIs
     summary = db_manager.safe_get_user_summary(user_id="test_user_001")
@@ -1091,7 +1193,7 @@ def render_step_5_portfolio():
     st.markdown("---")
 
     # 2. Bet History Tabs
-    tab1, tab2 = st.tabs(["⏳ Pending Bets", "📜 Bet History"])
+    tab1, tab2 = st.tabs(["Pending Bets", "Bet History"])
 
     with tab1:
         pending_bets = db_manager.safe_get_user_bets(
@@ -1111,15 +1213,33 @@ def render_step_5_portfolio():
             st.error(f"Error loading game data: {e}")
             game_map = {}
 
+        # Selection State
+        if "selected_bets" not in st.session_state:
+            st.session_state["selected_bets"] = []
+
+        selected_indices = []
+
         if pending_bets:
-            for bet in pending_bets:
+            # Header for actions
+            st.markdown(f"### {assets.ICON_CLOCK} Pending Bets", unsafe_allow_html=True)
+
+            # Form for selection to avoid rerun on every click?
+            # Actually, checkboxes trigger rerun. Let's just use them.
+
+            for i, bet in enumerate(pending_bets):
                 with st.container():
-                    c1, c2, c3, c4, c5 = st.columns([3, 2, 1, 1, 1])
+                    c0, c1, c2, c3, c4, c5 = st.columns([0.5, 3, 2, 1, 1, 1])
+                    with c0:
+                        # Checkbox for selection
+                        is_selected = st.checkbox("", key=f"sel_{bet.get('bet_id')}")
+                        if is_selected:
+                            selected_indices.append(i)
+
                     with c1:
                         game_id = str(bet.get("game_id"))
                         matchup = game_map.get(game_id, "Unknown Matchup")
                         st.write(f"**{matchup}**")
-                        st.caption(f"ID: {game_id} • 📅 {bet.get('created_at')}")
+                        st.caption(f"ID: {game_id} • {bet.get('created_at')}")
                     with c2:
                         st.write(f"**{bet.get('bet_type')}**")
                     with c3:
@@ -1127,28 +1247,80 @@ def render_step_5_portfolio():
                     with c4:
                         st.write(f"€{bet.get('amount')}")
                     with c5:
-                        if st.button(
-                            "🗑️", key=f"del_{bet.get('bet_id')}", help="Delete Bet"
-                        ):
+                        # Use clean text "Delete" instead of emoji
+                        if st.button("Delete", key=f"del_p_{bet.get('bet_id')}"):
+                            # Refund logic
+                            refund_amount = float(bet.get("amount", 0.0))
                             if db_manager.safe_delete_bet(
                                 bet.get("bet_id"),
                                 "test_user_001",
                                 audit_user="WIC_DASHBOARD",
                             ):
-                                # Refund stake to bankroll
-                                refund_amount = float(bet.get("amount", 0.0))
-                                if update_bankroll(refund_amount):
-                                    st.toast("Bet deleted and refunded!", icon="🗑️")
-                                else:
-                                    st.warning(
-                                        "Bet deleted but bankroll update failed."
-                                    )
+                                # Refund to bankroll
+                                if refund_amount != 0:
+                                    db_manager._update_bankroll(refund_amount, "add")
 
+                                st.toast(
+                                    f"Bet deleted. Bankroll adjusted by €{refund_amount:.2f}"
+                                )
                                 time.sleep(1)
                                 st.rerun()
-                            else:
-                                st.error("Could not delete bet.")
-                st.divider()
+
+            st.markdown("---")
+
+            # Action Buttons
+            c_gen, c_reset = st.columns([2, 1])
+
+            with c_gen:
+                # Custom SVG Icon + Button
+                c_icon, c_b = st.columns([1, 5])
+                with c_icon:
+                    st.markdown(
+                        assets.ICON_SUMMARY.replace('width="24"', 'width="20"').replace(
+                            'height="24"', 'height="20"'
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                with c_b:
+                    if st.button(
+                        "Generate Summary",
+                        key="btn_gen_summary_selected",
+                        type="primary",
+                    ):
+                        if not selected_indices:
+                            st.warning("No bets selected.")
+                        else:
+                            summary_lines = [
+                                "Imposta queste scommesse con queste puntate che poi io deciderò se giocare realmente:\n"
+                            ]
+                            for idx in selected_indices:
+                                bet = pending_bets[idx]
+                                game_id = str(bet.get("game_id"))
+                                matchup = game_map.get(game_id, "Unknown Matchup")
+                                # Format: Away vs Home
+                                if "@" in matchup:
+                                    away, home = matchup.split("@")
+                                    matchup_fmt = f"{away.strip()} vs {home.strip()}"
+                                else:
+                                    matchup_fmt = matchup
+
+                                bet_type = bet.get("bet_type", "")
+                                odds = bet.get("odds", 0.0)
+                                stake = bet.get("amount", 0.0)
+
+                                # Format: 1. Match | Type | Odds | Stake
+                                line_str = f"{len(summary_lines)}. {matchup_fmt} | {bet_type} | Quota: @{odds} | Puntata: €{stake}"
+                                summary_lines.append(line_str)
+
+                            st.code("\n".join(summary_lines), language="text")
+
+            with c_reset:
+                # User requested to disable this for safety
+                # if st.button("Reset Portfolio", key="btn_reset_portfolio"):
+                #     st.toast("Portfolio reset feature coming soon", icon="⚠️")
+                pass
+
+            st.divider()
         else:
             st.info("No pending bets.")
 
@@ -1191,7 +1363,7 @@ def render_step_5_portfolio():
                             )
                     with c6:
                         if st.button(
-                            "🗑️",
+                            "Delete",
                             key=f"del_hist_{bet.get('bet_id')}",
                             help="Delete Record",
                         ):
@@ -1213,8 +1385,6 @@ def render_step_5_portfolio():
                                 # Adjustment: -10. (Which is -Profit).
                                 # Profit = Payout - Stake.
                                 # So Adjustment = -(Payout - Stake).
-                                # Wait, update_bankroll adds the argument.
-                                # So we pass -(Payout - Stake).
                                 payout = stake * float(bet.get("odds", 1.0))
                                 profit = payout - stake
                                 refund_amount = -profit
@@ -1233,16 +1403,9 @@ def render_step_5_portfolio():
                                 "test_user_001",
                                 audit_user="WIC_DASHBOARD",
                             ):
-                                if update_bankroll(refund_amount):
-                                    st.toast(
-                                        f"Bet deleted. Bankroll adjusted by €{refund_amount:.2f}",
-                                        icon="🗑️",
-                                    )
-                                else:
-                                    st.warning(
-                                        "Bet deleted but bankroll update failed."
-                                    )
-
+                                st.toast(
+                                    "Bet deleted and refunded (if pending)!", icon="🗑️"
+                                )
                                 time.sleep(1)
                                 st.rerun()
                             else:
@@ -1253,9 +1416,19 @@ def render_step_5_portfolio():
 
     # Navigation
     st.markdown("---")
-    if st.button("🔄 Start New Analysis", type="primary"):
-        WICState.reset()
-        st.rerun()
+    # Custom SVG Icon + Button
+    c_nav_icon, c_nav_btn = st.columns([1, 4])
+    with c_nav_icon:
+        st.markdown(
+            assets.ICON_PLAY.replace('width="24"', 'width="20"').replace(
+                'height="24"', 'height="20"'
+            ),
+            unsafe_allow_html=True,
+        )
+    with c_nav_btn:
+        if st.button("Start New Analysis", type="primary"):
+            WICState.reset()
+            st.rerun()
 
 
 # --- UI Configuration ---
@@ -1279,7 +1452,7 @@ def main():
     # Initialize Page Config
     st.set_page_config(
         page_title="NBA Predictor Professional",
-        page_icon="🏀",
+        page_icon="🏀",  # Keep emoji for favicon as base64 is tricky here without file path
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -1292,13 +1465,36 @@ def main():
 
     # --- Sidebar ---
     with st.sidebar:
-        st.title("🏀 NBA Pro")
+        # Custom Logo Header
+        st.image("src/nba_predictor/streamlit/nba_logo_flat.png", width=150)
+
         st.markdown("---")
-        if st.button("🏠 New Analysis", use_container_width=True):
+        if st.button("New Analysis", use_container_width=True):
             WICState.reset()
             st.rerun()
 
-        if st.button("📈 Portfolio", use_container_width=True):
+        # Bankroll Management (Centralized)
+        user_id = "test_user_001"
+        bankroll_summary = db_manager.get_bankroll_summary(user_id)
+
+        total_bankroll = bankroll_summary["total_bankroll"]
+        free_bankroll = bankroll_summary["free_bankroll"]
+        committed_bankroll = bankroll_summary["committed_bankroll"]
+
+        st.markdown(
+            f"<div style='display:flex;align-items:center;gap:8px;font-size:1.2rem;font-weight:600;margin-top:20px;margin-bottom:10px;'>{assets.ICON_WALLET} Bankroll</div>",
+            unsafe_allow_html=True,
+        )
+        st.metric("Total Equity", f"€{total_bankroll:.2f}")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Free", f"€{free_bankroll:.2f}")
+        with c2:
+            st.metric("Locked", f"€{committed_bankroll:.2f}")
+
+        st.markdown("---")
+        if st.button("Portfolio", use_container_width=True):
             WICState.set_step(5)
             st.rerun()
 

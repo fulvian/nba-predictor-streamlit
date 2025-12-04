@@ -3,56 +3,56 @@ WIC Dashboard Components
 Reusable UI components for the Workflow Intelligent Control Dashboard.
 """
 
-import streamlit as st
-import pandas as pd
-from typing import Dict, Any, Optional, Callable
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
+
+import streamlit as st
+
+from nba_predictor.streamlit import assets
 
 
 def render_wic_header(title: str, current_step: int, total_steps: int = 5):
     """
     Renders the standard WIC header with breadcrumb progress.
     """
-    st.title(f"🏀 {title}")
+    st.title(f"{title}")
 
     # Progress Bar
     progress = current_step / total_steps
     st.progress(progress)
 
-    # Breadcrumbs
+    # Breadcrumbs (Editorial style with Icons)
     steps = ["Update", "Schedule", "Predict", "Analyze", "Trade", "Portfolio"]
     cols = st.columns(len(steps))
     for i, step_name in enumerate(steps):
         if i == current_step:
-            cols[i].markdown(f"**🔵 {step_name}**")
+            cols[i].markdown(
+                f"<div style='display:flex;align-items:center;gap:4px;font-weight:700;border-bottom:2px solid var(--color-primary);padding-bottom:4px;'>{assets.ICON_TARGET} {step_name}</div>",
+                unsafe_allow_html=True,
+            )
         elif i < current_step:
-            cols[i].markdown(f"✅ {step_name}")
+            cols[i].markdown(
+                f"<div style='display:flex;align-items:center;gap:4px;color:var(--color-text-secondary);'>{assets.ICON_CHECK_CIRCLE} {step_name}</div>",
+                unsafe_allow_html=True,
+            )
         else:
-            cols[i].markdown(f"⚪ {step_name}")
+            cols[i].markdown(
+                f"<div style='display:flex;align-items:center;gap:4px;color:var(--color-border);'>{assets.ICON_Target if False else ''} {step_name}</div>",
+                unsafe_allow_html=True,
+            )
 
     st.markdown("---")
 
 
-def render_game_card(game: Dict[str, Any], on_analyze: Callable[[str], None]):
+def render_game_card(game: dict[str, Any], on_analyze: Callable[[str], None]):
     """
     Renders a card for a single game in the scheduler list.
     """
     with st.container():
         # Styling for the card
-        st.markdown(
-            """
-        <style>
-        .game-card {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #e0e0e0;
-            margin-bottom: 1rem;
-            background-color: #f9f9f9;
-        }
-        </style>
-        """,
-            unsafe_allow_html=True,
-        )
+        # Styling for the card is now handled in style_light.css
+        # .game-card class is used
 
         col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
 
@@ -63,19 +63,36 @@ def render_game_card(game: Dict[str, Any], on_analyze: Callable[[str], None]):
         with col2:
             game_date = game.get("game_date")
             if isinstance(game_date, (str, datetime)):
-                st.text(f"📅 {str(game_date)}")
-            st.text(f"⏰ {game.get('game_time', 'TBD')}")
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:4px'>{assets.ICON_CALENDAR} {str(game_date)}</div>",
+                    unsafe_allow_html=True,
+                )
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:4px'>{assets.ICON_CLOCK} {game.get('game_time', 'TBD')}</div>",
+                unsafe_allow_html=True,
+            )
 
         with col3:
             status = game.get("status", "Scheduled")
             st.info(status)
 
         with col4:
-            if st.button("Analyze 🔍", key=f"btn_analyze_{game.get('game_id')}"):
-                on_analyze(game.get("game_id"))
+            # Use custom SVG icon next to button
+            game_id = game.get("game_id")
+            c_icon, c_btn = st.columns([1, 3])
+            with c_icon:
+                st.markdown(
+                    assets.ICON_ANALYZE.replace('width="24"', 'width="20"').replace(
+                        'height="24"', 'height="20"'
+                    ),
+                    unsafe_allow_html=True,
+                )
+            with c_btn:
+                if st.button("Analyze", key=f"btn_analyze_{game_id}", type="primary"):
+                    on_analyze(game_id)
 
 
-def render_prediction_summary(prediction: Dict[str, Any]):
+def render_prediction_summary(prediction: dict[str, Any]):
     """
     Render a modern, card-based prediction summary.
     """
@@ -102,47 +119,51 @@ def render_prediction_summary(prediction: Dict[str, Any]):
     ev_class = "ev-positive" if ev > 0 else "ev-negative"
     ev_display = f"+{ev:.1f}%" if ev > 0 else f"{ev:.1f}%"
 
-    # Create HTML Card (Light Minimalist v4)
-    # SVG Icons
-    icon_basketball = '<svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M5.6 5.6l12.8 12.8"></path><path d="M18.4 5.6l-12.8 12.8"></path></svg>'
-    icon_chart = '<svg class="icon-svg" viewBox="0 0 24 24"><path d="M18 20V10"></path><path d="M12 20V4"></path><path d="M6 20v-6"></path></svg>'
-    icon_money = '<svg class="icon-svg" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>'
-    icon_check = '<svg class="icon-svg" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>'
-
+    # Create HTML Card (Editorial Style v7 - with Assets)
     card_html = f"""
 <div class="game-card">
-<div class="card-header">
-<div class="team-names">{away_team} <span style="color: var(--text-secondary); font-weight: 300;">@</span> {home_team}</div>
-<div class="game-status">{icon_basketball} Live Analysis</div>
-</div>
-<div class="stats-grid">
-<div class="stat-box">
-<div class="stat-label">{icon_chart} Predicted Total</div>
-<div class="stat-value">{predicted_total:.1f}</div>
-</div>
-<div class="stat-box">
-<div class="stat-label">{icon_check} Confidence</div>
-<div class="stat-value">{confidence:.1f}%</div>
-</div>
-<div class="stat-box">
-<div class="stat-label">{icon_money} Edge</div>
-<div class="edge-badge {ev_class}">{ev_display}</div>
-</div>
-</div>
-<div class="rec-box">
-<div class="rec-label">Recommendation</div>
-<div class="rec-value">{recommendation}</div>
-</div>
+    <div class="card-header">
+        <div class="team-names">{away_team} <span style="font-family: var(--font-body); font-weight: 300; font-size: 1.2rem; color: var(--color-text-secondary);">at</span> {home_team}</div>
+        <div class="game-status" style="display:flex;align-items:center;gap:6px;">{assets.ICON_BASKETBALL.replace('width="24"', 'width="20"').replace('height="24"', 'height="20"')} Live Analysis</div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Away Team</div>
+            <div class="stat-value">{away_team}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Home Team</div>
+            <div class="stat-value">{home_team}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">{assets.ICON_ANALYTICS} Predicted Total</div>
+            <div class="stat-value">{predicted_total:.1f}</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">{assets.ICON_BRAIN} Confidence</div>
+            <div class="stat-value">{confidence:.1f}%</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">{assets.ICON_BETTING} Edge</div>
+            <div class="edge-badge {ev_class}">{ev_display}</div>
+        </div>
+    </div>
+    <div class="rec-box">
+        <div class="rec-label" style="display:flex;align-items:center;gap:6px;">{assets.ICON_LIGHTBULB} Recommendation</div>
+        <div class="rec-value">{recommendation}</div>
+    </div>
 </div>
 """
 
     st.markdown(card_html, unsafe_allow_html=True)
 
     # Detailed Stats Expanders
-    with st.expander("📊 Advanced Analytics & Factors", expanded=False):
+    with st.expander("Advanced Analytics & Factors", expanded=False):
         cols = st.columns(2)
         with cols[0]:
-            st.markdown("#### 📈 Momentum Factors")
+            st.markdown(
+                f"#### {assets.ICON_NAV_CHART} Momentum Factors", unsafe_allow_html=True
+            )
             # Check for situational factors
             sit_factors = prediction.get("situational_factors", {})
             if sit_factors:
@@ -156,7 +177,9 @@ def render_prediction_summary(prediction: Dict[str, Any]):
                     st.progress(min(max(value, 0.0), 1.0), text=f"{factor}")
 
         with cols[1]:
-            st.markdown("#### 🧠 Model Confidence")
+            st.markdown(
+                f"#### {assets.ICON_BRAIN} Model Confidence", unsafe_allow_html=True
+            )
             st.metric("Model Certainty", f"{confidence:.1f}%")
 
             # Show insights
@@ -166,15 +189,15 @@ def render_prediction_summary(prediction: Dict[str, Any]):
 
 
 def render_betting_card(
-    bookmaker_odds: Dict[str, float],
-    system_probs: Dict[str, float],
+    bookmaker_odds: dict[str, float],
+    system_probs: dict[str, float],
     manual_line_key: str,
-) -> Optional[float]:
+) -> float | None:
     """
     Renders the betting analysis card with manual input.
     Returns the manually entered line/odds.
     """
-    st.subheader("📊 Betting Analysis")
+    st.markdown(f"### {assets.ICON_NAV_CHART} Betting Analysis", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
 
@@ -210,5 +233,21 @@ def render_toast(message: str, type: str = "success"):
     """
     Wrapper for st.toast
     """
-    icon = "✅" if type == "success" else "⚠️" if type == "warning" else "❌"
-    st.toast(f"{icon} {message}")
+    """
+    Wrapper for st.toast with custom SVG icons
+    """
+    # Streamlit toast doesn't support HTML/SVG directly in the icon parameter easily without hacky CSS.
+    # We will use the 'icon' parameter with standard emojis for now as fallback,
+    # OR we can try to use the new material icons if supported.
+    # However, to be strictly "Anthropic", we might want to use a custom notification component.
+    # For now, let's stick to clean emojis that match the color scheme or just text.
+
+    # Actually, let's try to use the 'icon' parameter with a valid emoji that fits the style better,
+    # or just omit it and use the message.
+
+    if type == "success":
+        st.toast(message)
+    elif type == "warning":
+        st.toast(message)
+    else:
+        st.toast(message)
