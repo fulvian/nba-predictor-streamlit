@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import threading
+import time
 import json
 import hashlib
 import hashlib
@@ -204,14 +205,38 @@ class SecureBettingDatabaseManager:
 
     @contextmanager
     def get_connection(self):
-        """Thread-safe secure connection management."""
+        """Thread-safe secure connection management with conflict resolution."""
         with self._lock:
             try:
                 if self._conn is None:
-                    self._conn = duckdb.connect(str(self.db_path))
-                    # Set secure database settings
-                    self._conn.execute("SET timezone='UTC'")
-                    self._conn.execute("SET enable_progress_bar=false")
+                    # Try to connect with read-only mode first to check if file is locked
+                    try:
+                        self._conn = duckdb.connect(str(self.db_path), read_only=True)
+                        self._conn.close()
+                    except:
+                        pass  # File might be locked, continue with normal connection
+                    
+                    # Connect with exclusive access and retry logic
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            self._conn = duckdb.connect(str(self.db_path))
+                            # Set secure database settings
+                            self._conn.execute("SET timezone='UTC'")
+                            self._conn.execute("SET enable_progress_bar=false")
+                            logger.info(f"Database connection established on attempt {attempt + 1}")
+                            break  # Success, exit retry loop
+                        except Exception as conn_error:
+                            if attempt < max_retries - 1:
+                                warning_msg = f"Connection attempt {attempt + 1} failed: {conn_error}"
+                                if "lock" in str(conn_error).lower() or "conflict" in str(conn_error).lower():
+                                    logger.warning(f"Database lock detected, retrying...")
+                                else:
+                                    logger.warning(warning_msg)
+                                time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
+                            else:
+                                logger.error(f"Failed to connect after {max_retries} attempts: {conn_error}")
+                                raise
                 yield self._conn
             except Exception as e:
                 logger.error(f"Database connection error: {e}")

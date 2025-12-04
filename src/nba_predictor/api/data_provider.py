@@ -14,14 +14,12 @@ Questa soluzione risolve tutti i problemi precedenti:
 """
 
 import pandas as pd
-import numpy as np
 import os
 import json
 import time
 import requests
 import logging
 from datetime import datetime, date, timedelta
-from dateutil import parser
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from dataclasses import dataclass
@@ -87,6 +85,15 @@ from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
 from .ball_dont_lie_client import NBABallDontLieClient
 from balldontlie.exceptions import BallDontLieException
 
+# Import NBA Official API client
+from .nba_official_client import NBAOfficialClient
+
+# Import NBA Timezone Utils (Triggers header patching for NBA API)
+try:
+    from ..utils import nba_timezone_utils
+except ImportError:
+    pass
+
 # Import Data Persistence Bridge
 try:
     from ..core.data_persistence_bridge import (
@@ -125,7 +132,7 @@ class NBADataProvider:
             print("⚠️ TeamNameNormalizer not found")
             self.normalizer = None
 
-        # BallDontLie API configuration (primary source)
+        # BallDontLie API configuration (secondary source - rate limited)
         try:
             ball_dont_lie_api_key = os.getenv("BALLDONTLIE_API_KEY")
             if ball_dont_lie_api_key:
@@ -134,11 +141,21 @@ class NBADataProvider:
             else:
                 self.bdl_client = None
                 self.bdl_available = False
-                print("⚠️ BallDontLie API key not found, will use fallback sources")
+                print("⚠️ BallDontLie API key not found")
         except Exception as e:
             print(f"⚠️ BallDontLie client initialization failed: {e}")
             self.bdl_client = None
             self.bdl_available = False
+
+        # NBA Official API configuration (primary source - no rate limits)
+        try:
+            self.nba_official_client = NBAOfficialClient()
+            self.nba_official_available = True
+            print("✅ NBA Official API: Connessa e pronta (fonte primaria)")
+        except Exception as e:
+            print(f"⚠️ NBA Official client initialization failed: {e}")
+            self.nba_official_client = None
+            self.nba_official_available = False
 
         # The Odds API configuration (fallback)
         self.odds_api_key = os.getenv(
@@ -170,13 +187,19 @@ class NBADataProvider:
         }
 
         print("✅ NBADataProvider inizializzato")
+        if self.nba_official_available:
+            print(
+                f"   🏀 NBA Official API: Connessa e pronta (fonte primaria - no rate limits)"
+            )
         if self.bdl_available:
-            print(f"   🏀 BallDontLie API: Connessa e pronta (fonte primaria)")
+            print(f"   🏀 BallDontLie API: Connessa (fonte secondaria - rate limited)")
         else:
-            print(f"   ⚠️ BallDontLie API: Non disponibile, userò fallback")
+            print(f"   ⚠️ BallDontLie API: Non disponibile")
         print(f"   🎰 The Odds API: Configurata e pronta (fallback)")
         print(f"   🏀 NBA API: {len(self.nba_teams_info)} squadre caricate")
-        print(f"   🔄 Soluzione ibrida: Partite reali + fallback")
+        print(
+            f"   🔄 Soluzione ibrida: NBA Official (primary) + BallDontLie (secondary) + fallback"
+        )
 
         # Initialize cache
         self.cache = game_cache
@@ -217,6 +240,22 @@ class NBADataProvider:
         except Exception as e:
             print(f"      ❌ Error resolving team ID for {team_name}: {e}")
             return 0
+
+    def _get_team_name(self, team_id: int) -> str:
+        """
+        Resolve NBA team ID to name.
+        """
+        try:
+            from nba_api.stats.static import teams
+
+            nba_teams = teams.get_teams()
+            for team in nba_teams:
+                if team["id"] == team_id:
+                    return team["full_name"]
+            return f"Unknown Team ({team_id})"
+        except Exception as e:
+            print(f"      ⚠️ Error resolving team name for {team_id}: {e}")
+            return f"Unknown Team ({team_id})"
 
     def _get_odds_api_games(self, days_ahead=7):
         """
@@ -495,74 +534,174 @@ class NBADataProvider:
             print(f"   ❌ Error creating basic roster: {e}")
             return None
 
-    def _get_nba_completed_games(self, days_back=3):
+    def _get_nba_completed_games(self, days_back=3, specific_date=None):
         """
         Ottiene partite completate da NBA API.
+        Usa ScoreboardV2 per dati storici/specifici e Live Scoreboard per oggi.
 
-        Returns:
-            list: Partite completate con risultati
+        Args:
+            days_back: Giorni indietro da controllare (default 3)
+            specific_date: Data specifica (YYYY-MM-DD) opzionale
         """
         try:
-            print(
-                f"   🏀 NBA API: Richiesta partite completate (ultimi {days_back} giorni)..."
-            )
+            # Determine dates to check
+            dates_to_check = []
+            today = date.today()
 
-            # Usa Live Data API per partite recenti
-            board = live_scoreboard.ScoreBoard()
-            games_dict = board.games.get_dict()
+            if specific_date:
+                dates_to_check.append(specific_date)
+                print(
+                    f"   🏀 NBA API: Richiesta partite completate per {specific_date}..."
+                )
+            else:
+                print(
+                    f"   🏀 NBA API: Richiesta partite completate (ultimi {days_back} giorni)..."
+                )
+                # Check today and past `days_back` days
+                for i in range(days_back + 1):
+                    d = today - timedelta(days=i)
+                    dates_to_check.append(d.strftime("%Y-%m-%d"))
 
-            if games_dict:
-                print(f"   ✅ NBA Live API: {len(games_dict)} partite trovate")
+            completed_games = []
+            potential_games = []  # Initialize here to collect from all dates
 
-                completed_games = []
-                for game in games_dict:
-                    try:
-                        game_status = game.get("gameStatusText", "")
+            # Use LeagueGameLog for completed games (more robust for past dates)
+            from nba_api.stats.endpoints import leaguegamelog
 
-                        # Considera "Final" o partite con punteggio come completate
-                        if game_status == "Final" or (
-                            game.get("awayTeam", {}).get("score", 0) > 0
-                        ):
-                            away_score = game.get("awayTeam", {}).get("score", 0)
-                            home_score = game.get("homeTeam", {}).get("score", 0)
+            try:
+                # Fetch all games for the season (or we could filter, but LeagueGameLog is fast)
+                # We can't easily filter by date in the API call, so we fetch all and filter in Python.
+                # Default is current season.
+                print(f"   🏀 Fetching LeagueGameLog for completed games...")
+                log = leaguegamelog.LeagueGameLog(
+                    season="2025-26", player_or_team_abbreviation="T"
+                )  # Assuming 2025-26 season based on dates
+                # Note: Season format might need adjustment. If dates are Oct 2025, it's 2025-26 season.
+                # However, nba_api usually expects '2025-26'.
+                # Let's try to determine season from dates_to_check.
+                # If dates are in 2025, it's likely 2025-26.
+
+                # For safety, let's wrap this in a try/except or check season.
+                # If we are in 2025, season is '2025-26'.
+
+                games_data = log.get_normalized_dict()["LeagueGameLog"]
+
+                # Group by Game_ID to get both teams
+                games_by_id = {}
+                for entry in games_data:
+                    game_id = entry["GAME_ID"]
+                    if game_id not in games_by_id:
+                        games_by_id[game_id] = []
+                    games_by_id[game_id].append(entry)
+
+                for d_str in dates_to_check:
+                    # Filter games for this date
+                    # LeagueGameLog date format is usually 'YYYY-MM-DD'
+
+                    found_for_date = 0
+                    for game_id, entries in games_by_id.items():
+                        if len(entries) < 2:
+                            continue  # Need both teams
+
+                        # Check date of first entry
+                        game_date = entries[0]["GAME_DATE"]
+                        if game_date == d_str:
+                            # Found a game for this date
+                            # Determine Home and Away
+                            # MATCHUP format: "CHI vs. NYK" (Home) or "CHI @ NYK" (Away)
+                            # Actually, usually "Team vs. Opponent" means Home, "Team @ Opponent" means Away.
+
+                            team1 = entries[0]
+                            team2 = entries[1]
+
+                            # Identify home/away
+                            if "@" in team1["MATCHUP"]:
+                                away_team_entry = team1
+                                home_team_entry = team2
+                            else:
+                                home_team_entry = team1
+                                away_team_entry = team2
+
+                            # Extract scores
+                            home_score = home_team_entry["PTS"]
+                            away_score = away_team_entry["PTS"]
 
                             completed_game = {
-                                "away_team": game.get("awayTeam", {}).get(
-                                    "teamName", "Unknown"
-                                ),
-                                "home_team": game.get("homeTeam", {}).get(
-                                    "teamName", "Unknown"
-                                ),
-                                "away_team_id": game.get("awayTeam", {}).get(
-                                    "teamId", 0
-                                ),
-                                "home_team_id": game.get("homeTeam", {}).get(
-                                    "teamId", 0
-                                ),
-                                "game_id": game.get(
-                                    "gameId", f"COMPLETED_{len(completed_games)}"
-                                ),
-                                "date": board.score_board_date,
-                                "time": game.get("gameTimeUTC", ""),
-                                "time_utc": game.get("gameTimeUTC", ""),
-                                "status": game_status,
-                                "score": f"{away_score}-{home_score}",
-                                "away_score": away_score,
-                                "home_score": home_score,
-                                "odds": {},
-                                "source": "NBA Live Data API (Completed)",
-                                "api_endpoint": "cdn.nba.com/static/json/liveData/scoreboard",
+                                "game_id": game_id,
+                                "date": d_str,
+                                "home_team_id": home_team_entry["TEAM_ID"],
+                                "away_team_id": away_team_entry["TEAM_ID"],
+                                "home_team": home_team_entry["TEAM_NAME"],
+                                "away_team": away_team_entry["TEAM_NAME"],
+                                "home_score": int(home_score),
+                                "away_score": int(away_score),
+                                "score": f"{int(away_score)}-{int(home_score)}",
+                                "status": "Final",  # LeagueGameLog only contains completed games usually
+                                "source": "NBA LeagueGameLog",
                             }
                             completed_games.append(completed_game)
+                            found_for_date += 1
 
-                    except Exception as e:
-                        print(f"      ⚠️ Errore processing completed game: {e}")
-                        continue
+                    if found_for_date > 0:
+                        print(
+                            f"      ✅ Found {found_for_date} games in LeagueGameLog for {d_str}"
+                        )
+                    else:
+                        print(f"      ⚠️ No games found in LeagueGameLog for {d_str}")
 
-                print(f"   ✅ Partite completate processate: {len(completed_games)}")
+            except Exception as e:
+                print(f"   ⚠️ Error fetching LeagueGameLog: {e}")
+                # Fallback to ScoreboardV2 if LeagueGameLog fails?
+                # Or just proceed to BDL fallback.
+                pass
+
+            # Fallback logic: If no completed games found but we have potential games (or just no games),
+            # try BallDontLie API if available.
+            if not completed_games and self.bdl_client:
+                print(
+                    f"   🔍 NBA API returned no completed games. Trying BallDontLie API fallback..."
+                )
+                try:
+                    from datetime import datetime
+
+                    for d_str in dates_to_check:
+                        # Convert string date to date object
+                        d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+                        bdl_games = self.bdl_client.get_games_for_date_range(
+                            start_date=d_obj
+                        )
+
+                        if bdl_games:
+                            print(
+                                f"      ✅ BDL found {len(bdl_games)} games for {d_str}"
+                            )
+                            for bg in bdl_games:
+                                if bg["status"] == "Final":
+                                    # BDL client already returns standardized format, but we ensure compatibility
+                                    completed_game = {
+                                        "game_id": bg["game_id"],
+                                        "date": d_str,
+                                        "home_team_id": bg["home_team_id"],
+                                        "away_team_id": bg["away_team_id"],
+                                        "home_team": bg["home_team"],
+                                        "away_team": bg["away_team"],
+                                        "home_score": bg["home_score"],
+                                        "away_score": bg["away_score"],
+                                        "score": bg["score"],
+                                        "status": "Final",
+                                        "source": "BallDontLie API (Fallback)",
+                                    }
+                                    completed_games.append(completed_game)
+                except Exception as e:
+                    print(f"      ⚠️ Error in BDL fallback: {e}")
+
+            if completed_games:
+                print(
+                    f"   ✅ NBA API: {len(completed_games)} partite completate trovate (Totale)"
+                )
                 return completed_games
             else:
-                print(f"   ❌ NBA Live API: nessuna partita completata trovata")
+                print(f"   ❌ NBA API: nessuna partita completata trovata")
                 return []
 
         except Exception as e:
@@ -615,9 +754,26 @@ class NBADataProvider:
         primary_source = ""
         secondary_sources = []
 
-        # 1. Primario: BallDontLie API (official NBA schedule)
-        if self.bdl_available:
-            print(f"\n📅 FASE 1: Partite Ufficiali NBA (BallDontLie API)")
+        # 1. Primario: NBA Official API (official NBA schedule - no rate limits)
+        if self.nba_official_available:
+            print(f"\n📅 FASE 1: Partite Ufficiali NBA (Official API - No Rate Limits)")
+            nba_games = self._get_nba_official_games(
+                days_ahead=days_ahead, specific_date=specific_date
+            )
+
+            if nba_games:
+                all_games.extend(nba_games)
+                primary_source = "NBA Official API"
+                print(
+                    f"   ✅ NBA Official API: {len(nba_games)} partite ufficiali caricate"
+                )
+            else:
+                print(
+                    f"   ⚠️ NBA Official API: Nessuna partita trovata, procedo con fallback"
+                )
+        # 2. Secondario: BallDontLie API (fallback con rate limits)
+        elif self.bdl_available:
+            print(f"\n📅 FASE 1: Partite Ufficiali NBA (BallDontLie API - Fallback)")
             nba_games = self._get_ball_dont_lie_games(
                 days_ahead=days_ahead, specific_date=specific_date
             )
@@ -633,7 +789,7 @@ class NBADataProvider:
                     f"   ⚠️ BallDontLie API: Nessuna partita trovata, procedo con fallback"
                 )
         else:
-            print(f"\n📅 FASE 1: BallDontLie API non disponibile")
+            print(f"\n📅 FASE 1: NBA Official API non disponibile")
 
         # 2. Fallback 1: The Odds API (se NBA Official API fallisce)
         if not all_games:  # Solo se non abbiamo partite da NBA Official API
@@ -662,8 +818,8 @@ class NBADataProvider:
                 print(f"   ❌ The Odds API: Nessuna partita trovata")
 
         # 3. Fallback 2: NBA API completate (se necessario)
-        print(f"\n📅 FASE 3: Partite Completate (NBA Live API)")
-        completed_games = self._get_nba_completed_games(days_back=3)
+        print(f"\n📅 FASE 3: Partite Completate (NBA Official API)")
+        completed_games = self._get_nba_official_completed_games(days_back=3)
 
         if completed_games:
             if specific_date:
