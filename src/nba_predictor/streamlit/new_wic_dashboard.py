@@ -1180,6 +1180,15 @@ def render_step_5_portfolio():
                         st.markdown(f":{color}[{res}]")
                         if res == "WON":
                             st.caption(f"+€{bet.get('profit_loss'):.2f}")
+
+                        # Display Score if available
+                        home_score = bet.get("home_score")
+                        away_score = bet.get("away_score")
+                        if home_score is not None and away_score is not None:
+                            total_score = home_score + away_score
+                            st.caption(
+                                f"Score: {home_score} - {away_score} (Total: {total_score})"
+                            )
                     with c6:
                         if st.button(
                             "🗑️",

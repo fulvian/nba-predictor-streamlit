@@ -157,7 +157,9 @@ class SecureBettingDatabaseManager:
                     confidence_interval JSON,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    settled_at TIMESTAMP
+                    settled_at TIMESTAMP,
+                    home_score INTEGER,
+                    away_score INTEGER
                 )
             """)
 
@@ -166,11 +168,26 @@ class SecureBettingDatabaseManager:
                 # Check if user_id exists
                 columns = conn.execute("PRAGMA table_info(bets)").fetchall()
                 column_names = [col[1] for col in columns]
+
                 if "user_id" not in column_names:
                     logger.info("Migrating schema: Adding user_id column to bets table")
                     conn.execute(
                         "ALTER TABLE bets ADD COLUMN user_id VARCHAR(255) DEFAULT 'legacy_user'"
                     )
+
+                # Check for score columns
+                if "home_score" not in column_names:
+                    logger.info(
+                        "Migrating schema: Adding home_score column to bets table"
+                    )
+                    conn.execute("ALTER TABLE bets ADD COLUMN home_score INTEGER")
+
+                if "away_score" not in column_names:
+                    logger.info(
+                        "Migrating schema: Adding away_score column to bets table"
+                    )
+                    conn.execute("ALTER TABLE bets ADD COLUMN away_score INTEGER")
+
             except Exception as e:
                 logger.warning(f"Schema migration check failed: {e}")
 
@@ -187,7 +204,6 @@ class SecureBettingDatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
                     log_id INTEGER PRIMARY KEY,
@@ -215,7 +231,7 @@ class SecureBettingDatabaseManager:
                         self._conn.close()
                     except:
                         pass  # File might be locked, continue with normal connection
-                    
+
                     # Connect with exclusive access and retry logic
                     max_retries = 3
                     for attempt in range(max_retries):
@@ -224,18 +240,27 @@ class SecureBettingDatabaseManager:
                             # Set secure database settings
                             self._conn.execute("SET timezone='UTC'")
                             self._conn.execute("SET enable_progress_bar=false")
-                            logger.info(f"Database connection established on attempt {attempt + 1}")
+                            logger.info(
+                                f"Database connection established on attempt {attempt + 1}"
+                            )
                             break  # Success, exit retry loop
                         except Exception as conn_error:
                             if attempt < max_retries - 1:
                                 warning_msg = f"Connection attempt {attempt + 1} failed: {conn_error}"
-                                if "lock" in str(conn_error).lower() or "conflict" in str(conn_error).lower():
-                                    logger.warning(f"Database lock detected, retrying...")
+                                if (
+                                    "lock" in str(conn_error).lower()
+                                    or "conflict" in str(conn_error).lower()
+                                ):
+                                    logger.warning(
+                                        f"Database lock detected, retrying..."
+                                    )
                                 else:
                                     logger.warning(warning_msg)
-                                time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
+                                time.sleep(0.5 * (2**attempt))  # Exponential backoff
                             else:
-                                logger.error(f"Failed to connect after {max_retries} attempts: {conn_error}")
+                                logger.error(
+                                    f"Failed to connect after {max_retries} attempts: {conn_error}"
+                                )
                                 raise
                 yield self._conn
             except Exception as e:
@@ -521,6 +546,8 @@ class SecureBettingDatabaseManager:
         status: str,
         result: str = None,
         profit_loss: float = None,
+        home_score: int = None,
+        away_score: int = None,
         audit_user: str = None,
     ) -> bool:
         """Safely update bet status."""
@@ -528,20 +555,40 @@ class SecureBettingDatabaseManager:
         validated_status = self._validate_user_input(status, "status")
         validated_result = self._validate_user_input(result, "result")
         validated_profit_loss = self._validate_user_input(profit_loss, "profit_loss")
+        validated_home_score = self._validate_user_input(home_score, "home_score")
+        validated_away_score = self._validate_user_input(away_score, "away_score")
 
         if result and profit_loss is not None:
-            query = """
-                UPDATE bets
-                SET status = ?, result = ?, profit_loss = ?,
-                    settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-                WHERE bet_id = ?
-            """
-            params = (
-                validated_status,
-                validated_result,
-                validated_profit_loss,
-                validated_bet_id,
-            )
+            # Update with scores if provided
+            if validated_home_score is not None and validated_away_score is not None:
+                query = """
+                    UPDATE bets
+                    SET status = ?, result = ?, profit_loss = ?,
+                        home_score = ?, away_score = ?,
+                        settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE bet_id = ?
+                """
+                params = (
+                    validated_status,
+                    validated_result,
+                    validated_profit_loss,
+                    validated_home_score,
+                    validated_away_score,
+                    validated_bet_id,
+                )
+            else:
+                query = """
+                    UPDATE bets
+                    SET status = ?, result = ?, profit_loss = ?,
+                        settled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE bet_id = ?
+                """
+                params = (
+                    validated_status,
+                    validated_result,
+                    validated_profit_loss,
+                    validated_bet_id,
+                )
         else:
             query = """
                 UPDATE bets
@@ -616,7 +663,7 @@ class SecureBettingDatabaseManager:
         base_query = """
             SELECT bet_id, game_id, bet_type, amount, odds, status, result,
                    profit_loss, created_at, settled_at, prediction,
-                   confidence_interval
+                   confidence_interval, home_score, away_score
             FROM bets
             WHERE user_id = ?
         """
