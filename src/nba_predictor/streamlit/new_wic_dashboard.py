@@ -4,6 +4,13 @@ The central control unit for NBA prediction and betting system.
 """
 
 import streamlit as st
+
+st.set_page_config(
+    page_title="Basket Bet",
+    page_icon="🏀",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 import logging
 import pandas as pd
 from datetime import datetime, timedelta, date
@@ -18,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 # Fix relative import for direct execution
 sys.path.append(str(Path(__file__).resolve().parents[2]))
-
 
 # Import Components & Utils
 from nba_predictor.streamlit import assets
@@ -40,14 +46,23 @@ from nba_predictor.api.data_provider import NBADataProvider
 from nba_predictor.utils.team_normalizer import TeamNameNormalizer
 import polars as pl
 
-# Initialize Managers
-# Initialize Managers
-data_store = UnifiedDataStore(base_path="data")
-data_store.initialize()  # Ensure connection is ready
 
-db_manager = get_secure_database_manager()
-# Inject initialized data_store into db_manager
-db_manager.data_store = data_store
+# Initialize Managers
+# Initialize Managers
+@st.cache_resource
+def get_initialized_managers():
+    """Initialize and cache data managers to prevent race conditions."""
+    ds = UnifiedDataStore(base_path="data")
+    ds.initialize()  # Ensure connection is ready
+
+    db = get_secure_database_manager()
+    # Inject initialized data_store into db_manager
+    db.data_store = ds
+
+    return ds, db
+
+
+data_store, db_manager = get_initialized_managers()
 ml_bridge = get_enhanced_prediction_bridge_professional()
 risk_manager = LegacyRiskManager(data_path="data")
 
@@ -313,7 +328,7 @@ def auto_update_and_settle():
 
         if not pending_bets:
             logger.info("❌ No pending bets found. Exiting.")
-            return
+            return 0
 
         # Extract dates from pending bets with expanded range
         bet_dates = []
@@ -481,9 +496,12 @@ def auto_update_and_settle():
         for bet in pending_bets:
             bet_game_id = str(bet.get("game_id"))
             logger.info(f"🧐 Processing bet {bet_game_id}")
+            # DEBUG LOGGING
 
             # Strategy 1: Direct game ID matching
             game = games_dict.get(bet_game_id)
+            if game:
+                logger.debug(f"Strategy 1 Direct Match! Status: {game.get('status')}")
 
             # Strategy 2: Canonical ID matching
             if not game:
@@ -533,10 +551,14 @@ def auto_update_and_settle():
             if game:
                 status = game.get("status")
                 logger.debug(f"Game found. Status: '{status}'")
+                # st.write(f"DEBUG: Game Found. Status: '{status}'")
 
                 if is_game_completed(status):
                     logger.info(
                         f"✅ Game is completed ({status}). Attempting settlement..."
+                    )
+                    st.write(
+                        f"DEBUG: Game {game.get('game_id')} is FINAL. Settling bet {bet_game_id}..."
                     )
 
                     try:
@@ -590,17 +612,30 @@ def auto_update_and_settle():
                                     f"💸 Loss recorded: -€{abs(profit_loss):.2f}"
                                 )
 
-                            # Update bet in database
-                            update_success = db_manager.safe_update_bet_status(
-                                bet_id=bet.get("bet_id"),
-                                status=outcome,
-                                result=outcome,
-                                profit_loss=profit_loss,
-                                audit_user="WIC_DASHBOARD_ENHANCED",
+                            logger.info(
+                                f"💰 Settlement Payout: {payout} (Result: {outcome})"
+                            )
+                            st.write(
+                                f"DEBUG: Calculated Payout: {payout}, Outcome: {outcome}"
                             )
 
-                            if update_success:
+                            # Update Status in DB
+                            success = db_manager.safe_update_bet_status(
+                                bet_id=bet.get("bet_id"),
+                                status="SETTLED",
+                                result=outcome,
+                                profit_loss=profit_loss,  # Use the calculated profit_loss
+                                home_score=home_score,
+                                away_score=away_score,
+                                audit_user="SYSTEM_AUTO_SETTLE",
+                            )
+                            st.write(f"DEBUG: DB Update Success: {success}")
+
+                            if success:
                                 settled_count += 1
+                                st.toast(
+                                    f"Settled: {bet_game_id} ({outcome})",
+                                )
                                 logger.info(
                                     f"✅ Bet {bet.get('bet_id')} settled as {outcome}, P&L: €{profit_loss:.2f}"
                                 )
@@ -1448,14 +1483,11 @@ def load_css():
 def main():
     """
     Main entry point for Streamlit dashboard.
+    # CRITICAL: Always run this dashboard on port 8501.
+    # Command: streamlit run src/nba_predictor/streamlit/new_wic_dashboard.py --server.port 8501
     """
     # Initialize Page Config
-    st.set_page_config(
-        page_title="NBA Predictor Professional",
-        page_icon="🏀",  # Keep emoji for favicon as base64 is tricky here without file path
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
+    # st.set_page_config moved to top of file
 
     # Load Custom CSS
     load_css()
@@ -1463,10 +1495,37 @@ def main():
     # Initialize State
     WICState.initialize()
 
+    # --- Auto-Settlement Mechanism ---
+    # Enhanced debug mode for settlement
+    with st.sidebar:
+        if st.expander("🛠️ Admin / Debug", expanded=False):
+            if st.button("🔄 Force Check & Settle Bets"):
+                with st.spinner("Forcing settlement check..."):
+                    settled = auto_update_and_settle()
+                    if settled > 0:
+                        st.success(f"Settled {settled} bets!")
+                    else:
+                        st.info("No bets to settle.")
+
+    # --- Auto-Settlement Mechanism ---
+    # Run once on startup (session-persistent)
+    if "auto_settled" not in st.session_state:
+        with st.spinner(
+            "🔄 System Startup: Checking for completed games and settling bets..."
+        ):
+            print("\n\n!!! 🚀 STARTUP AUTO-SETTLEMENT TRIGGERED !!!\n\n")
+            auto_update_and_settle()
+        st.session_state["auto_settled"] = True
+
     # --- Sidebar ---
     with st.sidebar:
         # Custom Logo Header
-        st.image("src/nba_predictor/streamlit/nba_logo_flat.png", width=150)
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.image(
+                "src/nba_predictor/streamlit/nba_logo_flat.png",
+                use_container_width=True,
+            )
 
         st.markdown("---")
         if st.button("New Analysis", use_container_width=True):
@@ -1501,13 +1560,11 @@ def main():
     current_step = WICState.get_current_step()
 
     # Render Header
-    render_wic_header("Workflow Intelligent Control", current_step)
+    render_wic_header("Basket Bet", current_step)
 
     # Step 0: Auto-Run (Force Run for Debugging)
-    if "auto_settled" not in st.session_state:
-        print("\n\n!!! 🚀 ENHANCED AUTO-SETTLEMENT TRIGGERED !!!\n\n")
-        auto_update_and_settle()
-        st.session_state["auto_settled"] = True
+    # Step 0: Auto-Run (Handled at startup)
+    # logic moved to top of main()
 
     # Workflow Router
     if current_step == 1:

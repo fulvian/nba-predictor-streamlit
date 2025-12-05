@@ -222,50 +222,43 @@ class SecureBettingDatabaseManager:
     @contextmanager
     def get_connection(self):
         """Thread-safe secure connection management with conflict resolution."""
+        conn = None
         with self._lock:
             try:
-                if self._conn is None:
-                    # Try to connect with read-only mode first to check if file is locked
+                # Connect with exclusive access and retry logic
+                max_retries = 3
+                for attempt in range(max_retries):
                     try:
-                        self._conn = duckdb.connect(str(self.db_path), read_only=True)
-                        self._conn.close()
-                    except:
-                        pass  # File might be locked, continue with normal connection
-
-                    # Connect with exclusive access and retry logic
-                    max_retries = 3
-                    for attempt in range(max_retries):
-                        try:
-                            self._conn = duckdb.connect(str(self.db_path))
-                            # Set secure database settings
-                            self._conn.execute("SET timezone='UTC'")
-                            self._conn.execute("SET enable_progress_bar=false")
-                            logger.info(
-                                f"Database connection established on attempt {attempt + 1}"
+                        conn = duckdb.connect(str(self.db_path))
+                        # Set secure database settings
+                        conn.execute("SET timezone='UTC'")
+                        conn.execute("SET enable_progress_bar=false")
+                        break  # Success, exit retry loop
+                    except Exception as conn_error:
+                        if attempt < max_retries - 1:
+                            if (
+                                "lock" in str(conn_error).lower()
+                                or "conflict" in str(conn_error).lower()
+                            ):
+                                logger.warning(f"Database lock detected, retrying...")
+                            time.sleep(0.5 * (2**attempt))  # Exponential backoff
+                        else:
+                            logger.error(
+                                f"Failed to connect after {max_retries} attempts: {conn_error}"
                             )
-                            break  # Success, exit retry loop
-                        except Exception as conn_error:
-                            if attempt < max_retries - 1:
-                                warning_msg = f"Connection attempt {attempt + 1} failed: {conn_error}"
-                                if (
-                                    "lock" in str(conn_error).lower()
-                                    or "conflict" in str(conn_error).lower()
-                                ):
-                                    logger.warning(
-                                        f"Database lock detected, retrying..."
-                                    )
-                                else:
-                                    logger.warning(warning_msg)
-                                time.sleep(0.5 * (2**attempt))  # Exponential backoff
-                            else:
-                                logger.error(
-                                    f"Failed to connect after {max_retries} attempts: {conn_error}"
-                                )
-                                raise
-                yield self._conn
+                            raise
+
+                yield conn
+
             except Exception as e:
                 logger.error(f"Database connection error: {e}")
                 raise
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
 
     def _validate_table_name(self, table_name: str) -> str:
         """Validate table name against whitelist."""
@@ -479,18 +472,90 @@ class SecureBettingDatabaseManager:
         result = self.safe_execute_query(query, params, fetch_one=True)
         return result["count"] if result else 0
 
-    def safe_insert_bet(
+    def _get_bankroll_path(self) -> Path:
+        """Get path to bankroll file."""
+        return Path("data/bankroll.json")
+
+    def _read_bankroll(self) -> float:
+        """Read current free bankroll from file."""
+        try:
+            path = self._get_bankroll_path()
+            if path.exists():
+                with open(path, "r") as f:
+                    data = json.load(f)
+                    return float(data.get("current_bankroll", 1000.0))
+            return 1000.0
+        except Exception as e:
+            logger.error(f"Error reading bankroll: {e}")
+            return 1000.0
+
+    def _update_bankroll(self, amount: float, operation: str) -> bool:
+        """
+        Update bankroll file.
+        operation: 'add' or 'subtract'
+        """
+        try:
+            path = self._get_bankroll_path()
+            current = self._read_bankroll()
+
+            if operation == "add":
+                new_amount = current + amount
+            elif operation == "subtract":
+                new_amount = current - amount
+            else:
+                return False
+
+            # Ensure directory exists
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(path, "w") as f:
+                json.dump({"current_bankroll": new_amount}, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Error updating bankroll: {e}")
+            return False
+
+    def get_bankroll_summary(self, user_id: str) -> Dict[str, float]:
+        """
+        Get comprehensive bankroll summary.
+        Returns:
+            - free_bankroll: Funds available for betting
+            - committed_bankroll: Funds locked in pending bets
+            - total_bankroll: Free + Committed
+        """
+        free_bankroll = self._read_bankroll()
+
+        # Calculate committed bankroll (sum of stakes of PENDING bets)
+        query = """
+            SELECT SUM(amount) as committed
+            FROM bets 
+            WHERE user_id = ? AND status = 'PENDING'
+        """
+        result = self.safe_execute_query(query, (user_id,), fetch_one=True)
+        committed_bankroll = (
+            float(result["committed"]) if result and result["committed"] else 0.0
+        )
+
+        return {
+            "free_bankroll": free_bankroll,
+            "committed_bankroll": committed_bankroll,
+            "total_bankroll": free_bankroll + committed_bankroll,
+        }
+
+    def safe_place_bet(
         self,
         user_id: str,
         game_id: str,
         bet_type: str,
         amount: float,
         odds: float,
-        prediction: str = None,
-        confidence_interval: Dict = None,
+        prediction: Any,
+        confidence_interval: Optional[Dict] = None,
         audit_user: str = None,
     ) -> int:
-        """Safely insert a new bet record."""
+        """
+        Safely place a bet using parameterized queries and update bankroll.
+        """
         # Validate all inputs
         validated_user_id = self._validate_user_input(user_id, "user_id")
         validated_game_id = self._validate_user_input(game_id, "game_id")
@@ -501,6 +566,12 @@ class SecureBettingDatabaseManager:
         validated_confidence = self._validate_user_input(
             confidence_interval, "confidence_interval"
         )
+
+        # Check Bankroll
+        free_bankroll = self._read_bankroll()
+        if validated_amount > free_bankroll:
+            logger.warning(f"Insufficient funds: {free_bankroll} < {validated_amount}")
+            return 0
 
         query = """
             INSERT INTO bets (bet_id, user_id, game_id, bet_type, amount, odds,
@@ -527,22 +598,33 @@ class SecureBettingDatabaseManager:
             query, params, fetch_one=True, audit_user=audit_user
         )
 
-        if audit_user:
-            self._log_security_event(
-                audit_user,
-                "BET_CREATED",
-                {
-                    "bet_id": result["bet_id"],
-                    "amount": float(validated_amount),
-                    "game_id": validated_game_id,
-                },
-            )
+        if result:
+            # Deduct stake from free bankroll
+            if self._update_bankroll(validated_amount, "subtract"):
+                if audit_user:
+                    self._log_security_event(
+                        audit_user,
+                        "BET_CREATED",
+                        {
+                            "bet_id": result["bet_id"],
+                            "amount": float(validated_amount),
+                            "game_id": validated_game_id,
+                        },
+                    )
+                return result["bet_id"]
+            else:
+                # Rollback bet creation if bankroll update fails (simplified: just delete)
+                # In a real DB transaction this would be atomic.
+                self.safe_delete_bet(
+                    result["bet_id"], user_id, audit_user="SYSTEM_ROLLBACK"
+                )
+                return 0
 
-        return result["bet_id"] if result else 0
+        return 0
 
     def safe_update_bet_status(
         self,
-        bet_id: int,
+        bet_id: str,
         status: str,
         result: str = None,
         profit_loss: float = None,
@@ -550,13 +632,44 @@ class SecureBettingDatabaseManager:
         away_score: int = None,
         audit_user: str = None,
     ) -> bool:
-        """Safely update bet status."""
+        """
+        Safely update bet status and handle bankroll settlement.
+        """
         validated_bet_id = self._validate_user_input(bet_id, "bet_id")
         validated_status = self._validate_user_input(status, "status")
         validated_result = self._validate_user_input(result, "result")
         validated_profit_loss = self._validate_user_input(profit_loss, "profit_loss")
         validated_home_score = self._validate_user_input(home_score, "home_score")
         validated_away_score = self._validate_user_input(away_score, "away_score")
+
+        # Get current bet details to know the stake
+        bet_query = "SELECT amount, status FROM bets WHERE bet_id = ?"
+        bet_data = self.safe_execute_query(
+            bet_query, (validated_bet_id,), fetch_one=True
+        )
+
+        if not bet_data:
+            logger.error(f"Bet {validated_bet_id} not found for update.")
+            return False
+
+        current_status = bet_data["status"]
+        stake = float(bet_data["amount"])
+
+        # Prevent double settlement
+        if current_status != "PENDING" and validated_status != "PENDING":
+            # Allow updating scores/metadata but NOT bankroll if already settled
+            pass
+        elif current_status == "PENDING" and validated_status != "PENDING":
+            # Settlement Logic
+            if validated_result == "WON":
+                # Add Stake + Net Profit to Free Bankroll
+                # profit_loss passed here MUST be Net Profit
+                payout = stake + validated_profit_loss
+                self._update_bankroll(payout, "add")
+            elif validated_result == "void" or validated_result == "PUSH":
+                # Refund Stake
+                self._update_bankroll(stake, "add")
+            # If LOST, do nothing (stake already deducted)
 
         if result and profit_loss is not None:
             # Update with scores if provided
@@ -687,10 +800,8 @@ class SecureBettingDatabaseManager:
                 COUNT(*) as total_bets,
                 SUM(CASE WHEN status = 'WON' THEN 1 ELSE 0 END) as won_bets,
                 SUM(CASE WHEN status = 'LOST' THEN 1 ELSE 0 END) as lost_bets,
-                SUM(CASE WHEN status = 'WON' THEN amount * odds - amount ELSE 0 END) as total_profit,
-                SUM(CASE WHEN status = 'LOST' THEN -amount ELSE 0 END) as total_loss,
-                SUM(CASE WHEN status != 'PENDING' THEN profit_loss END) as net_profit_loss,
-                AVG(CASE WHEN status != 'PENDING' THEN profit_loss END) as avg_profit_loss
+                SUM(CASE WHEN status IN ('WON', 'LOST', 'PUSH', 'void') THEN amount ELSE 0 END) as total_staked,
+                SUM(CASE WHEN status != 'PENDING' THEN profit_loss END) as net_profit_loss
             FROM bets
             WHERE user_id = ?
         """
@@ -699,18 +810,21 @@ class SecureBettingDatabaseManager:
 
         if result:
             total_bets = result.get("total_bets") or 0
-            net_pl = result.get("net_profit_loss") or 0
+            net_pl = result.get("net_profit_loss") or 0.0
+            total_staked = result.get("total_staked") or 0.0
+
+            # Calculate Win Rate (based on settled bets only?)
+            # Usually Win Rate = Won / (Won + Lost)
+            won_bets = result.get("won_bets") or 0
+            lost_bets = result.get("lost_bets") or 0
+            settled_bets = won_bets + lost_bets
 
             result["win_rate"] = (
-                (result.get("won_bets", 0) / total_bets * 100) if total_bets > 0 else 0
+                (won_bets / settled_bets * 100) if settled_bets > 0 else 0.0
             )
-            result["roi"] = (
-                (
-                    net_pl / (total_bets * 100) * 100
-                )  # Assuming standard unit stake of 100 for ROI calc or similar logic
-                if total_bets > 0
-                else 0
-            )
+
+            # Calculate ROI: (Net Profit / Total Staked) * 100
+            result["roi"] = (net_pl / total_staked * 100) if total_staked > 0 else 0.0
 
         return result or {}
 

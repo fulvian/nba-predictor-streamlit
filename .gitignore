@@ -184,3 +184,7 @@ config.ini
 secrets.json
 .env.local
 .env.production
+
+# Deprecated files
+deprecated/
+**/deprecated/

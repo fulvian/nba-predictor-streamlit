@@ -7,6 +7,7 @@ for efficient storage and retrieval.
 
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -121,22 +122,24 @@ class UnifiedDataStore:
             raise DatabaseError(f"DuckDB initialization failed: {e}") from e
 
     def _init_duckdb(self) -> None:
-        """Initialize DuckDB connection with optimal settings."""
+        """Initialize DuckDB connection with optimal settings and locking handling."""
         try:
-            self._duckdb_conn = duckdb.connect(self.duckdb_path)
+            # Configure DuckDB for concurrent access
+            self._duckdb_conn = duckdb.connect(self.duckdb_path, read_only=False)
 
-            # Configure DuckDB for optimal performance
-            settings = {
-                "memory_limit": "1GB",
-                "threads": "4",
-                "enable_progress_bar": "false",
-                "preserve_insertion_order": "false",
-            }
+            # Configure DuckDB for optimal performance and concurrency
+            # Use basic settings to avoid syntax issues
+            try:
+                self._duckdb_conn.execute("SET memory_limit = '1GB'")
+                self._duckdb_conn.execute("SET threads = 4")
+                self._duckdb_conn.execute("SET enable_progress_bar = false")
+                self._duckdb_conn.execute("SET preserve_insertion_order = false")
+                logger.debug("DuckDB configured with basic settings")
+            except Exception as e:
+                logger.warning(f"Failed to configure some DuckDB settings: {e}")
+                # Continue with default settings
 
-            for key, value in settings.items():
-                self._duckdb_conn.execute(f"SET {key} = '{value}'")
-
-            logger.debug("DuckDB connection initialized with optimized settings")
+            logger.debug("DuckDB connection initialized with optimized settings for concurrency")
 
         except Exception as e:
             logger.error(
@@ -162,6 +165,39 @@ class UnifiedDataStore:
         self._duckdb_conn.execute(create_table_sql)
         logger.debug("Data metadata table created or verified")
 
+    def _retry_db_operation(self, operation_func, max_retries=3, retry_delay=1.0):
+        """
+        Retry database operations with exponential backoff to handle locking issues.
+        
+        Args:
+            operation_func: Function to execute that performs DB operation
+            max_retries: Maximum number of retry attempts
+            retry_delay: Initial delay between retries in seconds
+            
+        Returns:
+            Result of operation_func
+            
+        Raises:
+            DatabaseError: If all retries fail
+        """
+        for attempt in range(max_retries):
+            try:
+                return operation_func()
+            except Exception as e:
+                if "database is locked" in str(e).lower() and attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Database locked, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
+                        extra={"error": str(e)}
+                    )
+                    time.sleep(wait_time)
+                    # Reinitialize connection on retry
+                    if self._duckdb_conn:
+                        self._duckdb_conn.close()
+                        self._init_duckdb()
+                else:
+                    raise DatabaseError(f"Database operation failed after {attempt + 1} attempts: {e}") from e
+
     def store_games_data(self, games_df: pl.DataFrame, date_str: str) -> str:
         """
         Store NBA games data in Parquet format.
@@ -180,7 +216,11 @@ class UnifiedDataStore:
         if games_df is None or games_df.height == 0:
             raise ValidationError("Games DataFrame is empty or None")
 
-        try:
+        def _store_operation():
+            # Ensure DuckDB connection is initialized
+            if self._duckdb_conn is None:
+                self._init_duckdb()
+
             # Validate required columns
             required_columns = {
                 "game_id",
@@ -223,6 +263,9 @@ class UnifiedDataStore:
 
             return str(file_path)
 
+        # Use retry mechanism for database operations
+        try:
+            return self._retry_db_operation(_store_operation)
         except Exception as e:
             logger.error(
                 "Failed to store games data", extra={"error": str(e), "date": date_str}

@@ -89,6 +89,7 @@ def retry_with_backoff(retries=3, backoff_in_seconds=1):
 def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
     """
     Get NBA games using official NBA.com API (ScoreboardV2) with fallback to BallDontLie.
+    Prioritizes LeagueGameLog for past dates to ensure 'Final' status.
 
     Args:
         target_date: Date to fetch games for
@@ -96,6 +97,24 @@ def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
     Returns:
         List of NBA games with official schedule information
     """
+    # 0. Check if date is in the past (yesterday or older)
+    # If so, try LeagueGameLog first as it's more reliable for completed games status
+    if target_date < date.today():
+        try:
+            logger.info(
+                f"📅 Date {target_date} is in the past. Attempting LeagueGameLog fetch first..."
+            )
+            games = _get_games_from_leaguegamelog(target_date)
+            if games:
+                logger.info(
+                    f"✅ LeagueGameLog: Found {len(games)} completed games for {target_date}"
+                )
+                return games
+        except Exception as e:
+            logger.warning(
+                f"⚠️ LeagueGameLog fetch failed: {e}. Falling back to ScoreboardV2."
+            )
+
     # 1. Try Official NBA API (ScoreboardV2)
     try:
         logger.info(
@@ -185,6 +204,80 @@ def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
     # 2. Fallback to BallDontLie API
     logger.warning("⚠️ NBA Official API failed. Falling back to BallDontLie API...")
     return _get_games_from_balldontlie(target_date)
+
+
+def _get_games_from_leaguegamelog(target_date: date) -> List[Dict[str, Any]]:
+    """
+    Fetch games from LeagueGameLog for robust 'Final' status on past dates.
+    """
+    from nba_api.stats.endpoints import leaguegamelog
+
+    # Determine season (e.g. 2025-12-04 -> 2025-26)
+    # Simple logic: if month > 9, use year-(year+1), else (year-1)-year
+    year = target_date.year
+    if target_date.month >= 10:
+        season = f"{year}-{str(year + 1)[-2:]}"
+    else:
+        season = f"{year - 1}-{str(year)[-2:]}"
+
+    logger.info(f"🔍 Fetching LeagueGameLog for season {season}...")
+    log = leaguegamelog.LeagueGameLog(
+        season=season, player_or_team_abbreviation="T", timeout=30
+    )
+    data = log.get_normalized_dict().get("LeagueGameLog", [])
+
+    # Filter for target date
+    target_str = target_date.strftime("%Y-%m-%d")
+    daily_games = [g for g in data if g.get("GAME_DATE") == target_str]
+
+    if not daily_games:
+        return []
+
+    # Map game_id to team entries
+    games_map = {}
+    for entry in daily_games:
+        gid = entry["GAME_ID"]
+        if gid not in games_map:
+            games_map[gid] = []
+        games_map[gid].append(entry)
+
+    formatted_games = []
+
+    for gid, entries in games_map.items():
+        if len(entries) < 2:
+            continue  # Incomplete data
+
+        # Identify Home/Away
+        # MATCHUP: "GSW @ PHI" -> GSW is Away
+        # MATCHUP: "GSW vs. PHI" -> GSW is Home (usually)
+
+        team_a = entries[0]
+        team_b = entries[1]
+
+        if "@" in team_a["MATCHUP"]:
+            away = team_a
+            home = team_b
+        else:
+            home = team_a
+            away = team_b
+
+        game_info = {
+            "game_id": gid,
+            "game_date": target_str,
+            "home_team": home.get("TEAM_NAME"),
+            "away_team": away.get("TEAM_NAME"),
+            "home_score": int(home.get("PTS", 0)),
+            "away_score": int(away.get("PTS", 0)),
+            "game_time": "Final",
+            "status": "Final",
+            "arena": "Unknown",
+            "city": "Unknown",
+            "state": "Unknown",
+            "source": "LeagueGameLog",
+        }
+        formatted_games.append(game_info)
+
+    return formatted_games
 
 
 def _get_games_from_balldontlie(target_date: date) -> List[Dict[str, Any]]:

@@ -1,6 +1,0 @@
-2025-12-03 09:58:57.677381 - 🚀 Starting Auto-Update & Settlement process...
-2025-12-03 09:58:57.681811 - 🔍 Found 0 pending bets for user 'test_user_001'
-2025-12-03 09:58:57.681910 - ❌ No pending bets found. Exiting.
-2025-12-03 09:58:58.742191 - 🚀 Starting Auto-Update & Settlement process...
-2025-12-03 09:58:58.747136 - 🔍 Found 0 pending bets for user 'test_user_001'
-2025-12-03 09:58:58.747751 - ❌ No pending bets found. Exiting.

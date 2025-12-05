@@ -8,11 +8,11 @@ enableCORS = true
 enableXsrfProtection = false
 
 [theme]
-primaryColor = "#1f77b4"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f0f2f6"
-textColor = "#262730"
-font = "sans serif"
+primaryColor = "#52A878"
+backgroundColor = "#F3F1E7"
+secondaryBackgroundColor = "#F3F1E7"
+textColor = "#191919"
+font = "serif"
 
 [client]
 showErrorDetails = true
