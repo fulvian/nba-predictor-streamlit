@@ -21,6 +21,7 @@ import requests
 import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Any
+from dateutil import parser
 from dotenv import load_dotenv
 from dataclasses import dataclass
 
@@ -290,10 +291,21 @@ class NBADataProvider:
                 processed_games = []
                 for game in games:
                     try:
-                        # Parsing della data
-                        commence_time = parser.parse(game["commence_time"])
-                        game_date = commence_time.date()
-                        game_time = commence_time.strftime("%H:%M")
+                        # Parsing della data e conversione in US/Eastern (NBA Time)
+                        # The Odds API returns UTC (ISO 8601). We must convert to ET to match NBA schedule date.
+                        # E.g. 01:00 UTC Dec 6 is actually 20:00 ET Dec 5.
+                        from dateutil import tz
+
+                        commence_time_utc = parser.parse(game["commence_time"])
+
+                        # Convert to Eastern Time
+                        et_zone = tz.gettz("America/New_York")
+                        commence_time_et = commence_time_utc.astimezone(et_zone)
+
+                        game_date = commence_time_et.date()
+                        game_time = commence_time_et.strftime(
+                            "%H:%M"
+                        )  # Local ET time string
 
                         # Estrai quote principali
                         main_odds = self._extract_main_odds(game)
@@ -731,12 +743,10 @@ class NBADataProvider:
         if self.persistence_bridge:
             print(f"\n💾 FASE 0: Verifica dati persistenti...")
             try:
-                persistent_games = (
-                    self.persistence_bridge.get_scheduled_games_with_persistence(
-                        days_ahead=days_ahead,
-                        specific_date=specific_date,
-                        force_api=False,
-                    )
+                persistent_games = self.persistence_bridge.get_scheduled_games_with_persistence(
+                    days_ahead=days_ahead,
+                    specific_date=specific_date,
+                    force_api=True,  # FORCE LIVE FETCH (Prioritize Official API over stale cache)
                 )
                 if persistent_games:
                     print(

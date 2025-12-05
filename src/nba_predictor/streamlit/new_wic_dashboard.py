@@ -1306,7 +1306,20 @@ def render_step_5_portfolio():
 
                     with c1:
                         game_id = str(bet.get("game_id"))
-                        matchup = game_map.get(game_id, "Unknown Matchup")
+                        # TRY 1: Get from live map (best)
+                        matchup = game_map.get(game_id)
+
+                        # TRY 2: Get from stored bet info (fallback)
+                        if not matchup:
+                            home = bet.get("home_team")
+                            away = bet.get("away_team")
+                            if home and away:
+                                matchup = f"{away} @ {home}"  # Dashboard uses Away @ Home convention usually?
+                                # Actually let's check other code. Yes usually Away @ Home.
+                                # But wait, standard NBA notation is Away @ Home.
+                            else:
+                                matchup = f"Unknown Matchup ({game_id})"
+
                         st.write(f"**{matchup}**")
                         st.caption(f"ID: {game_id} • {bet.get('created_at')}")
                     with c2:
@@ -1405,8 +1418,18 @@ def render_step_5_portfolio():
                     c1, c2, c3, c4, c5, c6 = st.columns([3, 1, 1, 1, 1, 1])
                     with c1:
                         game_id = str(bet.get("game_id"))
-                        # Try to find matchup in game_map if available, else use ID
-                        matchup = game_map.get(game_id, f"Game {game_id}")
+                        # Try to find matchup in game_map if available
+                        matchup = game_map.get(game_id)
+
+                        # Fallback to stored names if map fails (e.g. BDL games)
+                        if not matchup:
+                            home = bet.get("home_team")
+                            away = bet.get("away_team")
+                            if home and away:
+                                matchup = f"{away} @ {home}"
+                            else:
+                                matchup = f"Game {game_id}"
+
                         st.write(f"**{matchup}**")
                         st.caption(f"📅 {bet.get('created_at')}")
                     with c2:

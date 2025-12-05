@@ -159,7 +159,9 @@ class SecureBettingDatabaseManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     settled_at TIMESTAMP,
                     home_score INTEGER,
-                    away_score INTEGER
+                    away_score INTEGER,
+                    home_team VARCHAR(100),
+                    away_team VARCHAR(100)
                 )
             """)
 
@@ -187,6 +189,19 @@ class SecureBettingDatabaseManager:
                         "Migrating schema: Adding away_score column to bets table"
                     )
                     conn.execute("ALTER TABLE bets ADD COLUMN away_score INTEGER")
+
+                # Check for team name columns (NEW)
+                if "home_team" not in column_names:
+                    logger.info(
+                        "Migrating schema: Adding home_team column to bets table"
+                    )
+                    conn.execute("ALTER TABLE bets ADD COLUMN home_team VARCHAR(100)")
+
+                if "away_team" not in column_names:
+                    logger.info(
+                        "Migrating schema: Adding away_team column to bets table"
+                    )
+                    conn.execute("ALTER TABLE bets ADD COLUMN away_team VARCHAR(100)")
 
             except Exception as e:
                 logger.warning(f"Schema migration check failed: {e}")
@@ -476,71 +491,87 @@ class SecureBettingDatabaseManager:
         """Get path to bankroll file."""
         return Path("data/bankroll.json")
 
-    def _read_bankroll(self) -> float:
-        """Read current free bankroll from file."""
+    def _sync_bankroll_file(self, free_bankroll: float):
+        """Sync calculated bankroll to file for external visibility."""
         try:
             path = self._get_bankroll_path()
-            if path.exists():
-                with open(path, "r") as f:
-                    data = json.load(f)
-                    return float(data.get("current_bankroll", 1000.0))
-            return 1000.0
-        except Exception as e:
-            logger.error(f"Error reading bankroll: {e}")
-            return 1000.0
-
-    def _update_bankroll(self, amount: float, operation: str) -> bool:
-        """
-        Update bankroll file.
-        operation: 'add' or 'subtract'
-        """
-        try:
-            path = self._get_bankroll_path()
-            current = self._read_bankroll()
-
-            if operation == "add":
-                new_amount = current + amount
-            elif operation == "subtract":
-                new_amount = current - amount
-            else:
-                return False
-
-            # Ensure directory exists
             path.parent.mkdir(parents=True, exist_ok=True)
-
             with open(path, "w") as f:
-                json.dump({"current_bankroll": new_amount}, f, indent=2)
-            return True
+                json.dump({"current_bankroll": free_bankroll}, f, indent=2)
         except Exception as e:
-            logger.error(f"Error updating bankroll: {e}")
-            return False
+            logger.error(f"Error syncing bankroll file: {e}")
+
+    def calculate_bankroll_from_db(
+        self, user_id: str = "test_user_001"
+    ) -> Tuple[float, float]:
+        """
+        Radical Bankroll Fix: Calculate bankroll dynamically from transaction history.
+        Formula: Initial (1000) + Sum(Realized P/L) - Sum(Pending Stakes)
+
+        Returns:
+            (free_bankroll, committed_bankroll)
+        """
+        initial_bankroll = 1000.0  # Default initial deposit
+
+        # 1. Realized P/L (WON, LOST, PUSH/void)
+        # Note: We trust 'profit_loss' column.
+        # WON: positive net profit (Payout - Stake) ... WAIT, user logic usually P/L IS NET PROFIT.
+        # But for 'WON', usually P/L is net profit.
+        # If I start with 1000. Bet 100. Win (Odds 2.0).
+        # Payout 200. Net Profit +100.
+        # Free = 1000 + 100 - 0 = 1100. Correct.
+        # If I lose. P/L is -100.
+        # Free = 1000 - 100 - 0 = 900. Correct.
+
+        query_pl = "SELECT SUM(profit_loss) as total_pl FROM bets WHERE user_id = ? AND status IN ('WON', 'LOST', 'void', 'PUSH')"
+        res_pl = self.safe_execute_query(query_pl, (user_id,), fetch_one=True)
+        total_pl = (
+            float(res_pl["total_pl"])
+            if res_pl and res_pl["total_pl"] is not None
+            else 0.0
+        )
+
+        # 2. Pending Stakes (Locked)
+        query_pending = "SELECT SUM(amount) as locked FROM bets WHERE user_id = ? AND status = 'PENDING'"
+        res_pending = self.safe_execute_query(query_pending, (user_id,), fetch_one=True)
+        total_locked = (
+            float(res_pending["locked"])
+            if res_pending and res_pending["locked"] is not None
+            else 0.0
+        )
+
+        current_free = initial_bankroll + total_pl - total_locked
+        return current_free, total_locked
 
     def get_bankroll_summary(self, user_id: str) -> Dict[str, float]:
         """
-        Get comprehensive bankroll summary.
-        Returns:
-            - free_bankroll: Funds available for betting
-            - committed_bankroll: Funds locked in pending bets
-            - total_bankroll: Free + Committed
+        Get comprehensive bankroll summary based on DB history.
         """
-        free_bankroll = self._read_bankroll()
+        free_bankroll, committed_bankroll = self.calculate_bankroll_from_db(user_id)
 
-        # Calculate committed bankroll (sum of stakes of PENDING bets)
-        query = """
-            SELECT SUM(amount) as committed
-            FROM bets 
-            WHERE user_id = ? AND status = 'PENDING'
-        """
-        result = self.safe_execute_query(query, (user_id,), fetch_one=True)
-        committed_bankroll = (
-            float(result["committed"]) if result and result["committed"] else 0.0
-        )
+        # Sync file for other components that might read it blindly (backwards compatibility)
+        self._sync_bankroll_file(free_bankroll)
 
         return {
             "free_bankroll": free_bankroll,
             "committed_bankroll": committed_bankroll,
             "total_bankroll": free_bankroll + committed_bankroll,
         }
+
+    # Legacy method wrapper for internal calls if any remain
+    def _read_bankroll(self) -> float:
+        # Default to test user if not specified (legacy support)
+        free, _ = self.calculate_bankroll_from_db("test_user_001")
+        return free
+
+    def _update_bankroll(self, amount: float, operation: str) -> bool:
+        """
+        DEPRECATED: Bankroll is now calculated dynamically.
+        This method is kept but does nothing to prevent logic errors.
+        """
+        # Bankroll is now stateless (derived from bets), so manual updates are ignored.
+        # The 'bets' INSERT/UPDATE actions drive the change.
+        return True
 
     def safe_place_bet(
         self,
@@ -551,6 +582,8 @@ class SecureBettingDatabaseManager:
         odds: float,
         prediction: Any,
         confidence_interval: Optional[Dict] = None,
+        home_team: str = None,
+        away_team: str = None,
         audit_user: str = None,
     ) -> int:
         """
@@ -566,6 +599,8 @@ class SecureBettingDatabaseManager:
         validated_confidence = self._validate_user_input(
             confidence_interval, "confidence_interval"
         )
+        validated_home_team = self._validate_user_input(home_team, "home_team")
+        validated_away_team = self._validate_user_input(away_team, "away_team")
 
         # Check Bankroll
         free_bankroll = self._read_bankroll()
@@ -575,8 +610,8 @@ class SecureBettingDatabaseManager:
 
         query = """
             INSERT INTO bets (bet_id, user_id, game_id, bet_type, amount, odds,
-                            prediction, confidence_interval, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)
+                            prediction, confidence_interval, home_team, away_team, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)
             RETURNING bet_id
         """
 
@@ -592,6 +627,8 @@ class SecureBettingDatabaseManager:
             validated_odds,
             validated_prediction,
             json.dumps(validated_confidence) if validated_confidence else None,
+            validated_home_team,
+            validated_away_team,
         )
 
         result = self.safe_execute_query(
@@ -599,26 +636,19 @@ class SecureBettingDatabaseManager:
         )
 
         if result:
-            # Deduct stake from free bankroll
-            if self._update_bankroll(validated_amount, "subtract"):
-                if audit_user:
-                    self._log_security_event(
-                        audit_user,
-                        "BET_CREATED",
-                        {
-                            "bet_id": result["bet_id"],
-                            "amount": float(validated_amount),
-                            "game_id": validated_game_id,
-                        },
-                    )
-                return result["bet_id"]
-            else:
-                # Rollback bet creation if bankroll update fails (simplified: just delete)
-                # In a real DB transaction this would be atomic.
-                self.safe_delete_bet(
-                    result["bet_id"], user_id, audit_user="SYSTEM_ROLLBACK"
+            # Bankroll is automatically recalculated from DB history,
+            # so we don't need to manually update the file or rollback on file error.
+            if audit_user:
+                self._log_security_event(
+                    audit_user,
+                    "BET_CREATED",
+                    {
+                        "bet_id": result["bet_id"],
+                        "amount": float(validated_amount),
+                        "game_id": validated_game_id,
+                    },
                 )
-                return 0
+            return result["bet_id"]
 
         return 0
 
@@ -667,17 +697,19 @@ class SecureBettingDatabaseManager:
                 calculated_payout = stake * float(bet_data["odds"])
                 calculated_net_profit = calculated_payout - stake
 
-                # Bankroll Logic: Add Payout (Stake + Net Profit) to Free Bankroll
-                # Previously, stake was deducted from Free Bankroll.
-                # Now we return the full payout (Stake + Profit).
-                self._update_bankroll(calculated_payout, "add")
+                # Bankroll Logic:
+                # Bankroll is now automatically calculated from DB history (sum of P/L + initial),
+                # so we DO NOT manually update the file here.
+                # Validated P/L (Net Profit) will be saved to DB and used for calculation.
 
                 # Override profit_loss with calculated value for consistency
                 validated_profit_loss = calculated_net_profit
 
             elif validated_result == "void" or validated_result == "PUSH":
                 # Refund Stake
-                self._update_bankroll(stake, "add")
+                # Bankroll Logic:
+                # P/L is 0. Locked stake is removed (status -> PUSH).
+                # Free bankroll naturally increases by stake amount in calculation.
                 validated_profit_loss = 0.0
 
             elif validated_result == "LOST":
@@ -790,7 +822,8 @@ class SecureBettingDatabaseManager:
         base_query = """
             SELECT bet_id, game_id, bet_type, amount, odds, status, result,
                    profit_loss, created_at, settled_at, prediction,
-                   confidence_interval, home_score, away_score
+                   confidence_interval, home_score, away_score,
+                   home_team, away_team
             FROM bets
             WHERE user_id = ?
         """

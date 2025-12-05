@@ -98,7 +98,6 @@ def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
         List of NBA games with official schedule information
     """
     # 0. Check if date is in the past (yesterday or older)
-    # If so, try LeagueGameLog first as it's more reliable for completed games status
     if target_date < date.today():
         try:
             logger.info(
@@ -112,13 +111,108 @@ def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
                 return games
         except Exception as e:
             logger.warning(
-                f"⚠️ LeagueGameLog fetch failed: {e}. Falling back to ScoreboardV2."
+                f"⚠️ LeagueGameLog fetch failed: {e}. Falling back to standard Scoreboard."
             )
 
-    # 1. Try Official NBA API (ScoreboardV2)
+    # 1. OPTIMIZATION: Use NBA CDN for TODAY's games (Fast & Reliable)
+    # This was the logic that "worked yesterday" -> restoring robust CDN path.
+    if target_date == date.today():
+        try:
+            logger.info(f"⚡️ Fetching TODAY's games ({target_date}) via NBA CDN...")
+            cdn_url = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
+
+            import requests
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.nba.com/",
+                "Origin": "https://www.nba.com",
+            }
+
+            resp = requests.get(cdn_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                scoreboard = data.get("scoreboard", {})
+                games_list = scoreboard.get("games", [])
+
+                if games_list:
+                    processed_games = []
+                    for game in games_list:
+                        try:
+                            # Map CDN structure to our format
+                            game_id = game.get("gameId")
+
+                            # Safely get status
+                            status_text = game.get("gameStatusText") or ""
+
+                            # Teams
+                            home_team_info = game.get("homeTeam", {})
+                            away_team_info = game.get("awayTeam", {})
+
+                            # Standardize names
+                            home_name = _standardize_team_name(
+                                home_team_info.get("teamName", "Unknown")
+                            )
+                            away_name = _standardize_team_name(
+                                away_team_info.get("teamName", "Unknown")
+                            )
+
+                            home_score = home_team_info.get("score", 0)
+                            away_score = away_team_info.get("score", 0)
+
+                            # Map status
+                            status_raw = status_text.upper()
+                            status = "Scheduled"  # Default
+
+                            if "FINAL" in status_raw:
+                                status = "Final"
+                            elif "HALF" in status_raw or "Q" in status_raw:
+                                status = "Live"
+                            elif (
+                                "ET" in status_raw
+                                or "PM" in status_raw
+                                or "AM" in status_raw
+                            ):
+                                status = "Scheduled"
+
+                            game_info = {
+                                "game_id": game_id,
+                                "game_date": target_date.strftime("%Y-%m-%d"),
+                                "home_team": home_name,
+                                "away_team": away_name,
+                                "home_score": int(home_score),
+                                "away_score": int(away_score),
+                                "game_time": status_text,
+                                "status": status,
+                                "arena": game.get("arenaName", "Unknown"),
+                                "city": game.get("arenaCity", "Unknown"),
+                                "state": game.get("arenaState", "Unknown"),
+                                "source": "NBA_CDN",
+                            }
+                            processed_games.append(game_info)
+                        except Exception as inner_e:
+                            logger.warning(
+                                f"⚠️ Error parsing single game in CDN: {inner_e}"
+                            )
+                            continue
+
+                    logger.info(
+                        f"✅ NBA CDN: Found {len(processed_games)} games for TODAY"
+                    )
+                    return processed_games
+                else:
+                    logger.warning("Let check ScoreboardV2 if CDN is empty.")
+            else:
+                logger.warning(
+                    f"⚠️ NBA CDN failed {resp.status_code}. Fallback to ScoreboardV2."
+                )
+        except Exception as e:
+            logger.warning(f"⚠️ NBA CDN Exception: {e}. Fallback to ScoreboardV2.")
+
+    # 2. Try Official NBA API (ScoreboardV2) - Fallback or for non-today dates
     try:
         logger.info(
-            f"🏀 NBA Official API: Fetching games for {target_date} using ScoreboardV2"
+            f"🏀 NBA Official API: Fetching games for {target_date} using ScoreboardV2 (NBA API Lib)"
         )
 
         # Use ScoreboardV2 which is more reliable for historical/completed games
@@ -174,6 +268,10 @@ def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
                 away_team_name = team_id_map.get(
                     away_team_id, f"Unknown ({away_team_id})"
                 )
+
+                # Double check standardization just in case
+                home_team_name = _standardize_team_name(home_team_name)
+                away_team_name = _standardize_team_name(away_team_name)
 
                 game_info = {
                     "game_id": game_id,
@@ -243,6 +341,44 @@ def _get_games_from_leaguegamelog(target_date: date) -> List[Dict[str, Any]]:
 
     formatted_games = []
 
+    # Standardization Map for Nicknames -> Full Names
+    nickname_map = {
+        "Warriors": "Golden State Warriors",
+        "Celtics": "Boston Celtics",
+        "Sixers": "Philadelphia 76ers",
+        "76ers": "Philadelphia 76ers",
+        "Lakers": "Los Angeles Lakers",
+        "Knicks": "New York Knicks",
+        "Nets": "Brooklyn Nets",
+        "Raptors": "Toronto Raptors",
+        "Bulls": "Chicago Bulls",
+        "Cavaliers": "Cleveland Cavaliers",
+        "Bucks": "Milwaukee Bucks",
+        "Pistons": "Detroit Pistons",
+        "Pacers": "Indiana Pacers",
+        "Magic": "Orlando Magic",
+        "Heat": "Miami Heat",
+        "Wizards": "Washington Wizards",
+        "Hornets": "Charlotte Hornets",
+        "Hawks": "Atlanta Hawks",
+        "Mavericks": "Dallas Mavericks",
+        "Spurs": "San Antonio Spurs",
+        "Rockets": "Houston Rockets",
+        "Grizzlies": "Memphis Grizzlies",
+        "Pelicans": "New Orleans Pelicans",
+        "Timberwolves": "Minnesota Timberwolves",
+        "Nuggets": "Denver Nuggets",
+        "Jazz": "Utah Jazz",
+        "Trail Blazers": "Portland Trail Blazers",
+        "Kings": "Sacramento Kings",
+        "Clippers": "Los Angeles Clippers",
+        "Suns": "Phoenix Suns",
+        "Thunder": "Oklahoma City Thunder",
+    }
+
+    def _standardize(name):
+        return nickname_map.get(name, name)  # Return full name if mapped, else original
+
     for gid, entries in games_map.items():
         if len(entries) < 2:
             continue  # Incomplete data
@@ -264,8 +400,8 @@ def _get_games_from_leaguegamelog(target_date: date) -> List[Dict[str, Any]]:
         game_info = {
             "game_id": gid,
             "game_date": target_str,
-            "home_team": home.get("TEAM_NAME"),
-            "away_team": away.get("TEAM_NAME"),
+            "home_team": _standardize(home.get("TEAM_NAME")),
+            "away_team": _standardize(away.get("TEAM_NAME")),
             "home_score": int(home.get("PTS", 0)),
             "away_score": int(away.get("PTS", 0)),
             "game_time": "Final",
