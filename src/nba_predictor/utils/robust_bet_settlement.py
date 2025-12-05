@@ -473,10 +473,15 @@ class RobustBetSettlement:
 
                 home_score, away_score = match.final_score
 
-                # Usa il metodo esistente del database manager
-                settled_count = self.betting_db.update_game_results_from_scores(
-                    match.nba_game_id, home_score, away_score
+                # Legacy method call removed. logic moved to dashboard/safe_update_bet_status
+                # settled_count = self.betting_db.update_game_results_from_scores(...)
+
+                # For now, we rely on the main dashboard settlement logic or manual trigger
+                # as this class lacks the detailed bet type parsing logic matching new_wic_dashboard.py
+                self.logger.info(
+                    f"ℹ️ Skipping robust settlement for {match.bet_id} (delegated to main logic)"
                 )
+                settled_count = 0
 
                 if settled_count > 0:
                     settlement_report["successful_settlements"] += settled_count

@@ -662,14 +662,28 @@ class SecureBettingDatabaseManager:
         elif current_status == "PENDING" and validated_status != "PENDING":
             # Settlement Logic
             if validated_result == "WON":
-                # Add Stake + Net Profit to Free Bankroll
-                # profit_loss passed here MUST be Net Profit
-                payout = stake + validated_profit_loss
-                self._update_bankroll(payout, "add")
+                # Calculate Payout internally to ensure accuracy and prevent double counting
+                # Payout = Stake * Odds
+                calculated_payout = stake * float(bet_data["odds"])
+                calculated_net_profit = calculated_payout - stake
+
+                # Bankroll Logic: Add Payout (Stake + Net Profit) to Free Bankroll
+                # Previously, stake was deducted from Free Bankroll.
+                # Now we return the full payout (Stake + Profit).
+                self._update_bankroll(calculated_payout, "add")
+
+                # Override profit_loss with calculated value for consistency
+                validated_profit_loss = calculated_net_profit
+
             elif validated_result == "void" or validated_result == "PUSH":
                 # Refund Stake
                 self._update_bankroll(stake, "add")
-            # If LOST, do nothing (stake already deducted)
+                validated_profit_loss = 0.0
+
+            elif validated_result == "LOST":
+                # No bankroll update (stake already lost)
+                # Ensure profit_loss is recorded as negative stake
+                validated_profit_loss = -stake
 
         if result and profit_loss is not None:
             # Update with scores if provided

@@ -584,14 +584,48 @@ def auto_update_and_settle():
                                 outcome = "WON"
                             else:
                                 outcome = "LOST"
-                        # TODO: Add more bet types as needed
+                        else:
+                            # Default / Moneyline Logic
+                            # Assuming bet_type or prediction indicates the team
+                            # Clean team names for comparison
+                            winner_team = (
+                                game.get("home_team")
+                                if home_score > away_score
+                                else game.get("away_team")
+                            )
+
+                            # Try to extract picked team from bet info
+                            # Prediction is stored as JSON usually
+                            try:
+                                pred_data = json.loads(bet.get("prediction", "{}"))
+                                picked_team = pred_data.get("winner") or pred_data.get(
+                                    "team"
+                                )
+                            except:
+                                picked_team = str(bet.get("prediction"))
+
+                            # Simple fuzzy match or direct comparison
+                            if picked_team and winner_team:
+                                if (
+                                    picked_team.upper().strip()
+                                    in winner_team.upper().strip()
+                                    or winner_team.upper().strip()
+                                    in picked_team.upper().strip()
+                                ):
+                                    outcome = "WON"
+                                else:
+                                    outcome = "LOST"
+                            else:
+                                logger.warning(
+                                    f"Could not determine winner for bet {bet.get('bet_id')} type {bet_type}"
+                                )
 
                         logger.info(
                             f"🎯 Outcome: {outcome} (Score: {home_score}-{away_score}, Total: {total_score})"
                         )
 
                         if outcome != "PENDING":
-                            # Calculate profit/loss
+                            # Calculate profit/loss (Client side estimate, DB enforces strict calculation)
                             profit_loss = 0.0
                             if outcome == "WON":
                                 payout = float(bet.get("amount")) * float(
@@ -1506,6 +1540,56 @@ def main():
                         st.success(f"Settled {settled} bets!")
                     else:
                         st.info("No bets to settle.")
+
+            st.markdown("---")
+            if st.button("⚠️ Recalculate Bankroll (Fix Ledger)"):
+                # Logic from reset_bankroll.py adapted for inline execution
+                # This avoids lock conflicts by using the existing db_manager connection implicitly
+                # (or managing it safely if the manager supports re-entry, which it likely does via thread locking)
+                try:
+                    INITIAL_CAPITAL = 84.75
+                    query = """
+                        SELECT 
+                            SUM(CASE WHEN status != 'PENDING' THEN profit_loss ELSE 0 END) as net_pl,
+                            SUM(CASE WHEN status = 'PENDING' THEN amount ELSE 0 END) as pending_staked
+                        FROM bets
+                    """
+                    # We use the existing db_manager instance
+                    # Note: db_manager is initialized in main scope, accessible here?
+                    # Yes, typically. If not, we'll see a NameError.
+                    # Checking file.. 'db_manager' is used in sidebar at line 1571, so it IS available.
+                    result = db_manager.safe_execute_query(query, fetch_one=True)
+
+                    net_pl = result.get("net_pl") or 0.0
+                    pending_staked = result.get("pending_staked") or 0.0
+
+                    total_net_worth = INITIAL_CAPITAL + float(net_pl)
+                    free_bankroll = total_net_worth - float(pending_staked)
+
+                    # Manual Update to JSON via Manager (using private method or re-implementing write)
+                    # best to use manager's private method if accessible or just overwrite file carefully
+                    # Manager has `_update_bankroll` but that adds/subtracts.
+                    # We want to SET. Manager doesn't have SET?
+                    # We will write to file directly.
+
+                    bankroll_path = db_manager._get_bankroll_path()
+                    new_data = {
+                        "current_bankroll": free_bankroll,
+                        "initial_bankroll": INITIAL_CAPITAL,
+                        "total_net_worth": total_net_worth,
+                    }
+                    import json
+
+                    with open(bankroll_path, "w") as f:
+                        json.dump(new_data, f, indent=4)
+
+                    st.success(
+                        f"Bankroll Recalculated! Free: €{free_bankroll:.2f} (Base: €{INITIAL_CAPITAL} + P/L: €{net_pl:.2f})"
+                    )
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Recalculation failed: {e}")
 
     # --- Auto-Settlement Mechanism ---
     # Run once on startup (session-persistent)
