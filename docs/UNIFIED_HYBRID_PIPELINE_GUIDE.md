@@ -1,12 +1,12 @@
 # 🏀 Unified Hybrid Pipeline - Complete Guide
 
-**Version**: 1.0.0 | **Date**: 2025-10-28 | **Status**: PRODUCTION READY
+**Version**: 1.1.0 | **Date**: 2025-12-06 | **Status**: PRODUCTION READY
 
 ---
 
 ## 🎯 Overview
 
-The **Unified Hybrid NBA Prediction Pipeline** represents the culmination of integrating the best features from both the research and enhanced prediction systems. This production-ready system combines advanced machine learning algorithms with comprehensive real-time data integration.
+The **Unified Hybrid NBA Prediction Pipeline** represents the culmination of integrating the best features from both the research and enhanced prediction systems. This production-ready system combines advanced machine learning algorithms with **Continuous Learning** capabilities.
 
 ## 🏗️ Architecture Overview
 
@@ -15,7 +15,7 @@ The **Unified Hybrid NBA Prediction Pipeline** represents the culmination of int
 ```python
 from nba_predictor.core.unified_hybrid_pipeline import UnifiedHybridPipeline
 
-# Initialize the complete system
+# Initialize the complete system with auto-sync
 pipeline = UnifiedHybridPipeline(
     data_path="data",
     model_path="models",
@@ -29,13 +29,18 @@ pipeline = UnifiedHybridPipeline(
 
 ## ✨ Key Features
 
+### 🔄 **Continuous Learning (Dynamic Sync)**
+- **Auto-Update**: Automatically detects and merges new games from `data/games/*.parquet`
+- **Real-time Form**: Predictions incorporate outcomes from games played <24h ago
+- **Zero-Touch Maintenance**: No manual retraining required for daily updates
+
 ### 🔧 **Data Leakage Prevention (Critical Fix)**
 - **TimeSeriesSplit Implementation**: Proper temporal data handling
 - **Safety Checks**: Automatic detection of unrealistic scores
 - **Cross-Validation**: Time-aware validation preventing future data contamination
 
 ### 📊 **Complete Data Integration** (From Enhanced Pipeline)
-- ✅ **Historical Games**: 5,995 real NBA games with advanced statistics
+- ✅ **Historical Games**: 6,000+ real NBA games (Historical + Dynamic New)
 - ✅ **Injury Reports**: Real-time injury data and impact analysis
 - ✅ **Roster Information**: Current team rosters and player movements
 - ✅ **Player Statistics**: Complete individual performance metrics

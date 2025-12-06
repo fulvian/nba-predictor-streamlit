@@ -22,19 +22,12 @@ NBA Predictor Analytics Dashboard è un sistema completo di analisi e betting NB
 
 **[🏀 NBA Betting Workflow Dashboard](http://localhost:8504)** - **OFFICIAL SYSTEM**
 
-## 📋 Today's NBA Games (29 Ottobre 2025)
+## 📋 Live System Status (December 6, 2025)
+**✅ System Fully Operational**
 
-**✅ All 10 Games Found via Official BallDontLie API:**
-1. Cleveland Cavaliers @ Boston Celtics
-2. Orlando Magic @ Detroit Pistons
-3. Atlanta Hawks @ Brooklyn Nets
-4. **Houston Rockets @ Toronto Raptors** ✅
-5. Sacramento Kings @ Chicago Bulls
-6. Indiana Pacers @ Dallas Mavericks
-7. New Orleans Pelicans @ Denver Nuggets
-8. Portland Trail Blazers @ Utah Jazz
-9. Los Angeles Lakers @ Minnesota Timberwolves
-10. Memphis Grizzlies @ Phoenix Suns
+- **Data Sync**: Automatic Daily Download (Dashboard Startup)
+- **ML Pipeline**: Continuous Learning (Auto-syncs new games)
+- **API Status**: All Systems Go
 
 ## ✅ **OFFICIAL NBA DATA SYSTEM**
 
@@ -45,17 +38,17 @@ from src.nba_predictor.api.data_provider import NBADataProvider
 # Create official provider
 provider = NBADataProvider()
 
-# Get games with intelligent caching (Memory → Persistent Storage → BallDontLie API)
-# Performance: <50ms cache HIT, 1-2s API call with 90% reduction in API usage
-games = provider.get_scheduled_games(days_ahead=7, specific_date='2025-10-29')
+# Get games with intelligent caching (Memory → Persistent Storage → NBA Official API → BallDontLie API)
+games = provider.get_scheduled_games(days_ahead=7)
 ```
 
 ### 🏗️ **System Architecture**
-- **🥇 Primary API**: BallDontLie API (Official NBA Schedule)
-- **🥈 Fallback API**: The Odds API (Betting odds)
-- **💾 Persistent Storage**: Automatic data caching in Data Store
-- **🧠 Intelligent Caching**: Data Store → API → Cache workflow
-- **🎯 Official Dashboard**: `run_betting_workflow.py`
+- **🥇 Primary API**: NBA Official API (Stats & Scores)
+- **🥈 Fallback API**: BallDontLie API (Schedule Backup)
+- **🥉 Fallback API**: The Odds API (Betting Odds & Backup)
+- **💾 Persistent Storage**: Automatic data caching in Data Store (Parquet/DuckDB)
+- **🔄 ML Auto-Sync**: Unified Pipeline dynamically appends fresh game data
+- **🎯 Official Dashboard**: `main_app.py`
 
 ### 🚫 **DEPRECATED SYSTEMS**
 All other scripts have been moved to `deprecated/` folder.
