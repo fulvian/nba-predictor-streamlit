@@ -139,7 +139,9 @@ class UnifiedDataStore:
                 logger.warning(f"Failed to configure some DuckDB settings: {e}")
                 # Continue with default settings
 
-            logger.debug("DuckDB connection initialized with optimized settings for concurrency")
+            logger.debug(
+                "DuckDB connection initialized with optimized settings for concurrency"
+            )
 
         except Exception as e:
             logger.error(
@@ -168,15 +170,15 @@ class UnifiedDataStore:
     def _retry_db_operation(self, operation_func, max_retries=3, retry_delay=1.0):
         """
         Retry database operations with exponential backoff to handle locking issues.
-        
+
         Args:
             operation_func: Function to execute that performs DB operation
             max_retries: Maximum number of retry attempts
             retry_delay: Initial delay between retries in seconds
-            
+
         Returns:
             Result of operation_func
-            
+
         Raises:
             DatabaseError: If all retries fail
         """
@@ -185,10 +187,10 @@ class UnifiedDataStore:
                 return operation_func()
             except Exception as e:
                 if "database is locked" in str(e).lower() and attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                    wait_time = retry_delay * (2**attempt)  # Exponential backoff
                     logger.warning(
                         f"Database locked, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})",
-                        extra={"error": str(e)}
+                        extra={"error": str(e)},
                     )
                     time.sleep(wait_time)
                     # Reinitialize connection on retry
@@ -196,7 +198,9 @@ class UnifiedDataStore:
                         self._duckdb_conn.close()
                         self._init_duckdb()
                 else:
-                    raise DatabaseError(f"Database operation failed after {attempt + 1} attempts: {e}") from e
+                    raise DatabaseError(
+                        f"Database operation failed after {attempt + 1} attempts: {e}"
+                    ) from e
 
     def store_games_data(self, games_df: pl.DataFrame, date_str: str) -> str:
         """
@@ -440,7 +444,7 @@ class UnifiedDataStore:
                 result = self._duckdb_conn.execute(query).fetchall()
 
                 # Convert to Polars DataFrame
-                if result:
+                if result and self._duckdb_conn.description:
                     columns = [desc[0] for desc in self._duckdb_conn.description]
                     df = pl.DataFrame(result, schema=columns, orient="row")
                 else:
@@ -458,7 +462,7 @@ class UnifiedDataStore:
 
                 result = self._duckdb_conn.execute(query).fetchall()
 
-                if result:
+                if result and self._duckdb_conn.description:
                     columns = [desc[0] for desc in self._duckdb_conn.description]
                     df = pl.DataFrame(result, schema=columns, orient="row")
                 else:
