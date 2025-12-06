@@ -324,15 +324,76 @@ class UnifiedHybridPipeline:
                 games_df = pd.read_csv(nba_data_file)
                 data_sources["nba_games"] = games_df
                 logger.info(f"✅ NBA real games loaded: {len(games_df)} games")
-            else:
-                # Fallback to simple dataset
-                simple_file = self.data_path / "nba_simple_complete_dataset.csv"
-                if simple_file.exists():
-                    games_df = pd.read_csv(simple_file)
-                    data_sources["nba_games"] = games_df
-                    logger.info(f"✅ Simple dataset loaded: {len(games_df)} games")
+
+            # --- ENHANCEMENT: Append recent games from UnifiedDataStore (Parquet) ---
+            try:
+                # 1. Get max date in current loaded data
+                if "GAME_DATE" in games_df.columns:
+                    max_date = pd.to_datetime(games_df["GAME_DATE"]).max()
+                elif "GAME_DATE_EST" in games_df.columns:
+                    max_date = pd.to_datetime(games_df["GAME_DATE_EST"]).max()
                 else:
-                    raise FileNotFoundError("No NBA data files found")
+                    max_date = pd.Timestamp("2024-01-01")  # Fallback
+
+                logger.info(f"📅 Loaded data max date: {max_date}")
+
+                # 2. Check for newer parquet files in data/games
+                games_dir = self.data_path / "games"
+                if games_dir.exists():
+                    parquet_files = list(games_dir.glob("games_*.parquet"))
+                    new_games = []
+
+                    for p_file in parquet_files:
+                        try:
+                            # Extract date from filename: games_YYYY-MM-DD.parquet
+                            file_date_str = p_file.stem.replace("games_", "")
+                            file_date = pd.to_datetime(file_date_str)
+
+                            if file_date > max_date:
+                                # This is a new game file!
+                                df_new = pd.read_parquet(p_file)
+                                new_games.append(df_new)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse/read {p_file}: {e}")
+
+                    if new_games:
+                        new_games_df = pd.concat(new_games, ignore_index=True)
+                        logger.info(
+                            f"found {len(new_games_df)} new games in Parquet files to append"
+                        )
+
+                        # 3. Map Parquet schema to CSV schema
+                        # Parquet: game_date, home_team, away_team, home_score, away_score
+                        # CSV: GAME_DATE_EST, HOME_TEAM_NAME, AWAY_TEAM_NAME, HOME_SCORE, AWAY_SCORE
+                        mapped_new = pd.DataFrame()
+                        mapped_new["GAME_DATE"] = pd.to_datetime(
+                            new_games_df["game_date"]
+                        )  # Unified format
+                        mapped_new["GAME_DATE_EST"] = mapped_new[
+                            "GAME_DATE"
+                        ]  # For compatibility
+                        mapped_new["HOME_TEAM_NAME"] = new_games_df["home_team"]
+                        mapped_new["AWAY_TEAM_NAME"] = new_games_df["away_team"]
+                        mapped_new["HOME_SCORE"] = new_games_df["home_score"]
+                        mapped_new["AWAY_SCORE"] = new_games_df["away_score"]
+                        mapped_new["TOTAL_SCORE"] = (
+                            new_games_df["home_score"] + new_games_df["away_score"]
+                        )
+                        mapped_new["GAME_ID"] = new_games_df["game_id"]
+
+                        # Fill specific stats with None/NaN - Rolling calc will handle them (or use fillna)
+                        # We only have scores, so we can't provide FGM, etc.
+
+                        # Append
+                        games_df = pd.concat([games_df, mapped_new], ignore_index=True)
+                        logger.info(
+                            f"✅ Appended {len(mapped_new)} new games. New total: {len(games_df)}"
+                        )
+                        # Update the source in the dict
+                        data_sources["nba_games"] = games_df
+            except Exception as e:
+                logger.error(f"❌ Failed to append recent parquet games: {e}")
+            # --------------------------------------------------------------------------
 
             # 2. Player statistics (enhanced pipeline integration)
             player_stats_dir = self.data_path / "persistent" / "player_stats"
