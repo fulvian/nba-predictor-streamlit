@@ -1407,9 +1407,7 @@ def render_step_5_portfolio():
                 # Custom SVG Icon + Button
                 c_icon, c_b = st.columns([1, 5])
                 with c_icon:
-                    st.image(
-                        assets.ICON_SUMMARY_PATH, width=20
-                    )  # Replaced markdown with st.image
+                    st.markdown(assets.ICON_SUMMARY, unsafe_allow_html=True)
                 with c_b:
                     if st.button(
                         "Generate Summary",

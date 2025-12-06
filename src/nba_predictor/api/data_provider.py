@@ -781,9 +781,21 @@ class NBADataProvider:
                 print(
                     f"   ⚠️ NBA Official API: Nessuna partita trovata, procedo con fallback"
                 )
+
+        else:
+            print(f"\n📅 FASE 1: NBA Official API non disponibile")
+
         # 2. Secondario: BallDontLie API (fallback con rate limits)
-        elif self.bdl_available:
-            print(f"\n📅 FASE 1: Partite Ufficiali NBA (BallDontLie API - Fallback)")
+        # Execute this IF Official API failed (not available) OR returned no games
+        if not all_games and self.bdl_available:
+            print(f"\n📅 FASE 1 (Fallback): Partite Ufficiali NBA (BallDontLie API)")
+
+            # If we already tried Official and failed, log it
+            if self.nba_official_available:
+                print(
+                    f"   ⚠️ Official API returned 0 games. Switching to BallDontLie..."
+                )
+
             nba_games = self._get_ball_dont_lie_games(
                 days_ahead=days_ahead, specific_date=specific_date
             )
@@ -798,6 +810,8 @@ class NBADataProvider:
                 print(
                     f"   ⚠️ BallDontLie API: Nessuna partita trovata, procedo con fallback"
                 )
+        elif self.bdl_available and all_games:
+            print(f"   ℹ️ BallDontLie API skipped (Official API successful)")
         else:
             print(f"\n📅 FASE 1: NBA Official API non disponibile")
 

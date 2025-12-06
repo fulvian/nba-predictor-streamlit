@@ -156,8 +156,23 @@ class DataPersistenceBridge:
         # We need to call the internal API methods, not get_scheduled_games which calls this bridge
         games = []
 
-        # Use BallDontLie API directly (primary source)
-        if hasattr(self.data_provider, "_get_ball_dont_lie_games"):
+        # Use NBA Official API (primary source - best for schedule)
+        if hasattr(self.data_provider, "_get_nba_official_games"):
+            try:
+                # Primary Source 1: NBA Official API
+                nba_games = self.data_provider._get_nba_official_games(
+                    days_ahead=days_ahead, specific_date=specific_date
+                )
+                if nba_games:
+                    games.extend(nba_games)
+                    logger.info(
+                        f"Retrieved {len(nba_games)} games from NBA Official API"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to get NBA Official games: {e}")
+
+        # Use BallDontLie API directly (secondary source)
+        if not games and hasattr(self.data_provider, "_get_ball_dont_lie_games"):
             try:
                 bdl_games = self.data_provider._get_ball_dont_lie_games(
                     days_ahead=days_ahead, specific_date=specific_date

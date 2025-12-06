@@ -1,0 +1,52 @@
+--- DEBUG SCHEDULE: 2025-12-06 11:31:14.382785 ---
+✅ NBA Official API: Connessa e pronta (fonte primaria)
+✅ NBADataProvider inizializzato
+   🏀 NBA Official API: Connessa e pronta (fonte primaria - no rate limits)
+   🏀 BallDontLie API: Connessa (fonte secondaria - rate limited)
+   🎰 The Odds API: Configurata e pronta (fallback)
+   🏀 NBA API: 30 squadre caricate
+   🔄 Soluzione ibrida: NBA Official (primary) + BallDontLie (secondary) + fallback
+   📦 Cache: Abilitata per ottimizzazione API
+   💾 Data Persistence: Auto-salvataggio abilitato
+
+Checking range: 2025-12-06 to 2025-12-09
+
+--- 1. THE ODDS API (Raw Check) ---
+   🎰 The Odds API: Richiesta partite future (prossimi 3 giorni)...
+   ✅ The Odds API: 11 partite future trovate
+ID: ODDS_223ec223d9ac0172d28afb1c26f4b8ae
+  Matchup: New Orleans Pelicans @ Brooklyn Nets
+  UTC: 2025-12-06T22:10:00Z
+  Calc Date: 2025-12-06 (Should be ET)
+  Calc Time: 17:10
+ID: ODDS_50bba5f55019436fa6145be51c60a174
+  Matchup: Atlanta Hawks @ Washington Wizards
+  UTC: 2025-12-07T00:10:00Z
+  Calc Date: 2025-12-06 (Should be ET)
+  Calc Time: 19:10
+ID: ODDS_ddfe1830cd36ca5a0d614297cef168de
+  Matchup: Golden State Warriors @ Cleveland Cavaliers
+  UTC: 2025-12-07T00:40:00Z
+  Calc Date: 2025-12-06 (Should be ET)
+  Calc Time: 19:40
+ID: ODDS_77f737d32c12f24c9aa802751b7164cf
+  Matchup: Milwaukee Bucks @ Detroit Pistons
+  UTC: 2025-12-07T00:40:00Z
+  Calc Date: 2025-12-06 (Should be ET)
+  Calc Time: 19:40
+ID: ODDS_571e505133f8b2d20c101c45437cffb9
+  Matchup: Los Angeles Clippers @ Minnesota Timberwolves
+  UTC: 2025-12-07T01:10:00Z
+  Calc Date: 2025-12-06 (Should be ET)
+  Calc Time: 20:10
+
+--- 2. NBA OFFICIAL API (ScoreboardV2) ---
+
+Fetching for 2025-12-06...
+  No games found.
+
+Fetching for 2025-12-07...
+  No games found.
+
+Fetching for 2025-12-08...
+  No games found.
