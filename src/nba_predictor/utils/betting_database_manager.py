@@ -713,6 +713,23 @@ class SecureBettingDatabaseManager:
 
         return True
 
+    def safe_get_pending_bets_by_game(self, user_id: str) -> Dict[str, int]:
+        """
+        Safely get count of pending bets grouped by game_id.
+        Returns: {game_id: count}
+        """
+        validated_user_id = self._validate_user_input(user_id, "user_id")
+
+        query = """
+            SELECT game_id, COUNT(*) as count
+            FROM bets
+            WHERE user_id = ? AND status = 'PENDING'
+            GROUP BY game_id
+        """
+
+        results = self.safe_execute_query(query, (validated_user_id,), fetch_all=True)
+        return {row["game_id"]: row["count"] for row in results} if results else {}
+
     def safe_get_user_bets(
         self, user_id: str, limit: int = 100, offset: int = 0, status: str = None
     ) -> List[Dict]:

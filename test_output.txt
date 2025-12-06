@@ -1,0 +1,623 @@
+2025-12-05 15:46:50,385 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpczoi5nyv/perf_test.duckdb
+2025-12-05 15:46:50,388 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:50,388 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:50,951 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_1d4176901b5f49f7_1764946010
+2025-12-05 15:46:50,952 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_1d4176901b5f49f7_1764946010", "timestamp": "2025-12-05T15:46:50.395869+00:00", "transaction_type": "DEPOSIT", "amount": 10000.0, "balance_after": 10000.0, "description": "Performance test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:50,952 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_1d4176901b5f49f7_1764946010: expected 9654415af505e780ac7844a1f2581d0a58caececbb705184cdc937ad2dab4e13, found 2ceeeb55eee1e2819157ee6a3209cf9a2fb93368425a99dbe9aa97d4a178498d
+2025-12-05 15:46:50,952 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_1d4176901b5f49f7_1764946010: expected 9654415af505e780ac7844a1f2581d0a58caececbb705184cdc937ad2dab4e13, found 2ceeeb55eee1e2819157ee6a3209cf9a2fb93368425a99dbe9aa97d4a178498d
+2025-12-05 15:46:50,954 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_1d4176901b5f49f7_1764946010: expected 9654415af505e780ac7844a1f2581d0a58caececbb705184cdc937ad2dab4e13, found 2ceeeb55eee1e2819157ee6a3209cf9a2fb93368425a99dbe9aa97d4a178498d
+E2025-12-05 15:46:50,970 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpzkm6nq2k/perf_test.duckdb
+2025-12-05 15:46:50,972 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:50,972 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:50,976 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_b8be0621bcf3486c_1764946010
+2025-12-05 15:46:50,977 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_b8be0621bcf3486c_1764946010", "timestamp": "2025-12-05T15:46:50.974132+00:00", "transaction_type": "DEPOSIT", "amount": 10000.0, "balance_after": 10000.0, "description": "Performance test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:50,977 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_b8be0621bcf3486c_1764946010: expected eeebd7335dca370547e64b98ba379b976a18bcb2931529144561e2e924869344, found 097dfb0dd0a91b872641fb45e11510f10e226f108999d24189584bc87d60fef1
+2025-12-05 15:46:50,977 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_b8be0621bcf3486c_1764946010: expected eeebd7335dca370547e64b98ba379b976a18bcb2931529144561e2e924869344, found 097dfb0dd0a91b872641fb45e11510f10e226f108999d24189584bc87d60fef1
+2025-12-05 15:46:50,978 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_b8be0621bcf3486c_1764946010: expected eeebd7335dca370547e64b98ba379b976a18bcb2931529144561e2e924869344, found 097dfb0dd0a91b872641fb45e11510f10e226f108999d24189584bc87d60fef1
+E2025-12-05 15:46:50,993 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp7v7knj3l/test_bankroll.duckdb
+2025-12-05 15:46:50,994 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:50,995 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:50,997 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp7v7knj3l/test_bankroll.duckdb
+2025-12-05 15:46:50,999 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:50,999 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,003 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_99b76295dcc542c7_1764946010
+2025-12-05 15:46:51,003 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_99b76295dcc542c7_1764946010", "timestamp": "2025-12-05T15:46:51.000775+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,003 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_99b76295dcc542c7_1764946010: expected 533e6d4d030bd01f9bc61857b471fcfc0b241f7fff30f06b3d1ab7b7084c28a9, found e884dbe75efd89c26fe8585c4aabe90c02a9f47469e1390229819290299f8ca9
+2025-12-05 15:46:51,003 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_99b76295dcc542c7_1764946010: expected 533e6d4d030bd01f9bc61857b471fcfc0b241f7fff30f06b3d1ab7b7084c28a9, found e884dbe75efd89c26fe8585c4aabe90c02a9f47469e1390229819290299f8ca9
+2025-12-05 15:46:51,004 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_99b76295dcc542c7_1764946010: expected 533e6d4d030bd01f9bc61857b471fcfc0b241f7fff30f06b3d1ab7b7084c28a9, found e884dbe75efd89c26fe8585c4aabe90c02a9f47469e1390229819290299f8ca9
+E2025-12-05 15:46:51,018 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpuq7ufhan/test_bankroll.duckdb
+2025-12-05 15:46:51,020 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,020 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,022 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpuq7ufhan/test_bankroll.duckdb
+2025-12-05 15:46:51,023 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,023 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,027 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_3c4f6123de6b40b3_1764946011
+2025-12-05 15:46:51,027 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_3c4f6123de6b40b3_1764946011", "timestamp": "2025-12-05T15:46:51.024980+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,027 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_3c4f6123de6b40b3_1764946011: expected daef09a464e0fec3e0db6a4a9582160daf3a3b0f4295b66eabc4136c860b3459, found ed7a9b83cc744ec90f0a3fe742b32d9ef3603cb3a8780005104bf9694b46a76b
+2025-12-05 15:46:51,027 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_3c4f6123de6b40b3_1764946011: expected daef09a464e0fec3e0db6a4a9582160daf3a3b0f4295b66eabc4136c860b3459, found ed7a9b83cc744ec90f0a3fe742b32d9ef3603cb3a8780005104bf9694b46a76b
+2025-12-05 15:46:51,028 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_3c4f6123de6b40b3_1764946011: expected daef09a464e0fec3e0db6a4a9582160daf3a3b0f4295b66eabc4136c860b3459, found ed7a9b83cc744ec90f0a3fe742b32d9ef3603cb3a8780005104bf9694b46a76b
+E2025-12-05 15:46:51,043 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpc30ige0_/test_bankroll.duckdb
+2025-12-05 15:46:51,046 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,046 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,049 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpc30ige0_/test_bankroll.duckdb
+2025-12-05 15:46:51,050 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,050 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,055 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_fc9bbb15fec940a4_1764946011
+2025-12-05 15:46:51,056 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_fc9bbb15fec940a4_1764946011", "timestamp": "2025-12-05T15:46:51.051953+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,056 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_fc9bbb15fec940a4_1764946011: expected ceace39c4265ac3fca82233440e499216f9accfaf9a5947f9fa09a1f3d1a6481, found f71b951d91f697d3aa10d1faf28e1a18cc5afcbaf0949b80a346e9d7cb499be5
+2025-12-05 15:46:51,056 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_fc9bbb15fec940a4_1764946011: expected ceace39c4265ac3fca82233440e499216f9accfaf9a5947f9fa09a1f3d1a6481, found f71b951d91f697d3aa10d1faf28e1a18cc5afcbaf0949b80a346e9d7cb499be5
+2025-12-05 15:46:51,061 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_fc9bbb15fec940a4_1764946011: expected ceace39c4265ac3fca82233440e499216f9accfaf9a5947f9fa09a1f3d1a6481, found f71b951d91f697d3aa10d1faf28e1a18cc5afcbaf0949b80a346e9d7cb499be5
+E2025-12-05 15:46:51,083 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp6zn62kj5/test_bankroll.duckdb
+2025-12-05 15:46:51,086 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,086 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,090 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp6zn62kj5/test_bankroll.duckdb
+2025-12-05 15:46:51,094 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,094 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,102 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_8226f1315f3944f9_1764946011
+2025-12-05 15:46:51,104 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_8226f1315f3944f9_1764946011", "timestamp": "2025-12-05T15:46:51.097720+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,104 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_8226f1315f3944f9_1764946011: expected 41b4d7a66dc86c37db3a74d12587d0a45491176dd7dce8393eddcabb15b3249c, found 7a271861f362caf07b7eec7ec805cf852d627fb43a27735f82cec23d6ff0cf48
+2025-12-05 15:46:51,104 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_8226f1315f3944f9_1764946011: expected 41b4d7a66dc86c37db3a74d12587d0a45491176dd7dce8393eddcabb15b3249c, found 7a271861f362caf07b7eec7ec805cf852d627fb43a27735f82cec23d6ff0cf48
+2025-12-05 15:46:51,109 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_8226f1315f3944f9_1764946011: expected 41b4d7a66dc86c37db3a74d12587d0a45491176dd7dce8393eddcabb15b3249c, found 7a271861f362caf07b7eec7ec805cf852d627fb43a27735f82cec23d6ff0cf48
+E2025-12-05 15:46:51,127 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpffa2wmzk/test_bankroll.duckdb
+2025-12-05 15:46:51,131 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,132 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,135 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpffa2wmzk/test_bankroll.duckdb
+2025-12-05 15:46:51,137 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,137 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,144 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_3c08818b1b8d42fd_1764946011
+2025-12-05 15:46:51,145 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_3c08818b1b8d42fd_1764946011", "timestamp": "2025-12-05T15:46:51.141735+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,145 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_3c08818b1b8d42fd_1764946011: expected a36242fce2c313d1bbb4286395c21492eb4b9afccafb782ad03911ed4121677f, found 91db3ab073e937995f42ab0f4037f7cc4455b647b7c9b6009eee0c7f22f6826f
+2025-12-05 15:46:51,145 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_3c08818b1b8d42fd_1764946011: expected a36242fce2c313d1bbb4286395c21492eb4b9afccafb782ad03911ed4121677f, found 91db3ab073e937995f42ab0f4037f7cc4455b647b7c9b6009eee0c7f22f6826f
+2025-12-05 15:46:51,150 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_3c08818b1b8d42fd_1764946011: expected a36242fce2c313d1bbb4286395c21492eb4b9afccafb782ad03911ed4121677f, found 91db3ab073e937995f42ab0f4037f7cc4455b647b7c9b6009eee0c7f22f6826f
+E2025-12-05 15:46:51,267 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpdd1fwyoy/test_bankroll.duckdb
+2025-12-05 15:46:51,270 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,270 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,274 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpdd1fwyoy/test_bankroll.duckdb
+2025-12-05 15:46:51,275 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,275 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,279 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_1ad79eb5be3244b3_1764946011
+2025-12-05 15:46:51,280 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_1ad79eb5be3244b3_1764946011", "timestamp": "2025-12-05T15:46:51.277251+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,280 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_1ad79eb5be3244b3_1764946011: expected 7d8f2e540d7c8ed53eaa8d82b3b283485f9ec10e9ca8d1eddbfca937f59d7944, found 9de9110cdc3d43f437ef566dda79ff47446f710cfda9d7796a418604e1dd0f21
+2025-12-05 15:46:51,281 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_1ad79eb5be3244b3_1764946011: expected 7d8f2e540d7c8ed53eaa8d82b3b283485f9ec10e9ca8d1eddbfca937f59d7944, found 9de9110cdc3d43f437ef566dda79ff47446f710cfda9d7796a418604e1dd0f21
+2025-12-05 15:46:51,283 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_1ad79eb5be3244b3_1764946011: expected 7d8f2e540d7c8ed53eaa8d82b3b283485f9ec10e9ca8d1eddbfca937f59d7944, found 9de9110cdc3d43f437ef566dda79ff47446f710cfda9d7796a418604e1dd0f21
+E2025-12-05 15:46:51,295 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpujpycekg/test_bankroll.duckdb
+2025-12-05 15:46:51,302 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,302 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,305 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpujpycekg/test_bankroll.duckdb
+2025-12-05 15:46:51,308 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,308 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,316 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_a7d99e81a91f4c9c_1764946011
+2025-12-05 15:46:51,317 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_a7d99e81a91f4c9c_1764946011", "timestamp": "2025-12-05T15:46:51.313294+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,317 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_a7d99e81a91f4c9c_1764946011: expected b6a9d320603744b39483bcc4c8d643ab51d2bde5bef0e928af515bec30e747ea, found d4c339e1bde403efdbcbe5e252789de0d871dc88a61b785e54ac736a435c7cc7
+2025-12-05 15:46:51,317 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_a7d99e81a91f4c9c_1764946011: expected b6a9d320603744b39483bcc4c8d643ab51d2bde5bef0e928af515bec30e747ea, found d4c339e1bde403efdbcbe5e252789de0d871dc88a61b785e54ac736a435c7cc7
+2025-12-05 15:46:51,318 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_a7d99e81a91f4c9c_1764946011: expected b6a9d320603744b39483bcc4c8d643ab51d2bde5bef0e928af515bec30e747ea, found d4c339e1bde403efdbcbe5e252789de0d871dc88a61b785e54ac736a435c7cc7
+E2025-12-05 15:46:51,333 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp6j26430r/test_bankroll.duckdb
+2025-12-05 15:46:51,335 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,335 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,337 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp6j26430r/test_bankroll.duckdb
+2025-12-05 15:46:51,338 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,338 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,342 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_0d5a823f93b14926_1764946011
+2025-12-05 15:46:51,343 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_0d5a823f93b14926_1764946011", "timestamp": "2025-12-05T15:46:51.340047+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,343 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_0d5a823f93b14926_1764946011: expected f92fb1416ab181c8468a15550f33c3dae99f2be2e156ee9ca3056fb390ae1094, found fc054df4452896420988afa79da91a8aa1443b99bfb5cc3b5c223b54fceb4128
+2025-12-05 15:46:51,343 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_0d5a823f93b14926_1764946011: expected f92fb1416ab181c8468a15550f33c3dae99f2be2e156ee9ca3056fb390ae1094, found fc054df4452896420988afa79da91a8aa1443b99bfb5cc3b5c223b54fceb4128
+2025-12-05 15:46:51,344 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_0d5a823f93b14926_1764946011: expected f92fb1416ab181c8468a15550f33c3dae99f2be2e156ee9ca3056fb390ae1094, found fc054df4452896420988afa79da91a8aa1443b99bfb5cc3b5c223b54fceb4128
+E2025-12-05 15:46:51,357 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmps0zqmt64/test_bankroll.duckdb
+2025-12-05 15:46:51,360 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,360 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,362 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmps0zqmt64/test_bankroll.duckdb
+2025-12-05 15:46:51,363 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,363 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,367 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_8437109815034bc8_1764946011
+2025-12-05 15:46:51,367 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_8437109815034bc8_1764946011", "timestamp": "2025-12-05T15:46:51.365060+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,367 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_8437109815034bc8_1764946011: expected be95d3f4b272ad3439d261202fabefed0f626fffd12c580a8eff1d38dc6778ab, found beef6338744d60d14373ca444ef86ae13a0ef0cbb041980f23bf493d79d78e51
+2025-12-05 15:46:51,368 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_8437109815034bc8_1764946011: expected be95d3f4b272ad3439d261202fabefed0f626fffd12c580a8eff1d38dc6778ab, found beef6338744d60d14373ca444ef86ae13a0ef0cbb041980f23bf493d79d78e51
+2025-12-05 15:46:51,369 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_8437109815034bc8_1764946011: expected be95d3f4b272ad3439d261202fabefed0f626fffd12c580a8eff1d38dc6778ab, found beef6338744d60d14373ca444ef86ae13a0ef0cbb041980f23bf493d79d78e51
+E2025-12-05 15:46:51,384 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmppwmd5kmc/test_bankroll.duckdb
+2025-12-05 15:46:51,387 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,387 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,390 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmppwmd5kmc/test_bankroll.duckdb
+2025-12-05 15:46:51,391 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,391 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,395 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_368f8520f8ab4eff_1764946011
+2025-12-05 15:46:51,396 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_368f8520f8ab4eff_1764946011", "timestamp": "2025-12-05T15:46:51.393194+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,396 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_368f8520f8ab4eff_1764946011: expected 0084d92613ea3b8470fd3424e4fa92bc6ee51c60fb2a93c3126ddc2820b45deb, found 5f371b077c6caeb9ea58fa2d5f2363939835acde5cda10cab2cff06401d1d695
+2025-12-05 15:46:51,396 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_368f8520f8ab4eff_1764946011: expected 0084d92613ea3b8470fd3424e4fa92bc6ee51c60fb2a93c3126ddc2820b45deb, found 5f371b077c6caeb9ea58fa2d5f2363939835acde5cda10cab2cff06401d1d695
+2025-12-05 15:46:51,397 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_368f8520f8ab4eff_1764946011: expected 0084d92613ea3b8470fd3424e4fa92bc6ee51c60fb2a93c3126ddc2820b45deb, found 5f371b077c6caeb9ea58fa2d5f2363939835acde5cda10cab2cff06401d1d695
+E2025-12-05 15:46:51,409 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp5lwi8pcb/test_bankroll.duckdb
+2025-12-05 15:46:51,412 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,412 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,415 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp5lwi8pcb/test_bankroll.duckdb
+2025-12-05 15:46:51,416 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,417 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,424 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_e3ce779234f04207_1764946011
+2025-12-05 15:46:51,424 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_e3ce779234f04207_1764946011", "timestamp": "2025-12-05T15:46:51.418548+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,424 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_e3ce779234f04207_1764946011: expected f00409bd8a6de5eec4ae8208311a23ffbd4e78ac7f6ca265d7db0f36795ceab2, found 2bb9030fe8b21ffd0a3a2ec8a8b911e06aecf16bc25a7db14f30eb9bdfca60dd
+2025-12-05 15:46:51,424 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_e3ce779234f04207_1764946011: expected f00409bd8a6de5eec4ae8208311a23ffbd4e78ac7f6ca265d7db0f36795ceab2, found 2bb9030fe8b21ffd0a3a2ec8a8b911e06aecf16bc25a7db14f30eb9bdfca60dd
+2025-12-05 15:46:51,425 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_e3ce779234f04207_1764946011: expected f00409bd8a6de5eec4ae8208311a23ffbd4e78ac7f6ca265d7db0f36795ceab2, found 2bb9030fe8b21ffd0a3a2ec8a8b911e06aecf16bc25a7db14f30eb9bdfca60dd
+E2025-12-05 15:46:51,441 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp16ft4579/test_bankroll.duckdb
+2025-12-05 15:46:51,444 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,444 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,448 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmp16ft4579/test_bankroll.duckdb
+2025-12-05 15:46:51,450 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,450 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,461 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_3815a68a5c0c458b_1764946011
+2025-12-05 15:46:51,463 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_3815a68a5c0c458b_1764946011", "timestamp": "2025-12-05T15:46:51.452155+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,463 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_3815a68a5c0c458b_1764946011: expected 6c09346eb99c7ffedf6facdee3298aacf0fba77f218681de4d894a593b9841f8, found 8dfc6f73e9f26bcdc63fa2db3cfcffcd0a71c0c39cb8a33e7092d3e26372c0db
+2025-12-05 15:46:51,464 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_3815a68a5c0c458b_1764946011: expected 6c09346eb99c7ffedf6facdee3298aacf0fba77f218681de4d894a593b9841f8, found 8dfc6f73e9f26bcdc63fa2db3cfcffcd0a71c0c39cb8a33e7092d3e26372c0db
+2025-12-05 15:46:51,466 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_3815a68a5c0c458b_1764946011: expected 6c09346eb99c7ffedf6facdee3298aacf0fba77f218681de4d894a593b9841f8, found 8dfc6f73e9f26bcdc63fa2db3cfcffcd0a71c0c39cb8a33e7092d3e26372c0db
+E2025-12-05 15:46:51,486 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmprqazdiwm/test_bankroll.duckdb
+2025-12-05 15:46:51,488 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,488 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,491 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmprqazdiwm/test_bankroll.duckdb
+2025-12-05 15:46:51,492 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,493 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,496 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_82a45f56292043c3_1764946011
+2025-12-05 15:46:51,497 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_82a45f56292043c3_1764946011", "timestamp": "2025-12-05T15:46:51.494420+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,497 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_82a45f56292043c3_1764946011: expected ea0e2ea0f4d5b43807d7ac934432010a6ede69eb22b8ac5d29f60269350fe1f7, found 24f93a419153ba6afb6b20cf503e9cde32aeaa20cf3ff68992979a3914c47c6d
+2025-12-05 15:46:51,497 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_82a45f56292043c3_1764946011: expected ea0e2ea0f4d5b43807d7ac934432010a6ede69eb22b8ac5d29f60269350fe1f7, found 24f93a419153ba6afb6b20cf503e9cde32aeaa20cf3ff68992979a3914c47c6d
+2025-12-05 15:46:51,498 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_82a45f56292043c3_1764946011: expected ea0e2ea0f4d5b43807d7ac934432010a6ede69eb22b8ac5d29f60269350fe1f7, found 24f93a419153ba6afb6b20cf503e9cde32aeaa20cf3ff68992979a3914c47c6d
+E2025-12-05 15:46:51,511 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpw8hymse2/test_bankroll.duckdb
+2025-12-05 15:46:51,513 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,513 - src.nba_predictor.bankroll.security - INFO - Security Manager initialized
+2025-12-05 15:46:51,517 - src.nba_predictor.bankroll.engine - INFO - Database initialized at /var/folders/1t/kklhyjjs2wbfnn1hvr1g0tfr0000gn/T/tmpw8hymse2/test_bankroll.duckdb
+2025-12-05 15:46:51,518 - src.nba_predictor.bankroll.audit - INFO - Audit tables initialized
+2025-12-05 15:46:51,518 - src.nba_predictor.bankroll.manager - INFO - Bankroll Manager initialized
+2025-12-05 15:46:51,524 - src.nba_predictor.bankroll.engine - INFO - Transaction executed: txn_09de59bc4a274f59_1764946011
+2025-12-05 15:46:51,525 - src.nba_predictor.bankroll.engine - CRITICAL - DEBUG Checksum Data: {"transaction_id": "txn_09de59bc4a274f59_1764946011", "timestamp": "2025-12-05T15:46:51.520161+00:00", "transaction_type": "DEPOSIT", "amount": 1000.0, "balance_after": 1000.0, "description": "Initial test deposit", "bet_id": null, "game_id": null, "metadata": {"deposit_source": "manual"}}
+2025-12-05 15:46:51,525 - src.nba_predictor.bankroll.engine - CRITICAL - Checksum mismatch for transaction txn_09de59bc4a274f59_1764946011: expected bf3f19d28ebed00da004f2b829a7da8944da2726b2696c4933289c0c67d29a3b, found fa85a9a68b8253527c5cb6b9e93be35fe5c74a89ecbc55d3e01953078d2ce7b8
+2025-12-05 15:46:51,525 - src.nba_predictor.bankroll.engine - ERROR - Database connection error: Checksum mismatch for transaction txn_09de59bc4a274f59_1764946011: expected bf3f19d28ebed00da004f2b829a7da8944da2726b2696c4933289c0c67d29a3b, found fa85a9a68b8253527c5cb6b9e93be35fe5c74a89ecbc55d3e01953078d2ce7b8
+2025-12-05 15:46:51,527 - src.nba_predictor.bankroll.manager - ERROR - Deposit failed: Connection failed: Checksum mismatch for transaction txn_09de59bc4a274f59_1764946011: expected bf3f19d28ebed00da004f2b829a7da8944da2726b2696c4933289c0c67d29a3b, found fa85a9a68b8253527c5cb6b9e93be35fe5c74a89ecbc55d3e01953078d2ce7b8
+E
+======================================================================
+ERROR: test_memory_usage (test_bankroll_v3.TestBankrollPerformance)
+Test utilizzo memoria
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_1d4176901b5f49f7_1764946010: expected 9654415af505e780ac7844a1f2581d0a58caececbb705184cdc937ad2dab4e13, found 2ceeeb55eee1e2819157ee6a3209cf9a2fb93368425a99dbe9aa97d4a178498d
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 582, in setUp
+    self.bankroll_manager.add_deposit(
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_1d4176901b5f49f7_1764946010: expected 9654415af505e780ac7844a1f2581d0a58caececbb705184cdc937ad2dab4e13, found 2ceeeb55eee1e2819157ee6a3209cf9a2fb93368425a99dbe9aa97d4a178498d
+
+======================================================================
+ERROR: test_performance_large_dataset (test_bankroll_v3.TestBankrollPerformance)
+Test performance con dataset grande
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_b8be0621bcf3486c_1764946010: expected eeebd7335dca370547e64b98ba379b976a18bcb2931529144561e2e924869344, found 097dfb0dd0a91b872641fb45e11510f10e226f108999d24189584bc87d60fef1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 582, in setUp
+    self.bankroll_manager.add_deposit(
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_b8be0621bcf3486c_1764946010: expected eeebd7335dca370547e64b98ba379b976a18bcb2931529144561e2e924869344, found 097dfb0dd0a91b872641fb45e11510f10e226f108999d24189584bc87d60fef1
+
+======================================================================
+ERROR: test_001_transaction_engine_initialization (test_bankroll_v3.TestBankrollV3)
+Test 001: Inizializzazione Transaction Engine
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_99b76295dcc542c7_1764946010: expected 533e6d4d030bd01f9bc61857b471fcfc0b241f7fff30f06b3d1ab7b7084c28a9, found e884dbe75efd89c26fe8585c4aabe90c02a9f47469e1390229819290299f8ca9
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_99b76295dcc542c7_1764946010: expected 533e6d4d030bd01f9bc61857b471fcfc0b241f7fff30f06b3d1ab7b7084c28a9, found e884dbe75efd89c26fe8585c4aabe90c02a9f47469e1390229819290299f8ca9
+
+======================================================================
+ERROR: test_002_bankroll_state_calculation (test_bankroll_v3.TestBankrollV3)
+Test 002: Calcolo stato bankroll
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_3c4f6123de6b40b3_1764946011: expected daef09a464e0fec3e0db6a4a9582160daf3a3b0f4295b66eabc4136c860b3459, found ed7a9b83cc744ec90f0a3fe742b32d9ef3603cb3a8780005104bf9694b46a76b
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_3c4f6123de6b40b3_1764946011: expected daef09a464e0fec3e0db6a4a9582160daf3a3b0f4295b66eabc4136c860b3459, found ed7a9b83cc744ec90f0a3fe742b32d9ef3603cb3a8780005104bf9694b46a76b
+
+======================================================================
+ERROR: test_003_bet_placement_risk_validation (test_bankroll_v3.TestBankrollV3)
+Test 003: Piazzamento scommessa con validazione rischio
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_fc9bbb15fec940a4_1764946011: expected ceace39c4265ac3fca82233440e499216f9accfaf9a5947f9fa09a1f3d1a6481, found f71b951d91f697d3aa10d1faf28e1a18cc5afcbaf0949b80a346e9d7cb499be5
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_fc9bbb15fec940a4_1764946011: expected ceace39c4265ac3fca82233440e499216f9accfaf9a5947f9fa09a1f3d1a6481, found f71b951d91f697d3aa10d1faf28e1a18cc5afcbaf0949b80a346e9d7cb499be5
+
+======================================================================
+ERROR: test_004_risk_limit_enforcement (test_bankroll_v3.TestBankrollV3)
+Test 004: Enforcement limiti rischio
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_8226f1315f3944f9_1764946011: expected 41b4d7a66dc86c37db3a74d12587d0a45491176dd7dce8393eddcabb15b3249c, found 7a271861f362caf07b7eec7ec805cf852d627fb43a27735f82cec23d6ff0cf48
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_8226f1315f3944f9_1764946011: expected 41b4d7a66dc86c37db3a74d12587d0a45491176dd7dce8393eddcabb15b3249c, found 7a271861f362caf07b7eec7ec805cf852d627fb43a27735f82cec23d6ff0cf48
+
+======================================================================
+ERROR: test_005_bet_settlement_workflow (test_bankroll_v3.TestBankrollV3)
+Test 005: Workflow completo settlement scommessa
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_3c08818b1b8d42fd_1764946011: expected a36242fce2c313d1bbb4286395c21492eb4b9afccafb782ad03911ed4121677f, found 91db3ab073e937995f42ab0f4037f7cc4455b647b7c9b6009eee0c7f22f6826f
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_3c08818b1b8d42fd_1764946011: expected a36242fce2c313d1bbb4286395c21492eb4b9afccafb782ad03911ed4121677f, found 91db3ab073e937995f42ab0f4037f7cc4455b647b7c9b6009eee0c7f22f6826f
+
+======================================================================
+ERROR: test_006_insufficient_funds_handling (test_bankroll_v3.TestBankrollV3)
+Test 006: Gestione fondi insufficienti
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_1ad79eb5be3244b3_1764946011: expected 7d8f2e540d7c8ed53eaa8d82b3b283485f9ec10e9ca8d1eddbfca937f59d7944, found 9de9110cdc3d43f437ef566dda79ff47446f710cfda9d7796a418604e1dd0f21
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_1ad79eb5be3244b3_1764946011: expected 7d8f2e540d7c8ed53eaa8d82b3b283485f9ec10e9ca8d1eddbfca937f59d7944, found 9de9110cdc3d43f437ef566dda79ff47446f710cfda9d7796a418604e1dd0f21
+
+======================================================================
+ERROR: test_007_transaction_history_integrity (test_bankroll_v3.TestBankrollV3)
+Test 007: Integrità storia transazioni
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_a7d99e81a91f4c9c_1764946011: expected b6a9d320603744b39483bcc4c8d643ab51d2bde5bef0e928af515bec30e747ea, found d4c339e1bde403efdbcbe5e252789de0d871dc88a61b785e54ac736a435c7cc7
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_a7d99e81a91f4c9c_1764946011: expected b6a9d320603744b39483bcc4c8d643ab51d2bde5bef0e928af515bec30e747ea, found d4c339e1bde403efdbcbe5e252789de0d871dc88a61b785e54ac736a435c7cc7
+
+======================================================================
+ERROR: test_008_audit_trail_functionality (test_bankroll_v3.TestBankrollV3)
+Test 008: Funzionalità audit trail
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_0d5a823f93b14926_1764946011: expected f92fb1416ab181c8468a15550f33c3dae99f2be2e156ee9ca3056fb390ae1094, found fc054df4452896420988afa79da91a8aa1443b99bfb5cc3b5c223b54fceb4128
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_0d5a823f93b14926_1764946011: expected f92fb1416ab181c8468a15550f33c3dae99f2be2e156ee9ca3056fb390ae1094, found fc054df4452896420988afa79da91a8aa1443b99bfb5cc3b5c223b54fceb4128
+
+======================================================================
+ERROR: test_009_performance_metrics_collection (test_bankroll_v3.TestBankrollV3)
+Test 009: Raccolta metriche performance
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_8437109815034bc8_1764946011: expected be95d3f4b272ad3439d261202fabefed0f626fffd12c580a8eff1d38dc6778ab, found beef6338744d60d14373ca444ef86ae13a0ef0cbb041980f23bf493d79d78e51
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_8437109815034bc8_1764946011: expected be95d3f4b272ad3439d261202fabefed0f626fffd12c580a8eff1d38dc6778ab, found beef6338744d60d14373ca444ef86ae13a0ef0cbb041980f23bf493d79d78e51
+
+======================================================================
+ERROR: test_010_security_policy_enforcement (test_bankroll_v3.TestBankrollV3)
+Test 010: Enforcement policy sicurezza
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_368f8520f8ab4eff_1764946011: expected 0084d92613ea3b8470fd3424e4fa92bc6ee51c60fb2a93c3126ddc2820b45deb, found 5f371b077c6caeb9ea58fa2d5f2363939835acde5cda10cab2cff06401d1d695
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_368f8520f8ab4eff_1764946011: expected 0084d92613ea3b8470fd3424e4fa92bc6ee51c60fb2a93c3126ddc2820b45deb, found 5f371b077c6caeb9ea58fa2d5f2363939835acde5cda10cab2cff06401d1d695
+
+======================================================================
+ERROR: test_011_concurrent_operations_safety (test_bankroll_v3.TestBankrollV3)
+Test 011: Sicurezza operazioni concorrenti
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_e3ce779234f04207_1764946011: expected f00409bd8a6de5eec4ae8208311a23ffbd4e78ac7f6ca265d7db0f36795ceab2, found 2bb9030fe8b21ffd0a3a2ec8a8b911e06aecf16bc25a7db14f30eb9bdfca60dd
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_e3ce779234f04207_1764946011: expected f00409bd8a6de5eec4ae8208311a23ffbd4e78ac7f6ca265d7db0f36795ceab2, found 2bb9030fe8b21ffd0a3a2ec8a8b911e06aecf16bc25a7db14f30eb9bdfca60dd
+
+======================================================================
+ERROR: test_012_data_consistency_validation (test_bankroll_v3.TestBankrollV3)
+Test 012: Validazione consistenza dati
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_3815a68a5c0c458b_1764946011: expected 6c09346eb99c7ffedf6facdee3298aacf0fba77f218681de4d894a593b9841f8, found 8dfc6f73e9f26bcdc63fa2db3cfcffcd0a71c0c39cb8a33e7092d3e26372c0db
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_3815a68a5c0c458b_1764946011: expected 6c09346eb99c7ffedf6facdee3298aacf0fba77f218681de4d894a593b9841f8, found 8dfc6f73e9f26bcdc63fa2db3cfcffcd0a71c0c39cb8a33e7092d3e26372c0db
+
+======================================================================
+ERROR: test_013_error_handling_and_recovery (test_bankroll_v3.TestBankrollV3)
+Test 013: Error handling e recovery
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_82a45f56292043c3_1764946011: expected ea0e2ea0f4d5b43807d7ac934432010a6ede69eb22b8ac5d29f60269350fe1f7, found 24f93a419153ba6afb6b20cf503e9cde32aeaa20cf3ff68992979a3914c47c6d
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_82a45f56292043c3_1764946011: expected ea0e2ea0f4d5b43807d7ac934432010a6ede69eb22b8ac5d29f60269350fe1f7, found 24f93a419153ba6afb6b20cf503e9cde32aeaa20cf3ff68992979a3914c47c6d
+
+======================================================================
+ERROR: test_014_edge_cases_and_boundary_conditions (test_bankroll_v3.TestBankrollV3)
+Test 014: Edge cases e condizioni boundary
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 176, in _get_connection
+    yield self._connection
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 630, in get_transaction_by_id
+    return self._row_to_transaction(result)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 577, in _row_to_transaction
+    raise ChecksumMismatchError(
+src.nba_predictor.bankroll.exceptions.ChecksumMismatchError: Checksum mismatch for transaction txn_09de59bc4a274f59_1764946011: expected bf3f19d28ebed00da004f2b829a7da8944da2726b2696c4933289c0c67d29a3b, found fa85a9a68b8253527c5cb6b9e93be35fe5c74a89ecbc55d3e01953078d2ce7b8
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/test_bankroll_v3.py", line 69, in setUp
+    self.bankroll_manager.add_deposit(Decimal("1000.00"), "Initial test deposit")
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/manager.py", line 370, in add_deposit
+    transaction = self.engine.get_transaction_by_id(transaction_id)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 631, in get_transaction_by_id
+    return None
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/contextlib.py", line 135, in __exit__
+    self.gen.throw(type, value, traceback)
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/bankroll/engine.py", line 180, in _get_connection
+    raise DatabaseConnectionError(
+src.nba_predictor.bankroll.exceptions.DatabaseConnectionError: Connection failed: Checksum mismatch for transaction txn_09de59bc4a274f59_1764946011: expected bf3f19d28ebed00da004f2b829a7da8944da2726b2696c4933289c0c67d29a3b, found fa85a9a68b8253527c5cb6b9e93be35fe5c74a89ecbc55d3e01953078d2ce7b8
+
+----------------------------------------------------------------------
+Ran 16 tests in 1.167s
+
+FAILED (errors=16)

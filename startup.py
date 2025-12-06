@@ -177,14 +177,10 @@ def verify_project_structure() -> bool:
             "src/nba_predictor": SRC_PATH / "nba_predictor",
             "src/nba_predictor/__init__.py": SRC_PATH / "nba_predictor" / "__init__.py",
             "src/nba_predictor/streamlit": SRC_PATH / "nba_predictor" / "streamlit",
-            "src/nba_predictor/streamlit/app.py": SRC_PATH
+            "src/nba_predictor/streamlit/new_wic_dashboard.py": SRC_PATH
             / "nba_predictor"
             / "streamlit"
-            / "app.py",
-            "src/nba_predictor/streamlit/betting_workflow_dashboard.py": SRC_PATH
-            / "nba_predictor"
-            / "streamlit"
-            / "betting_workflow_dashboard.py",
+            / "new_wic_dashboard.py",
             "src/nba_predictor/core": SRC_PATH / "nba_predictor" / "core",
             "src/nba_predictor/utils": SRC_PATH / "nba_predictor" / "utils",
         }
@@ -220,7 +216,13 @@ def launch_application() -> bool:
         logger.info(f"📁 Project root: {PROJECT_ROOT}")
 
         # Path to the main application file
-        script_path = PROJECT_ROOT / "src" / "nba_predictor" / "streamlit" / "app.py"
+        script_path = (
+            PROJECT_ROOT
+            / "src"
+            / "nba_predictor"
+            / "streamlit"
+            / "new_wic_dashboard.py"
+        )
 
         if not script_path.exists():
             logger.error(f"❌ Application file not found: {script_path}")

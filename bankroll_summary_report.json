@@ -1,0 +1,311 @@
+{
+    "analysis_date": "2025-12-05T11:17:58Z",
+    "initial_deposit": 84.75,
+    "summary": {
+        "total_bets": 24,
+        "won_bets": 11,
+        "lost_bets": 5,
+        "pending_bets": 8,
+        "settled_bets": 16,
+        "total_staked": 107.20,
+        "total_pending_amount": 43.70,
+        "total_profit_loss": 21.61,
+        "expected_final_balance": 106.36,
+        "actual_free_bankroll": 62.66,
+        "actual_locked_bankroll": 43.70,
+        "actual_total_equity": 106.36,
+        "calculation_difference": 0.0,
+        "status": "CORRECT"
+    },
+    "detailed_bets": [
+        {
+            "index": 1,
+            "date": "2025-12-03 15:10:42",
+            "match": "Orlando Magic vs San Antonio Spurs",
+            "status": "WON",
+            "amount": 3.80,
+            "odds": 1.90,
+            "payout": 7.22,
+            "net_profit": 3.42,
+            "running_balance": 88.17
+        },
+        {
+            "index": 2,
+            "date": "2025-12-03 16:21:55",
+            "match": "Cleveland Cavaliers vs Portland Trail Blazers",
+            "status": "WON",
+            "amount": 3.80,
+            "odds": 1.90,
+            "payout": 7.22,
+            "net_profit": 3.42,
+            "running_balance": 91.59
+        },
+        {
+            "index": 3,
+            "date": "2025-12-03 16:52:48",
+            "match": "New York Knicks vs Charlotte Hornets",
+            "status": "WON",
+            "amount": 3.70,
+            "odds": 1.90,
+            "payout": 7.03,
+            "net_profit": 3.33,
+            "running_balance": 94.92
+        },
+        {
+            "index": 4,
+            "date": "2025-12-03 16:53:28",
+            "match": "Chicago Bulls vs Brooklyn Nets",
+            "status": "WON",
+            "amount": 3.50,
+            "odds": 1.90,
+            "payout": 6.65,
+            "net_profit": 3.15,
+            "running_balance": 98.07
+        },
+        {
+            "index": 5,
+            "date": "2025-12-03 16:54:13",
+            "match": "Houston Rockets vs Sacramento Kings",
+            "status": "WON",
+            "amount": 3.30,
+            "odds": 1.90,
+            "payout": 6.27,
+            "net_profit": 2.97,
+            "running_balance": 101.04
+        },
+        {
+            "index": 6,
+            "date": "2025-12-03 16:54:44",
+            "match": "Milwaukee Bucks vs Detroit Pistons",
+            "status": "LOST",
+            "amount": 3.10,
+            "odds": 1.70,
+            "payout": 0.00,
+            "net_profit": -3.10,
+            "running_balance": 97.94
+        },
+        {
+            "index": 7,
+            "date": "2025-12-03 16:56:09",
+            "match": "Dallas Mavericks vs Miami Heat",
+            "status": "WON",
+            "amount": 3.00,
+            "odds": 1.90,
+            "payout": 5.70,
+            "net_profit": 2.70,
+            "running_balance": 100.64
+        },
+        {
+            "index": 8,
+            "date": "2025-12-03 16:57:18",
+            "match": "Indiana Pacers vs Denver Nuggets",
+            "status": "LOST",
+            "amount": 2.80,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": -2.80,
+            "running_balance": 97.84
+        },
+        {
+            "index": 9,
+            "date": "2025-12-03 22:36:49",
+            "match": "Philadelphia 76ers vs Golden State Warriors",
+            "status": "LOST",
+            "amount": 2.70,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": -2.70,
+            "running_balance": 95.14
+        },
+        {
+            "index": 10,
+            "date": "2025-12-04 15:29:32",
+            "match": "Washington Wizards vs Boston Celtics",
+            "status": "WON",
+            "amount": 4.80,
+            "odds": 1.90,
+            "payout": 9.12,
+            "net_profit": 4.32,
+            "running_balance": 99.46
+        },
+        {
+            "index": 11,
+            "date": "2025-12-04 15:31:33",
+            "match": "Washington Wizards vs Boston Celtics",
+            "status": "LOST",
+            "amount": 4.80,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": -4.80,
+            "running_balance": 94.66
+        },
+        {
+            "index": 12,
+            "date": "2025-12-04 15:33:57",
+            "match": "Washington Wizards vs Boston Celtics",
+            "status": "WON",
+            "amount": 4.80,
+            "odds": 1.70,
+            "payout": 8.16,
+            "net_profit": 3.36,
+            "running_balance": 98.02
+        },
+        {
+            "index": 13,
+            "date": "2025-12-04 15:36:22",
+            "match": "Washington Wizards vs Boston Celtics",
+            "status": "WON",
+            "amount": 4.80,
+            "odds": 1.90,
+            "payout": 9.12,
+            "net_profit": 4.32,
+            "running_balance": 102.34
+        },
+        {
+            "index": 14,
+            "date": "2025-12-04 15:39:24",
+            "match": "Washington Wizards vs Boston Celtics",
+            "status": "LOST",
+            "amount": 4.80,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": -4.80,
+            "running_balance": 97.54
+        },
+        {
+            "index": 15,
+            "date": "2025-12-05 09:27:08",
+            "match": "Boston Celtics vs Los Angeles Lakers",
+            "status": "PENDING",
+            "amount": 4.90,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 97.54
+        },
+        {
+            "index": 16,
+            "date": "2025-12-05 09:27:46",
+            "match": "Orlando Magic vs Miami Heat",
+            "status": "SETTLED",
+            "amount": 4.90,
+            "odds": 1.90,
+            "payout": 9.31,
+            "net_profit": 4.41,
+            "running_balance": 101.95
+        },
+        {
+            "index": 17,
+            "date": "2025-12-05 09:28:18",
+            "match": "Brooklyn Nets vs Utah Jazz",
+            "status": "PENDING",
+            "amount": 4.90,
+            "odds": 1.70,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 101.95
+        },
+        {
+            "index": 18,
+            "date": "2025-12-05 09:28:48",
+            "match": "Orlando Magic vs Miami Heat",
+            "status": "SETTLED",
+            "amount": 4.90,
+            "odds": 1.90,
+            "payout": 9.31,
+            "net_profit": 4.41,
+            "running_balance": 106.36
+        },
+        {
+            "index": 19,
+            "date": "2025-12-05 09:29:14",
+            "match": "Boston Celtics vs Los Angeles Lakers",
+            "status": "PENDING",
+            "amount": 4.90,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        },
+        {
+            "index": 20,
+            "date": "2025-12-05 09:31:14",
+            "match": "Chicago Bulls vs Indiana Pacers",
+            "status": "PENDING",
+            "amount": 5.80,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        },
+        {
+            "index": 21,
+            "date": "2025-12-05 09:31:53",
+            "match": "Chicago Bulls vs Indiana Pacers",
+            "status": "PENDING",
+            "amount": 5.80,
+            "odds": 1.70,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        },
+        {
+            "index": 22,
+            "date": "2025-12-05 09:32:32",
+            "match": "Chicago Bulls vs Indiana Pacers",
+            "status": "PENDING",
+            "amount": 5.80,
+            "odds": 1.70,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        },
+        {
+            "index": 23,
+            "date": "2025-12-05 09:33:18",
+            "match": "Atlanta Hawks vs Denver Nuggets",
+            "status": "PENDING",
+            "amount": 5.80,
+            "odds": 1.70,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        },
+        {
+            "index": 24,
+            "date": "2025-12-05 09:33:49",
+            "match": "Atlanta Hawks vs Denver Nuggets",
+            "status": "PENDING",
+            "amount": 5.80,
+            "odds": 1.90,
+            "payout": 0.00,
+            "net_profit": 0.00,
+            "running_balance": 106.36
+        }
+    ],
+    "transactions_summary": {
+        "total_transactions": 36,
+        "deposit_transactions": 1,
+        "bet_placement_transactions": 24,
+        "payout_transactions": 11,
+        "total_debit_amount": -107.20,
+        "total_credit_amount": 85.11,
+        "net_transaction_sum": -22.09,
+        "expected_free_bankroll": 62.66
+    },
+    "verification": {
+        "balance_calculation_correct": true,
+        "transaction_sum_correct": true,
+        "pending_bets_handled": true,
+        "profit_loss_calculations_correct": true,
+        "all_consistency_checks_passed": true
+    },
+    "recommendations": [
+        "Il calcolo del bankroll è ora CORRETTO e CONSISTENTE",
+        "Il sistema utilizza il metodo del ledger come best practice",
+        "Tutte le transazioni sono state ricostruite correttamente",
+        "I profitti/loss sono calcolati con la formula: net_profit = stake * (odds - 1) per le vincite",
+        "Le scommesse PENDING sono gestite correttamente come fondi bloccati",
+        "Il file bankroll.json è stato aggiornato con i valori corretti"
+    ]
+}

@@ -890,6 +890,19 @@ def render_step_1_scheduler():
         # Convert to list of dicts for rendering
         games = games_df.to_dicts()
 
+        # Fetch pending bets counts
+        from nba_predictor.utils.betting_database_manager import (
+            get_secure_database_manager,
+        )
+
+        try:
+            db_manager = get_secure_database_manager()
+            user_id = WICState.get_user_id()  # Assuming WICState has user_id
+            pending_counts = db_manager.safe_get_pending_bets_by_game(user_id)
+        except Exception as e:
+            # print(f"DEBUG: Failed to fetch pending counts: {e}")
+            pending_counts = {}
+
         for game in games:
             # Ensure required keys exist for card
             game_display = {
@@ -900,8 +913,13 @@ def render_step_1_scheduler():
                 "game_time": game.get("game_time", "TBD"),
                 "status": game.get("status", "Scheduled"),
             }
+
+            p_count = pending_counts.get(game.get("game_id"), 0)
+
             render_game_card(
-                game_display, on_analyze=lambda gid, g=game_display: select_game(gid, g)
+                game_display,
+                on_analyze=lambda gid, g=game_display: select_game(gid, g),
+                pending_bets_count=p_count,
             )
 
     except Exception as e:
@@ -1026,9 +1044,10 @@ def render_step_3_analyst():
             "Central Line (Points)",
             min_value=150.0,
             max_value=300.0,
-            value=220.0,
+            value=None,
             step=0.5,
             help="The total points line where Over and Under are priced equally (50% probability).",
+            placeholder="e.g. 224.5",
         )
 
     if central_line:
@@ -1373,15 +1392,7 @@ def render_step_5_portfolio():
 
             st.markdown("---")
 
-            # Logo Update
-            try:
-                st.image(
-                    "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/streamlit/logo.png",
-                    use_column_width=True,
-                )
-            except:
-                st.markdown("## Basket Bet")
-
+            # Logo removed from here (Portfolio)
             st.markdown(
                 """
                 <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 10px;">
@@ -1621,7 +1632,7 @@ def main():
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
             st.image(
-                "src/nba_predictor/streamlit/nba_logo_flat.png",
+                "src/nba_predictor/streamlit/logo_new.jpg",
                 use_container_width=True,
             )
 

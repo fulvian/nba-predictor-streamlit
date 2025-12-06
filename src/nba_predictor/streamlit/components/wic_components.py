@@ -45,7 +45,9 @@ def render_wic_header(title: str, current_step: int, total_steps: int = 5):
     st.markdown("---")
 
 
-def render_game_card(game: dict[str, Any], on_analyze: Callable[[str], None]):
+def render_game_card(
+    game: dict[str, Any], on_analyze: Callable[[str], None], pending_bets_count: int = 0
+):
     """
     Renders a card for a single game in the scheduler list.
     """
@@ -75,6 +77,11 @@ def render_game_card(game: dict[str, Any], on_analyze: Callable[[str], None]):
         with col3:
             status = game.get("status", "Scheduled")
             st.info(status)
+            if pending_bets_count > 0:
+                st.markdown(
+                    f"<div style='margin-top:4px;background-color:#fff3cd;color:#856404;padding:2px 6px;border-radius:4px;font-size:0.8rem;text-align:center;'>{pending_bets_count} Pending</div>",
+                    unsafe_allow_html=True,
+                )
 
         with col4:
             # Use custom SVG icon next to button

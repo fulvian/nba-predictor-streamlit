@@ -72,3 +72,8 @@ class WICState:
     @staticmethod
     def get_prediction() -> Optional[Dict[str, Any]]:
         return st.session_state.get(WICState.KEY_PREDICTION)
+
+    @staticmethod
+    def get_user_id() -> str:
+        """Returns the current user ID (mocked for now)."""
+        return "test_user_001"
