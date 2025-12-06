@@ -5,7 +5,7 @@ Reusable UI components for the Workflow Intelligent Control Dashboard.
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import streamlit as st
 
@@ -192,7 +192,7 @@ def render_betting_card(
     bookmaker_odds: dict[str, float],
     system_probs: dict[str, float],
     manual_line_key: str,
-) -> float | None:
+) -> Optional[float]:
     """
     Renders the betting analysis card with manual input.
     Returns the manually entered line/odds.

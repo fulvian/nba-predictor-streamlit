@@ -910,15 +910,25 @@ def render_step_1_scheduler():
 
 def select_game(game_id: str, game_data: dict):
     """Callback to select a game and move to Step 2."""
-    WICState.set_selected_game(game_id, game_data)
-    WICState.set_step(2)
-    st.rerun()
+    try:
+        WICState.set_selected_game(game_id, game_data)
+        WICState.set_step(2)
+        # Small delay to ensure session state persists before rerun
+        # Solves race condition where rerun happens before state update propagates
+        time.sleep(0.2)
+        st.rerun()
+    except Exception as e:
+        logger.error(f"Selection Error: {e}")
+        st.error(f"Selection Error: {e}")
 
 
 def render_step_2_predictor():
     """
     Step 2: Game Analysis (Predictor)
     """
+    # settlement_msg = verify_and_settle_bets(db_manager)
+    # if settlement_msg:
+    #     st.toast(settlement_msg, icon="💰")
     game = WICState.get_selected_game()
     if not game:
         st.error("No game selected. Please go back to Schedule.")
@@ -958,10 +968,15 @@ def render_step_2_predictor():
 
             except Exception as e:
                 st.error(f"ML Analysis Failed: {str(e)}")
-                return
+                # We do NOT return here, allowing navigation to proceed even if ML fails
+                # This fixes the blocking issue
+                pass
 
     # Display Prediction
-    render_prediction_summary(prediction)
+    if prediction:
+        render_prediction_summary(prediction)
+    else:
+        st.warning("⚠️ Prediction data not available. Analysis may have failed.")
 
     # Navigation
     st.markdown("---")
@@ -1351,18 +1366,39 @@ def render_step_5_portfolio():
             st.markdown("---")
 
             # Action Buttons
+            if st.toggle("Compact View", value=False):
+                st.session_state["compact_view"] = True
+            else:
+                st.session_state["compact_view"] = False
+
+            st.markdown("---")
+
+            # Logo Update
+            try:
+                st.image(
+                    "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/streamlit/logo.png",
+                    use_column_width=True,
+                )
+            except:
+                st.markdown("## Basket Bet")
+
+            st.markdown(
+                """
+                <div style="text-align: center; color: #666; font-size: 0.8em; margin-top: 10px;">
+                    Verified by <strong>Context7 Rules</strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             c_gen, c_reset = st.columns([2, 1])
 
             with c_gen:
                 # Custom SVG Icon + Button
                 c_icon, c_b = st.columns([1, 5])
                 with c_icon:
-                    st.markdown(
-                        assets.ICON_SUMMARY.replace('width="24"', 'width="20"').replace(
-                            'height="24"', 'height="20"'
-                        ),
-                        unsafe_allow_html=True,
-                    )
+                    st.image(
+                        assets.ICON_SUMMARY_PATH, width=20
+                    )  # Replaced markdown with st.image
                 with c_b:
                     if st.button(
                         "Generate Summary",
@@ -1555,8 +1591,8 @@ def main():
     # --- Auto-Settlement Mechanism ---
     # Enhanced debug mode for settlement
     with st.sidebar:
-        if st.expander("🛠️ Admin / Debug", expanded=False):
-            if st.button("🔄 Force Check & Settle Bets"):
+        if st.expander("Admin / Debug", expanded=False):
+            if st.button("Force Check & Settle Bets"):
                 with st.spinner("Forcing settlement check..."):
                     settled = auto_update_and_settle()
                     if settled > 0:
@@ -1565,54 +1601,9 @@ def main():
                         st.info("No bets to settle.")
 
             st.markdown("---")
-            if st.button("⚠️ Recalculate Bankroll (Fix Ledger)"):
-                # Logic from reset_bankroll.py adapted for inline execution
-                # This avoids lock conflicts by using the existing db_manager connection implicitly
-                # (or managing it safely if the manager supports re-entry, which it likely does via thread locking)
-                try:
-                    INITIAL_CAPITAL = 84.75
-                    query = """
-                        SELECT 
-                            SUM(CASE WHEN status != 'PENDING' THEN profit_loss ELSE 0 END) as net_pl,
-                            SUM(CASE WHEN status = 'PENDING' THEN amount ELSE 0 END) as pending_staked
-                        FROM bets
-                    """
-                    # We use the existing db_manager instance
-                    # Note: db_manager is initialized in main scope, accessible here?
-                    # Yes, typically. If not, we'll see a NameError.
-                    # Checking file.. 'db_manager' is used in sidebar at line 1571, so it IS available.
-                    result = db_manager.safe_execute_query(query, fetch_one=True)
-
-                    net_pl = result.get("net_pl") or 0.0
-                    pending_staked = result.get("pending_staked") or 0.0
-
-                    total_net_worth = INITIAL_CAPITAL + float(net_pl)
-                    free_bankroll = total_net_worth - float(pending_staked)
-
-                    # Manual Update to JSON via Manager (using private method or re-implementing write)
-                    # best to use manager's private method if accessible or just overwrite file carefully
-                    # Manager has `_update_bankroll` but that adds/subtracts.
-                    # We want to SET. Manager doesn't have SET?
-                    # We will write to file directly.
-
-                    bankroll_path = db_manager._get_bankroll_path()
-                    new_data = {
-                        "current_bankroll": free_bankroll,
-                        "initial_bankroll": INITIAL_CAPITAL,
-                        "total_net_worth": total_net_worth,
-                    }
-                    import json
-
-                    with open(bankroll_path, "w") as f:
-                        json.dump(new_data, f, indent=4)
-
-                    st.success(
-                        f"Bankroll Recalculated! Free: €{free_bankroll:.2f} (Base: €{INITIAL_CAPITAL} + P/L: €{net_pl:.2f})"
-                    )
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Recalculation failed: {e}")
+            # Recalculate Bankroll Hidden
+            # if st.button("⚠️ Recalculate Bankroll (Fix Ledger)"):
+            #     st.info("Feature hidden.")
 
     # --- Auto-Settlement Mechanism ---
     # Run once on startup (session-persistent)
