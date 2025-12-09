@@ -577,15 +577,6 @@ class SecureBettingDatabaseManager:
                         ):
                             payout = stake
 
-                        # Only create transaction if there money coming IN
-                        if payout > 0:
-                            self.engine.add_deposit(
-                                payout,
-                                f"Legacy Settlement Adjustment: Bet {bet_id} ({result})",
-                            )
-                            logger.info(
-                                f"💰 Legacy Adjustment: Added {payout} for Bet {bet_id}"
-                            )
                     else:
                         logger.error(
                             f"Legacy bet {bet_id} not found in DB either. Cannot settle."

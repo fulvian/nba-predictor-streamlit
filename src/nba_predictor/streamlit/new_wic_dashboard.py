@@ -158,7 +158,11 @@ def fetch_games_from_multiple_sources(target_date: str) -> List[Dict]:
                                                 "away_team_score", 0
                                             ),
                                             "status": game.get("status", "Scheduled"),
-                                            "time": game.get("time", "TBD"),
+                                            "time": (
+                                                lambda t: t
+                                                if t and t != "TBD"
+                                                else None
+                                            )(game.get("time")),
                                             "match_id": None,
                                         }
                                     )
@@ -458,7 +462,9 @@ def auto_update_and_settle():
                                 "home_team": g.get("home_team"),
                                 "away_team": g.get("away_team"),
                                 "season": "2025-26",
-                                "game_time": g.get("time", "TBD"),
+                                "game_time": (
+                                    lambda t: t if t and t != "TBD" else None
+                                )(g.get("time")),
                                 "status": g.get("status", "Scheduled"),
                                 "home_score": g.get("home_score", 0),
                                 "away_score": g.get("away_score", 0),
@@ -697,30 +703,6 @@ def auto_update_and_settle():
     except Exception as e:
         logger.error(f"❌ Critical error in auto_update_and_settle: {e}")
         st.error(f"Error during auto-settlement: {str(e)}")
-
-
-def get_bankroll() -> float:
-    """Get current bankroll from file."""
-    try:
-        with open("data/bankroll.json", "r") as f:
-            data = json.load(f)
-            return float(data.get("current_bankroll", 0.0))
-    except Exception:
-        return 0.0
-
-
-def update_bankroll(amount_change: float) -> bool:
-    """Update bankroll by adding amount_change (negative for deductions)."""
-    try:
-        current = get_bankroll()
-        new_amount = current + amount_change
-
-        with open("data/bankroll.json", "w") as f:
-            json.dump({"current_bankroll": new_amount}, f, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"Failed to update bankroll: {e}")
-        return False
 
 
 def render_step_1_scheduler():
@@ -1276,11 +1258,12 @@ def render_step_5_portfolio():
     summary = db_manager.safe_get_user_summary(user_id="test_user_001")
 
     # Load real bankroll
-    current_bankroll = get_bankroll()  # Updated to use new helper function
+    bankroll_summary = db_manager.get_bankroll_summary("test_user_001")
+    current_bankroll = bankroll_summary["total_bankroll"]
 
-    kpi0, kpi1, kpi2, kpi3, kpi4 = st.columns(5)
-    with kpi0:
+    with st.sidebar:
         render_kpi_card("Bankroll", f"€{current_bankroll:.2f}")
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     with kpi1:
         render_kpi_card("Total Bets", summary.get("total_bets", 0))
     with kpi2:
@@ -1610,9 +1593,9 @@ def main():
                         st.info("No bets to settle.")
 
             st.markdown("---")
-            # Recalculate Bankroll Hidden
-            # if st.button("⚠️ Recalculate Bankroll (Fix Ledger)"):
-            #     st.info("Feature hidden.")
+        # Recalculate Bankroll Hidden
+        # if st.button("⚠️ Recalculate Bankroll (Fix Ledger)"):
+        #     st.info("Feature hidden.")
 
     # --- Auto-Settlement Mechanism ---
     # Run once on startup (session-persistent)
