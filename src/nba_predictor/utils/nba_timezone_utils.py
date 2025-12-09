@@ -58,6 +58,44 @@ except Exception as e:
     logger.warning(f"⚠️ Error configuring NBA API headers: {e}")
 
 
+def _standardize_team_name(name: str) -> str:
+    """Standardize team name (handle nicknames/abbreviations)."""
+    nickname_map = {
+        "Warriors": "Golden State Warriors",
+        "Celtics": "Boston Celtics",
+        "Sixers": "Philadelphia 76ers",
+        "76ers": "Philadelphia 76ers",
+        "Lakers": "Los Angeles Lakers",
+        "Knicks": "New York Knicks",
+        "Nets": "Brooklyn Nets",
+        "Raptors": "Toronto Raptors",
+        "Bulls": "Chicago Bulls",
+        "Cavaliers": "Cleveland Cavaliers",
+        "Bucks": "Milwaukee Bucks",
+        "Pistons": "Detroit Pistons",
+        "Pacers": "Indiana Pacers",
+        "Magic": "Orlando Magic",
+        "Heat": "Miami Heat",
+        "Wizards": "Washington Wizards",
+        "Hornets": "Charlotte Hornets",
+        "Hawks": "Atlanta Hawks",
+        "Mavericks": "Dallas Mavericks",
+        "Spurs": "San Antonio Spurs",
+        "Rockets": "Houston Rockets",
+        "Grizzlies": "Memphis Grizzlies",
+        "Pelicans": "New Orleans Pelicans",
+        "Timberwolves": "Minnesota Timberwolves",
+        "Nuggets": "Denver Nuggets",
+        "Jazz": "Utah Jazz",
+        "Trail Blazers": "Portland Trail Blazers",
+        "Kings": "Sacramento Kings",
+        "Clippers": "Los Angeles Clippers",
+        "Suns": "Phoenix Suns",
+        "Thunder": "Oklahoma City Thunder",
+    }
+    return nickname_map.get(name, name)
+
+
 def retry_with_backoff(retries=3, backoff_in_seconds=1):
     """
     Retry decorator with exponential backoff.
@@ -88,220 +126,203 @@ def retry_with_backoff(retries=3, backoff_in_seconds=1):
 @retry_with_backoff(retries=3, backoff_in_seconds=2)
 def get_nba_games_official_api(target_date: date) -> List[Dict[str, Any]]:
     """
-    Get NBA games using official NBA.com API (ScoreboardV2) with fallback to BallDontLie.
-    Prioritizes LeagueGameLog for past dates to ensure 'Final' status.
+    Get NBA games using a robust "Master Schedule First" architecture.
 
-    Args:
-        target_date: Date to fetch games for
-
-    Returns:
-        List of NBA games with official schedule information
+    Strategy:
+    1. Past Dates (< Today): Use LeagueGameLog (Reliable Final Scores).
+    2. Today & Future (>= Today):
+        a. Fetch MASTER SCHEDULE (scheduleLeagueV2.json) to get valid headers (IDs, Names, Dates).
+        b. Filter strictly for target_date.
+        c. If Today: Fetch LIVE SCORES (todaysScoreboard) and enrich the master records.
+        d. If Future: Return master records (Status: Scheduled).
+    3. Fallback: BallDontLie.
     """
-    # 0. Check if date is in the past (yesterday or older)
+    # 1. PAST DATES (< Today): Keep using LeagueGameLog (Best for Final status)
     if target_date < date.today():
         try:
-            logger.info(
-                f"📅 Date {target_date} is in the past. Attempting LeagueGameLog fetch first..."
-            )
+            logger.info(f"📅 Past Date {target_date}: Fetching from LeagueGameLog...")
             games = _get_games_from_leaguegamelog(target_date)
             if games:
-                logger.info(
-                    f"✅ LeagueGameLog: Found {len(games)} completed games for {target_date}"
-                )
+                logger.info(f"✅ LeagueGameLog: Found {len(games)} completed games.")
                 return games
         except Exception as e:
             logger.warning(
-                f"⚠️ LeagueGameLog fetch failed: {e}. Falling back to standard Scoreboard."
+                f"⚠️ LeagueGameLog failed: {e}. Falling back to Master Schedule."
             )
 
-    # 1. OPTIMIZATION: Use NBA CDN for TODAY's games (Fast & Reliable)
-    # This was the logic that "worked yesterday" -> restoring robust CDN path.
-    if target_date == date.today():
-        try:
-            logger.info(f"⚡️ Fetching TODAY's games ({target_date}) via NBA CDN...")
-            cdn_url = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
-
-            import requests
-
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Referer": "https://www.nba.com/",
-                "Origin": "https://www.nba.com",
-            }
-
-            resp = requests.get(cdn_url, headers=headers, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                scoreboard = data.get("scoreboard", {})
-                games_list = scoreboard.get("games", [])
-
-                if games_list:
-                    processed_games = []
-                    for game in games_list:
-                        try:
-                            # Map CDN structure to our format
-                            game_id = game.get("gameId")
-
-                            # Safely get status
-                            status_text = game.get("gameStatusText") or ""
-
-                            # Teams
-                            home_team_info = game.get("homeTeam", {})
-                            away_team_info = game.get("awayTeam", {})
-
-                            # Standardize names
-                            home_name = _standardize_team_name(
-                                home_team_info.get("teamName", "Unknown")
-                            )
-                            away_name = _standardize_team_name(
-                                away_team_info.get("teamName", "Unknown")
-                            )
-
-                            home_score = home_team_info.get("score", 0)
-                            away_score = away_team_info.get("score", 0)
-
-                            # Map status
-                            status_raw = status_text.upper()
-                            status = "Scheduled"  # Default
-
-                            if "FINAL" in status_raw:
-                                status = "Final"
-                            elif "HALF" in status_raw or "Q" in status_raw:
-                                status = "Live"
-                            elif (
-                                "ET" in status_raw
-                                or "PM" in status_raw
-                                or "AM" in status_raw
-                            ):
-                                status = "Scheduled"
-
-                            game_info = {
-                                "game_id": game_id,
-                                "game_date": target_date.strftime("%Y-%m-%d"),
-                                "home_team": home_name,
-                                "away_team": away_name,
-                                "home_score": int(home_score),
-                                "away_score": int(away_score),
-                                "game_time": status_text,
-                                "status": status,
-                                "arena": game.get("arenaName", "Unknown"),
-                                "city": game.get("arenaCity", "Unknown"),
-                                "state": game.get("arenaState", "Unknown"),
-                                "source": "NBA_CDN",
-                            }
-                            processed_games.append(game_info)
-                        except Exception as inner_e:
-                            logger.warning(
-                                f"⚠️ Error parsing single game in CDN: {inner_e}"
-                            )
-                            continue
-
-                    logger.info(
-                        f"✅ NBA CDN: Found {len(processed_games)} games for TODAY"
-                    )
-                    return processed_games
-                else:
-                    logger.warning("Let check ScoreboardV2 if CDN is empty.")
-            else:
-                logger.warning(
-                    f"⚠️ NBA CDN failed {resp.status_code}. Fallback to ScoreboardV2."
-                )
-        except Exception as e:
-            logger.warning(f"⚠️ NBA CDN Exception: {e}. Fallback to ScoreboardV2.")
-
-    # 2. Try Official NBA API (ScoreboardV2) - Fallback or for non-today dates
+    # 2. TODAY & FUTURE (>= Today): Use Master Schedule as Source of Truth
     try:
-        logger.info(
-            f"🏀 NBA Official API: Fetching games for {target_date} using ScoreboardV2 (NBA API Lib)"
-        )
+        logger.info(f"🔮 Fetching Master Schedule (CDN) for {target_date}...")
+        master_games = _fetch_master_schedule_games(target_date)
 
-        # Use ScoreboardV2 which is more reliable for historical/completed games
-        board = scoreboardv2.ScoreboardV2(
-            game_date=target_date.strftime("%Y-%m-%d"),
-            league_id=LeagueID.nba,
-            timeout=30,  # Increased timeout for robustness
-        )
-
-        # Get GameHeader and LineScore
-        games_list = board.game_header.get_dict()["data"]
-        line_score = board.line_score.get_dict()["data"]
-
-        # Pre-fetch team info for name resolution
-        nba_teams_list = nba_teams.get_teams()
-        team_id_map = {team["id"]: team["full_name"] for team in nba_teams_list}
-
-        if games_list:
-            games = []
-
-            # Create a map for line scores (scores are here)
-            scores_map = {}
-            for ls in line_score:
-                # LineScore indices: GAME_ID=2, TEAM_ID=3, PTS=22
-                game_id = ls[2]
-                team_id = ls[3]
-                pts = ls[22]
-                if game_id not in scores_map:
-                    scores_map[game_id] = {}
-                scores_map[game_id][team_id] = pts
-
-            for game_row in games_list:
-                # GameHeader indices:
-                # GAME_DATE_EST=0, GAME_SEQUENCE=1, GAME_ID=2, GAME_STATUS_ID=3,
-                # GAME_STATUS_TEXT=4, GAMECODE=5, HOME_TEAM_ID=6, VISITOR_TEAM_ID=7
-
-                game_id = game_row[2]
-                home_team_id = game_row[6]
-                away_team_id = game_row[7]
-
-                # Get scores from map
-                home_score = scores_map.get(game_id, {}).get(home_team_id, 0)
-                away_score = scores_map.get(game_id, {}).get(away_team_id, 0)
-
-                # Determine status
-                status_text = game_row[4]
-                status = _map_status(status_text)
-
-                # Resolve Team Names using static map
-                home_team_name = team_id_map.get(
-                    home_team_id, f"Unknown ({home_team_id})"
-                )
-                away_team_name = team_id_map.get(
-                    away_team_id, f"Unknown ({away_team_id})"
-                )
-
-                # Double check standardization just in case
-                home_team_name = _standardize_team_name(home_team_name)
-                away_team_name = _standardize_team_name(away_team_name)
-
-                game_info = {
-                    "game_id": game_id,
-                    "game_date": target_date.strftime("%Y-%m-%d"),
-                    "home_team": home_team_name,
-                    "away_team": away_team_name,
-                    "home_score": int(home_score or 0),
-                    "away_score": int(away_score or 0),
-                    "game_time": status_text,  # Use status text as time for now (e.g. "Final", "7:00 pm ET")
-                    "status": status,
-                    "arena": "Unknown",
-                    "city": "Unknown",
-                    "state": "Unknown",
-                }
-                games.append(game_info)
-
-            logger.info(
-                f"✅ NBA Official API: Found {len(games)} games for {target_date}"
-            )
-            return games
+        if not master_games:
+            logger.warning(f"⚠️ Master Schedule returned 0 games for {target_date}.")
+            # If completely empty, maybe try fallback? Or maybe there ARE no games.
+            # Let's try fallback just in case.
         else:
-            logger.warning(f"❌ NBA Official API: No games found in response")
+            logger.info(
+                f"✅ Master Schedule: Found {len(master_games)} valid matchups."
+            )
+
+            # If TODAY, enrich with valid live scores
+            if target_date == date.today():
+                logger.info(
+                    "⚡️ Date is TODAY: Enriching with Live Scores (todaysScoreboard)..."
+                )
+                enrichment_data = _fetch_live_scores_enrichment()
+
+                # Merge logic
+                for game in master_games:
+                    g_id = game["game_id"]
+                    if g_id in enrichment_data:
+                        live = enrichment_data[g_id]
+                        game["home_score"] = live["home_score"]
+                        game["away_score"] = live["away_score"]
+                        game["status"] = live["status"]
+                        game["game_time"] = live["game_time"]
+                        game["source"] = "NBA_CDN_MASTER+LIVE"
+                    else:
+                        # Game in schedule but not in live scoreboard yet (or finished yesterday in timezone overlap)
+                        # Trust the Schedule's existence, but keep score 0/Scheduled if missing from live feed
+                        pass
+
+            return master_games
 
     except Exception as e:
-        logger.error(f"❌ NBA Official API (ScoreboardV2) failed: {e}")
-        # Continue to fallback
+        logger.error(f"❌ Master Schedule Logic failed: {e}")
 
-    # 2. Fallback to BallDontLie API
-    logger.warning("⚠️ NBA Official API failed. Falling back to BallDontLie API...")
+    # 3. Fallback to BallDontLie API
+    logger.warning("⚠️ Official API sources failed. Falling back to BallDontLie API...")
     return _get_games_from_balldontlie(target_date)
+
+
+def _fetch_master_schedule_games(target_date: date) -> List[Dict[str, Any]]:
+    """
+    Fetch games from the full season CDN schedule (scheduleLeagueV2.json).
+    Guarantees valid Team IDs and Names for any date in the season.
+    """
+    url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
+    import requests
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.nba.com/",
+            "Origin": "https://www.nba.com",
+        }
+
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            logger.warning(f"⚠️ CDN Schedule fetch failed: {resp.status_code}")
+            return []
+
+        data = resp.json()
+        league_schedule = data.get("leagueSchedule", {})
+        game_dates = league_schedule.get("gameDates", [])
+
+        # Format target date to match CDN format if possible, or search
+        # Typically CDN has "MM/DD/YYYY HH:MM:SS" or similar
+        # We'll search by containing string YYYY-MM-DD or MM/DD/YYYY
+        target_str_us = target_date.strftime("%m/%d/%Y")
+        target_str_iso = target_date.strftime("%Y-%m-%d")
+
+        found_date_node = None
+        for gd in game_dates:
+            d_val = gd.get("gameDate", "")
+            if target_str_us in d_val or target_str_iso in d_val:
+                found_date_node = gd
+                break
+
+        if not found_date_node:
+            logger.info(f"ℹ️ No games found in CDN schedule for {target_date}")
+            return []
+
+        games = []
+        for g in found_date_node.get("games", []):
+            try:
+                # Extract and map data
+                g_id = g.get("gameId")
+
+                # Teams
+                home_t = g.get("homeTeam", {})
+                away_t = g.get("awayTeam", {})
+
+                home_name = _standardize_team_name(home_t.get("teamName", "Unknown"))
+                away_name = _standardize_team_name(away_t.get("teamName", "Unknown"))
+
+                # Status/Time
+                status_text = g.get("gameStatusText", "Scheduled")
+
+                # Scores (likely 0 for future games)
+                h_score = home_t.get("score", 0)
+                a_score = away_t.get("score", 0)
+
+                game_info = {
+                    "game_id": g_id,
+                    "game_date": target_date.strftime("%Y-%m-%d"),
+                    "home_team": home_name,
+                    "away_team": away_name,
+                    "home_score": int(h_score),
+                    "away_score": int(a_score),
+                    "game_time": status_text,
+                    "status": "Scheduled",  # Explicitly scheduled as it's future
+                    "arena": g.get("arenaName", "Unknown"),
+                    "city": g.get("arenaCity", "Unknown"),
+                    "state": g.get("arenaState", "Unknown"),
+                    "source": "NBA_CDN_SCHEDULE",
+                }
+                games.append(game_info)
+            except Exception as e:
+                logger.warning(f"⚠️ Error parsing singular CDN scheduled game: {e}")
+                continue
+
+        return games
+
+    except Exception as e:
+        logger.error(f"❌ CDN Schedule Exception: {e}")
+        return []
+
+
+def _fetch_live_scores_enrichment() -> Dict[str, Dict[str, Any]]:
+    """
+    Fetch TODAYS live scores (todaysScoreboard_00.json) and return a map
+    of game_id -> {score, status, time} for enrichment.
+    """
+    url = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
+    import requests
+
+    enrichment_map = {}
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://www.nba.com/",
+            "Origin": "https://www.nba.com",
+        }
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            for game in data.get("scoreboard", {}).get("games", []):
+                g_id = game.get("gameId")
+
+                # Determine generic status
+                status_text = game.get("gameStatusText", "")
+                status_raw = status_text.upper()
+                status = "Scheduled"
+                if "FINAL" in status_raw:
+                    status = "Final"
+                elif "HALF" in status_raw or "Q" in status_raw:
+                    status = "Live"
+
+                enrichment_map[g_id] = {
+                    "home_score": int(game.get("homeTeam", {}).get("score", 0)),
+                    "away_score": int(game.get("awayTeam", {}).get("score", 0)),
+                    "status": status,
+                    "game_time": status_text,
+                }
+    except Exception as e:
+        logger.warning(f"⚠️ Live Score Enrichment failed: {e}")
+
+    return enrichment_map
 
 
 def _get_games_from_leaguegamelog(target_date: date) -> List[Dict[str, Any]]:

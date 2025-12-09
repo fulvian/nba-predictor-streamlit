@@ -432,7 +432,10 @@ class UnifiedDataStore:
                 # Use DuckDB for efficient filtering with schema evolution handling
                 # Cast season to VARCHAR to handle mixed types (Int64 vs String)
                 query = f"""
-                SELECT * REPLACE (CAST(season AS VARCHAR) AS season) 
+                SELECT * REPLACE (
+                    CAST(season AS VARCHAR) AS season,
+                    TRY_CAST(game_time AS VARCHAR) AS game_time
+                ) 
                 FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
                 WHERE game_date BETWEEN '{start_date}' AND '{end_date}'
                 ORDER BY game_date
@@ -452,7 +455,10 @@ class UnifiedDataStore:
             else:
                 # Load all games data using DuckDB to handle schema evolution and type casting
                 query = f"""
-                SELECT * REPLACE (CAST(season AS VARCHAR) AS season) 
+                SELECT * REPLACE (
+                    CAST(season AS VARCHAR) AS season,
+                    TRY_CAST(game_time AS VARCHAR) AS game_time
+                ) 
                 FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
                 ORDER BY game_date
                 """

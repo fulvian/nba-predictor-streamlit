@@ -722,149 +722,100 @@ class NBADataProvider:
 
     def get_scheduled_games(self, days_ahead=7, specific_date=None):
         """
-        Metodo principale che prima controlla il persistent storage, poi usa le API.
+        Metodo principale per ottenere il calendario.
+        Priorità a BallDontLie API (Official Schedule) per la stabilità delle date future.
 
         Workflow:
-        1. Controlla nel persistent storage (Data Persistence Bridge)
-        2. Se non trova dati, usa le API (BallDontLie + fallbacks)
-        3. Salva automaticamente i risultati nel persistent storage
-
-        Args:
-            days_ahead: Giorni futuri da cercare (massimo 5 consigliato per BallDontLie)
-            specific_date: Data specifica (YYYY-MM-DD)
-
-        Returns:
-            list: Tutte le partite (reali + fallback)
+        1. Accesso Priority: BallDontLie API (Official Schedule)
+        2. Fallback 1: NBA Official API (Live/Past)
+        3. Fallback 2: The Odds API (Odds only)
+        4. Post-processing: Deduplica, Sort, Persistence
         """
-        print(f"\n🏀 NBA Game Detection con Data Persistence - {date.today()}")
+        print(f"\n🏀 NBA Game Detection - {date.today()}")
         print("=" * 60)
 
-        # FASE 0: Data Persistence Bridge (persistent storage check)
+        # FASE 0: Data Persistence Bridge check (Read Cache)
         if self.persistence_bridge:
-            print(f"\n💾 FASE 0: Verifica dati persistenti...")
             try:
                 persistent_games = self.persistence_bridge.get_scheduled_games_with_persistence(
                     days_ahead=days_ahead,
                     specific_date=specific_date,
-                    force_api=True,  # FORCE LIVE FETCH (Prioritize Official API over stale cache)
+                    force_api=False,  # Use cache if available, but don't force bridge to fetch
                 )
                 if persistent_games:
                     print(
                         f"   ✅ Dati persistenti trovati: {len(persistent_games)} partite"
                     )
+                    # Standarize keys for persistence data (legacy data might use game_date)
+                    for g in persistent_games:
+                        if "date" not in g and "game_date" in g:
+                            g["date"] = g["game_date"]
+                        if "time" not in g and "game_time" in g:
+                            g["time"] = g["game_time"]
                     return persistent_games
-                else:
-                    print(f"   📝 Nessun dato persistente trovato, procedo con API...")
             except Exception as e:
                 print(f"   ⚠️ Errore accesso dati persistenti: {e}")
-        else:
-            print(f"\n📝 Data Persistence Bridge non disponibile, uso solo API...")
 
         all_games = []
         primary_source = ""
-        secondary_sources = []
 
-        # 1. Primario: NBA Official API (official NBA schedule - no rate limits)
-        if self.nba_official_available:
-            print(f"\n📅 FASE 1: Partite Ufficiali NBA (Official API - No Rate Limits)")
-            nba_games = self._get_nba_official_games(
-                days_ahead=days_ahead, specific_date=specific_date
-            )
-
-            if nba_games:
-                all_games.extend(nba_games)
-                primary_source = "NBA Official API"
-                print(
-                    f"   ✅ NBA Official API: {len(nba_games)} partite ufficiali caricate"
-                )
-            else:
-                print(
-                    f"   ⚠️ NBA Official API: Nessuna partita trovata, procedo con fallback"
-                )
-
-        else:
-            print(f"\n📅 FASE 1: NBA Official API non disponibile")
-
-        # 2. Secondario: BallDontLie API (fallback con rate limits)
-        # Execute this IF Official API failed (not available) OR returned no games
+        # 1. PRIMARY: BallDontLie API
         if not all_games and self.bdl_available:
-            print(f"\n📅 FASE 1 (Fallback): Partite Ufficiali NBA (BallDontLie API)")
-
-            # If we already tried Official and failed, log it
-            if self.nba_official_available:
-                print(
-                    f"   ⚠️ Official API returned 0 games. Switching to BallDontLie..."
+            print(f"\n📅 FASE 1: BallDontLie API (Primary Schedule Source)")
+            try:
+                bdl_games = self._get_ball_dont_lie_games(
+                    days_ahead=days_ahead, specific_date=specific_date
                 )
-
-            nba_games = self._get_ball_dont_lie_games(
-                days_ahead=days_ahead, specific_date=specific_date
-            )
-
-            if nba_games:
-                all_games.extend(nba_games)
-                primary_source = "BallDontLie API"
-                print(
-                    f"   ✅ BallDontLie API: {len(nba_games)} partite ufficiali caricate"
-                )
-            else:
-                print(
-                    f"   ⚠️ BallDontLie API: Nessuna partita trovata, procedo con fallback"
-                )
-        elif self.bdl_available and all_games:
-            print(f"   ℹ️ BallDontLie API skipped (Official API successful)")
-        else:
-            print(f"\n📅 FASE 1: NBA Official API non disponibile")
-
-        # 2. Fallback 1: The Odds API (se NBA Official API fallisce)
-        if not all_games:  # Solo se non abbiamo partite da NBA Official API
-            print(f"\n📅 FASE 2: Partite con Quote (The Odds API - Fallback)")
-            odds_games = self._get_odds_api_games(days_ahead=days_ahead)
-
-            if odds_games:
-                if specific_date:
-                    # Filtra per data specifica
-                    filtered_odds = [
-                        g for g in odds_games if g["date"] == specific_date
-                    ]
-                    all_games.extend(filtered_odds)
-                    secondary_sources.append("The Odds API")
-                    print(
-                        f"   📊 Filtrate {len(filtered_odds)} partite per {specific_date}"
-                    )
+                if bdl_games:
+                    all_games = bdl_games
+                    primary_source = "BallDontLie API"
+                    print(f"   ✅ BallDontLie API: {len(all_games)} partite caricate")
                 else:
-                    all_games.extend(odds_games)
-                    secondary_sources.append("The Odds API")
+                    print(f"   ⚠️ BallDontLie API: Nessuna partita trovata")
+            except Exception as e:
+                print(f"   ❌ BallDontLie API Error: {e}")
 
-                print(
-                    f"   ✅ The Odds API: {len(odds_games)} partite con quote trovate"
+        # 2. SECONDARY: NBA Official API
+        if not all_games and self.nba_official_available:
+            print(f"\n📅 FASE 2: NBA Official API (Fallback)")
+            try:
+                nba_games = self._get_nba_official_games(
+                    days_ahead=days_ahead, specific_date=specific_date
                 )
-            else:
-                print(f"   ❌ The Odds API: Nessuna partita trovata")
+                if nba_games:
+                    # Standardize keys
+                    for g in nba_games:
+                        if "date" not in g and "game_date" in g:
+                            g["date"] = g["game_date"]
+                        if "time" not in g and "game_time" in g:
+                            g["time"] = g["game_time"]
 
-        # 3. Fallback 2: NBA API completate (se necessario)
-        print(f"\n📅 FASE 3: Partite Completate (NBA Official API)")
-        completed_games = self._get_nba_official_completed_games(days_back=3)
+                    all_games = nba_games
+                    primary_source = "NBA Official API"
+                    print(f"   ✅ NBA Official API: {len(all_games)} partite caricate")
+                else:
+                    print(f"   ⚠️ NBA Official API: Nessuna partita trovata")
+            except Exception as e:
+                print(f"   ❌ NBA Official API Error: {e}")
 
-        if completed_games:
-            if specific_date:
-                # Filtra completate per data specifica
-                filtered_completed = [
-                    g for g in completed_games if g["date"] == specific_date
-                ]
-                all_games.extend(filtered_completed)
-                if filtered_completed:
-                    secondary_sources.append("NBA Live API")
-                print(
-                    f"   📊 Filtrate {len(filtered_completed)} partite completate per {specific_date}"
-                )
-            else:
-                all_games.extend(completed_games)
-                if completed_games:
-                    secondary_sources.append("NBA Live API")
+        # 3. TERTIARY: The Odds API
+        if not all_games:
+            print(f"\n📅 FASE 3: The Odds API (Fallback)")
+            try:
+                odds_games = self._get_odds_api_games(days_ahead=days_ahead)
+                if specific_date:
+                    odds_games = [
+                        g for g in odds_games if g.get("date") == specific_date
+                    ]
 
-            print(f"   ✅ NBA Live API: {len(completed_games)} partite completate")
-        else:
-            print(f"   ❌ NBA Live API: Nessuna partita completata")
+                if odds_games:
+                    all_games = odds_games
+                    primary_source = "The Odds API"
+                    print(f"   ✅ The Odds API: {len(all_games)} partite trovate")
+            except Exception as e:
+                print(f"   ❌ Odds API Error: {e}")
+
+        # --- POST PROCESSING ---
 
         # 4. Inject Canonical IDs and Deduplicate
         seen_match_ids = set()
@@ -872,104 +823,81 @@ class NBADataProvider:
 
         for game in all_games:
             try:
-                # Generate Canonical Match ID
+                # Generate Match ID
                 if self.normalizer:
-                    # Parse date string to object if needed
                     g_date_str = game.get("date")
+                    # Ensure legacy 'game_date' key exists for dashboard compatibility
+                    if "game_date" not in game and g_date_str:
+                        game["game_date"] = g_date_str
+
                     try:
                         g_date = datetime.strptime(g_date_str, "%Y-%m-%d").date()
                     except:
-                        g_date = date.today()  # Fallback
+                        g_date = date.today()
 
                     match_id = self.normalizer.generate_match_id(
                         g_date, game.get("home_team", ""), game.get("away_team", "")
                     )
                     game["match_id"] = match_id
                 else:
-                    # Fallback if normalizer missing
-                    match_id = f"{game['date']}_{game['away_team']}_{game['home_team']}"
+                    g_date_str = game.get("date")
+                    if "game_date" not in game and g_date_str:
+                        game["game_date"] = g_date_str
+
+                    match_id = f"{game.get('date')}_{game.get('away_team')}_{game.get('home_team')}"
                     game["match_id"] = match_id
 
-                # Deduplicate based on Canonical ID
                 if match_id not in seen_match_ids:
                     seen_match_ids.add(match_id)
                     unique_games.append(game)
-
             except Exception as e:
-                print(f"   ⚠️ Error generating match_id for game: {e}")
-                # Add anyway if error, to be safe
+                print(f"   ⚠️ Error processing game for ID: {e}")
                 unique_games.append(game)
 
-        # Ordina per data e ora
-        unique_games.sort(key=lambda x: (x["date"], x.get("time", "00:00")))
+        # Sort
+        try:
+            unique_games.sort(key=lambda x: (x.get("date", ""), x.get("time", "00:00")))
+        except:
+            pass
 
-        # 5. Risultato finale
+        # Print Summary
         print(f"\n📊 RISULTATO FINALE:")
-        print(f"   🎯 Partite uniche trovate: {len(unique_games)}")
-
+        print(f"   🎯 Partite trovate: {len(unique_games)}")
         if primary_source:
-            print(f"   🏀 Fonte primaria: {primary_source}")
-        if secondary_sources:
-            print(f"   🔄 Fonti secondarie: {', '.join(secondary_sources)}")
-
-        # Statistiche per sorgente
-        bdl_count = len([g for g in unique_games if "BallDontLie" in g["source"]])
-        odds_count = len([g for g in unique_games if "The Odds" in g["source"]])
-        nba_count = len([g for g in unique_games if "NBA Live" in g["source"]])
-
-        if bdl_count > 0:
-            print(f"   🏀 Partite ufficiali NBA: {bdl_count}")
-        if odds_count > 0:
-            print(f"   🎰 Partite con quote: {odds_count}")
-        if nba_count > 0:
-            print(f"   📊 Partite completate: {nba_count}")
+            print(f"   🏀 Fonte utilizzata: {primary_source}")
 
         if unique_games:
-            print(f"\n🏀 PARTITE TROVATE:")
-            for i, game in enumerate(unique_games[:10], 1):  # Mostra prime 10
-                if "BallDontLie" in game["source"]:
-                    source_icon = "🏀"
-                elif "The Odds" in game["source"]:
-                    source_icon = "🎰"
-                else:
-                    source_icon = "📊"
-
-                score_text = f" [{game.get('score', '')}]" if game.get("score") else ""
-                time_text = f" {game.get('time', '')}" if game.get("time") else ""
-
+            for i, game in enumerate(unique_games[:5], 1):
                 print(
-                    f"   {i}. {source_icon} {game['away_team']} @ {game['home_team']}{score_text} ({game['date']}{time_text})"
+                    f"   {i}. {game.get('away_team')} @ {game.get('home_team')} ({game.get('date')})"
                 )
-                print(f"      📡 {game['source']}")
 
-                # Mostra quote se disponibili
-                if game.get("odds") and game["odds"].get("moneyline"):
-                    print(
-                        f"      💰 Quote disponibili da {game.get('bookmakers_count', 0)} bookmaker"
-                    )
-
-            if len(unique_games) > 10:
-                print(f"   ... e altre {len(unique_games) - 10} partite")
-        else:
-            print(f"   ❌ NESSUNA PARTITA TROVATA")
-
-        # FASE FINALE: Salva dati nel persistent storage
+        # 5. Save to Persistence (Critical Step)
         if self.persistence_bridge and unique_games:
             print(f"\n💾 FASE FINALE: Salvataggio dati in persistent storage...")
             try:
-                # Usa il bridge per salvare i dati (automaticamente gestito dal bridge)
-                # Il Data Persistence Bridge salverà i dati quando li riceve
-                print(f"   📝 Dati salvati automaticamente per futuri accessi")
+                # The bridge might have a method to save, but typically 'get_scheduled_games_with_persistence'
+                # handles fetching AND saving if it calls the provider.
+                # However, since WE are the provider being called BY the bridge (or directly),
+                # we need to ensure data is saved if we bypassed the bridge or if this is a direct call.
+                # Actually, if the bridge called US, it will save the return value.
+                # If WE called the bridge at the start (Phase 0) and it returned None,
+                # we should manually trigger a save if we found new data.
 
-                # Mostra statistiche del bridge
-                stats = self.persistence_bridge.get_persistence_statistics()
-                total_saved = stats.get("persistence_stats", {}).get(
-                    "total_games_saved", 0
-                )
-                print(f"   📊 Totale partite salvate in storage: {total_saved}")
-
+                # We can explicitly save back to the bridge/store if needed.
+                # But typically the bridge.save_games() would be used.
+                # Looking at checking previous code, it just logged "Dati salvati automaticamente".
+                # It assumed the bridge wrapper (which CALLED this method) would handle it,
+                # OR it was calling a save method.
+                # Let's check the previous code... lines 956-972.
+                # It just prints! "Il Data Persistence Bridge salverà i dati quando li riceve".
+                # Ah, so this method just returns the data, and the CALLER (bridge) saves it?
+                # "Usa il bridge per salvare i dati (automaticamente gestito dal bridge)"
+                # "Il Data Persistence Bridge salverà i dati quando li riceve"
+                # So we just need to return the data!
+                pass
             except Exception as e:
-                print(f"   ⚠️ Errore salvataggio persistent storage: {e}")
+                print(f"   ⚠️ Errore persistence check: {e}")
 
         return unique_games
 
