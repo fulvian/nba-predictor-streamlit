@@ -1036,9 +1036,12 @@ def render_step_3_analyst():
         # 2. Perform Analysis using LegacyRiskManager
 
         # Map prediction to distribution format expected by Risk Manager
+        # IMPORTANT: Ensure minimum sigma of 10.0 to prevent extreme probabilities (100%)
+        # When CI is too tight, standard_error can be 2-5, producing unrealistic probs
+        raw_stderr = prediction.get("standard_error", 15.0)
         distribution = {
             "predicted_mu": prediction.get("predicted_total", 0),
-            "predicted_sigma": prediction.get("standard_error", 15.0),
+            "predicted_sigma": max(10.0, raw_stderr),  # Min 10.0 for realistic probs
         }
 
         # Generate and analyze opportunities
