@@ -265,7 +265,7 @@ def _fetch_master_schedule_games(target_date: date) -> List[Dict[str, Any]]:
                     "home_score": int(h_score),
                     "away_score": int(a_score),
                     "game_time": status_text,
-                    "status": "Scheduled",  # Explicitly scheduled as it's future
+                    "status": _map_status(status_text),  # Dynamic status mapping
                     "arena": g.get("arenaName", "Unknown"),
                     "city": g.get("arenaCity", "Unknown"),
                     "state": g.get("arenaState", "Unknown"),

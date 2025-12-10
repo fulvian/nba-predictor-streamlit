@@ -351,79 +351,68 @@ def auto_update_and_settle():
 
             logger.info(f"📅 Checking games from {min_date} to {max_date}")
 
-            # Fetch games for each date in range using NBA Official API directly
-            all_fetched_games = []
+            # Fetch games for each date in range using NBA Data Provider (Robust)
+            # This replaces the ad-hoc NBA Official Client usage
             current_date = min_date
+            all_fetched_games = []
 
-            # Use NBA Official API directly for completed games (no rate limits)
+            # Initialize robust provider
+            from nba_predictor.api.data_provider import NBADataProvider
+
             try:
-                from nba_predictor.api.nba_official_client import NBAOfficialClient
-                from nba_predictor.utils.nba_timezone_utils import (
-                    get_nba_games_official_api,
+                provider = NBADataProvider()
+                logger.info(
+                    "🏀 Using NBA Data Provider for robust hybrid game fetching"
                 )
+            except Exception as e:
+                logger.error(f"Failed to init NBADataProvider: {e}")
+                provider = None
 
-                nba_client = NBAOfficialClient()
-                logger.info("🏀 Using NBA Official API directly (no rate limits)")
-
+            if provider:
                 while current_date <= max_date:
                     date_str = current_date.strftime("%Y-%m-%d")
-                    logger.info(
-                        f"🔄 Fetching completed games for {date_str} via NBA Official API"
-                    )
+                    logger.info(f"🔄 Fetching completed games for {date_str}")
 
-                    # Get completed games directly from NBA Official API
-                    games = get_nba_games_official_api(current_date)
+                    try:
+                        # Use robust method (LeagueGameLog + BDL Fallback)
+                        games = provider._get_nba_completed_games(
+                            specific_date=date_str
+                        )
 
-                    if games:
-                        # Convert to expected format
-                        formatted_games = []
-                        for game in games:
-                            # Extract team names from game data
-                            home_team = game.get("home_team", "")
-                            away_team = game.get("away_team", "")
-
-                            if home_team and away_team:
+                        if games:
+                            # Convert/Ensure format compatibility
+                            formatted_games = []
+                            for g in games:
                                 formatted_games.append(
                                     {
-                                        "game_id": game.get(
-                                            "game_id", f"nba_official_{date_str}"
-                                        ),
-                                        "date": date_str,
-                                        "home_team": home_team,
-                                        "away_team": away_team,
+                                        "game_id": g.get("game_id"),
+                                        "date": g.get("date"),
+                                        "home_team": g.get("home_team"),
+                                        "away_team": g.get("away_team"),
                                         "season": "2025-26",
-                                        "game_time": game.get("game_time", "TBD"),
-                                        "status": game.get("status", "Final"),
-                                        "home_score": game.get("home_score", 0),
-                                        "away_score": game.get("away_score", 0),
-                                        "match_id": game.get("match_id"),
-                                        "source": "NBA Official API (Direct)",
+                                        "game_time": "TBD",  # Completed games usually don't need time
+                                        "status": g.get("status", "Final"),
+                                        "home_score": g.get("home_score", 0),
+                                        "away_score": g.get("away_score", 0),
+                                        "match_id": g.get(
+                                            "match_id"
+                                        ),  # Might need generation
+                                        "source": g.get("source"),
                                     }
                                 )
+                            all_fetched_games.extend(formatted_games)
+                            logger.info(
+                                f"✅ Found {len(formatted_games)} completed games for {date_str}"
+                            )
+                        else:
+                            logger.debug(f"No completed games found for {date_str}")
 
-                        logger.info(
-                            f"✅ NBA Official API: {len(formatted_games)} completed games found"
-                        )
-                        all_fetched_games.extend(formatted_games)
-                    else:
-                        logger.warning(f"⚠️ No completed games found for {date_str}")
-
-                    current_date += timedelta(days=1)
-
-            except Exception as e:
-                logger.error(f"❌ NBA Official API direct fetch failed: {e}")
-                # Fallback to original method if NBA Official API fails
-                logger.warning("🔄 Falling back to original fetch method...")
-                current_date = min_date
-                while current_date <= max_date:
-                    date_str = current_date.strftime("%Y-%m-%d")
-                    logger.info(f"🔄 Fetching games for {date_str}")
-
-                    games = fetch_games_from_multiple_sources(date_str)
-                    if games:
-                        all_fetched_games.extend(games)
+                    except Exception as e:
+                        logger.error(f"Error fetching games for {date_str}: {e}")
 
                     current_date += timedelta(days=1)
+            else:
+                logger.error("❌ NBADataProvider not available, skipping fetch.")
 
             # Store fetched games
             if all_fetched_games:
@@ -638,13 +627,43 @@ def auto_update_and_settle():
                                     bet.get("odds")
                                 )
                                 profit_loss = payout - float(bet.get("amount"))
+                                # update_bankroll is not defined, we must use the transaction engine via db_manager
                                 # Update bankroll with full payout
-                                if update_bankroll(payout):
+                                try:
+                                    logger.info(
+                                        f"💰 Processing win payout: €{payout:.2f}"
+                                    )
+                                    # We use the db_manager's safe method if available, or access transaction engine directly
+                                    if hasattr(db_manager, "update_bankroll"):
+                                        db_manager.update_bankroll(payout, "WIN_PAYOUT")
+                                    elif hasattr(db_manager, "engine"):
+                                        db_manager.engine.record_transaction(
+                                            user_id=bet.get("user_id"),
+                                            amount=payout,
+                                            transaction_type="WIN_PAYOUT",
+                                            description=f"Win: {bet.get('game_id')}",
+                                        )
+                                    else:
+                                        # Fallback to direct call if helper missing
+                                        # This assumes db_manager has _transaction_engine initialized
+                                        from nba_predictor.bankroll.engine import (
+                                            TransactionEngine,
+                                        )
+
+                                        engine = TransactionEngine(
+                                            db_manager.data_store
+                                        )  # Re-init engine if needed
+                                        engine.deposit(
+                                            payout, f"Win Payout: {bet.get('bet_id')}"
+                                        )
+
                                     logger.info(
                                         f"💰 Bankroll updated by +€{payout:.2f}"
                                     )
-                                else:
-                                    logger.error("❌ Failed to update bankroll for win")
+                                except Exception as e:
+                                    logger.error(
+                                        f"❌ Failed to update bankroll for win: {e}"
+                                    )
                             else:
                                 profit_loss = -float(bet.get("amount"))
                                 # For losses, stake was already deducted, no additional bankroll update needed
