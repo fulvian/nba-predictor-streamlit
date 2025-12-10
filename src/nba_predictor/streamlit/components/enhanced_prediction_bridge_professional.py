@@ -115,6 +115,11 @@ class EnhancedPredictionBridgeProfessional:
 
             # Costruisci response professionale
             response = {
+                # Basic context (ADDED for easier access)
+                "home_team": home_team,
+                "away_team": away_team,
+                "game_date": str(game_date),
+                "betting_line": line,
                 # Basic prediction
                 "status": "success",
                 "predicted_total": prediction_result.predicted_total,
@@ -251,28 +256,31 @@ class EnhancedPredictionBridgeProfessional:
             return {"edge": 0.0, "assessment": "No betting line available"}
 
         edge = prediction_result.predicted_total - betting_line
-        edge_pct = (edge / betting_line) * 100 if betting_line != 0 else 0
+        direction = "Over" if edge > 0 else "Under"
+
+        # Calculate Edge Percentage based on Absolute Difference (Magnitude)
+        # We want to show "11.4%" regardless of direction, not "-11.4%"
+        edge_pct = (abs(edge) / betting_line) * 100 if betting_line != 0 else 0
 
         # Determine edge quality
-        if abs(edge) > 10:
+        abs_edge = abs(edge)
+        if abs_edge > 10:
             quality = "Exceptional"
-        elif abs(edge) > 7:
+        elif abs_edge > 7:
             quality = "Strong"
-        elif abs(edge) > 4:
+        elif abs_edge > 4:
             quality = "Moderate"
-        elif abs(edge) > 2:
+        elif abs_edge > 2:
             quality = "Small"
         else:
             quality = "Minimal"
 
-        direction = "Over" if edge > 0 else "Under"
-
         return {
-            "edge_points": edge,
-            "edge_percentage": edge_pct,
+            "edge_points": edge,  # Keep signed value for logic
+            "edge_percentage": edge_pct,  # Display absolute percentage
             "direction": direction,
             "quality": quality,
-            "assessment": f"{quality} {direction} edge of {abs(edge):.1f} points",
+            "assessment": f"{quality} {direction} Edge of {edge_pct:.1f}% ({abs_edge:.1f} pts)",
         }
 
     def _assess_betting_value(
