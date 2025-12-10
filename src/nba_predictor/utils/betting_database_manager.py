@@ -757,10 +757,10 @@ class SecureBettingDatabaseManager:
         query = """
             SELECT
                 COUNT(*) as total_bets,
-                SUM(CASE WHEN status = 'WON' THEN 1 ELSE 0 END) as won_bets,
-                SUM(CASE WHEN status = 'LOST' THEN 1 ELSE 0 END) as lost_bets,
-                SUM(CASE WHEN status IN ('WON', 'LOST', 'PUSH', 'void') THEN amount ELSE 0 END) as total_staked,
-                SUM(CASE WHEN status != 'PENDING' THEN profit_loss END) as net_profit_loss
+                SUM(CASE WHEN result = 'WON' OR status = 'WON' THEN 1 ELSE 0 END) as won_bets,
+                SUM(CASE WHEN result = 'LOST' OR status = 'LOST' THEN 1 ELSE 0 END) as lost_bets,
+                SUM(CASE WHEN status IN ('SETTLED', 'WON', 'LOST', 'PUSH', 'void') THEN amount ELSE 0 END) as total_staked,
+                SUM(CASE WHEN status != 'PENDING' THEN profit_loss ELSE 0 END) as net_profit_loss
             FROM bets
             WHERE user_id = ?
         """
