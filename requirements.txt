@@ -55,6 +55,9 @@ apscheduler>=3.10.0
 # Monitoring and notifications
 python-telegram-bot>=20.0
 
+# RSS Feed parsing
+feedparser>=6.0.0
+
 # Legacy dependencies - kept for compatibility
 # Some older scripts may still use these
 # pandas>=2.0.0 (already covered above)

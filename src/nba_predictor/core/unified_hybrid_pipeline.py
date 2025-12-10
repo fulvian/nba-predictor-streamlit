@@ -73,7 +73,8 @@ from ..explainability.shap_explainer import (
 # New Components
 from ..analytics.ev_calculator import EVCalculator
 from ..intelligence.bayesian_updater import BayesianUpdater
-from ..intelligence.news_aggregator import NewsAggregator
+from ..intelligence.news_aggregator import CompositeNewsAggregator
+from ..intelligence.nanogpt_client import NanoGPTClient
 
 # Configure logging
 logging.basicConfig(
@@ -113,6 +114,7 @@ class UnifiedPredictionResult:
     # New Components (EV & Bayesian)
     ev_analysis: Optional[Dict[str, Any]] = None
     bayesian_update: Optional[Dict[str, Any]] = None
+    consensus_analysis: Optional[Dict[str, Any]] = None
 
 
 class UnifiedHybridPipeline:
@@ -176,8 +178,13 @@ class UnifiedHybridPipeline:
 
         # Initialize New Analytical Components
         self.ev_calculator = EVCalculator()
+        self.ev_calculator = EVCalculator()
         self.bayesian_updater = BayesianUpdater()
-        self.news_aggregator = NewsAggregator()
+        # Enhanced Intelligence Components
+        self.news_aggregator = CompositeNewsAggregator()
+        self.consensus_client = NanoGPTClient(
+            timeout=180
+        )  # 3 min timeout for multi-model consensus
 
         # Model components
         self.trained_model: Optional[Any] = None
@@ -507,6 +514,96 @@ class UnifiedHybridPipeline:
         except Exception as e:
             logger.error(f"❌ Error loading integrated data: {e}")
             raise Exception(f"Failed to load integrated data: {e}")
+
+    def predict_unified_with_consensus(
+        self,
+        team1: str,
+        team2: str,
+        line: float,
+        home_team: Optional[str] = None,
+        validate_prediction: bool = True,
+    ) -> UnifiedPredictionResult:
+        """
+        Orchestrate the Mixture of Experts (MoE): Quant + News + Reasoning.
+
+        Pattern: "Hybrid with Graceful Degradation"
+        1. Quant Expert: Fast statistical prediction.
+        2. Context: Gather real-time news/injuries.
+        3. Reasoning Expert: NanoGPT Consensus analysis (with timeout/fallback).
+        """
+        # 1. Execute Quant Expert (Unified Pipeline)
+        # This is the "System 1" fast response
+        quant_result = self.predict_unified(
+            team1, team2, line, home_team, validate_prediction
+        )
+
+        try:
+            # 2. Gather Context (News & Injuries)
+            # We map "Team Name" -> "Team Name" (Aggregator handles fuzzy match if needed)
+            news_context = []
+
+            # Fetch news for both teams
+            t1_news = self.news_aggregator.get_latest_news(team1)
+            t2_news = self.news_aggregator.get_latest_news(team2)
+
+            # Combine
+            news_context.extend(t1_news)
+            news_context.extend(t2_news)
+
+            # 3. Prepare Context for Consensus
+            consensus_context = {
+                "team1": team1,
+                "team2": team2,
+                "predicted_total": quant_result.predicted_total,
+                "confidence": f"{quant_result.confidence * 100:.1f}%",
+                "stats": {
+                    "over_prob": quant_result.over_probability,
+                    "under_prob": quant_result.under_probability,
+                    "model_weights": quant_result.model_weights,
+                },
+                "news": [
+                    {"type": item.get("type", "news"), "text": item.get("text", "")}
+                    for item in news_context
+                ],
+            }
+
+            # 4. Query Reasoning Expert (System 2)
+            # This is a blocking call but with strict timeout in the client
+            logger.info(f"🧠 Invoking Consensus Reasoning for {team1} vs {team2}...")
+            consensus_response = self.consensus_client.query_consensus_sync(
+                consensus_context
+            )
+
+            # 5. Enrich Result
+            quant_result.consensus_analysis = consensus_response
+
+            # Log successful orchestration - parse nested consensus JSON
+            try:
+                import json
+
+                consensus_str = consensus_response.get("consensus", "{}")
+                consensus_parsed = (
+                    json.loads(consensus_str)
+                    if isinstance(consensus_str, str)
+                    else consensus_str
+                )
+                score = consensus_parsed.get("confidence", "N/A")
+            except (json.JSONDecodeError, TypeError):
+                score = "N/A"
+            logger.info(f"✅ Consensus Orchestration Complete. Score: {score}%")
+
+        except Exception as e:
+            # GRACEFUL DEGRADATION:
+            # If the reasoning expert fails (timeout, error, process crash),
+            # we MUST still return the valid quantitative prediction.
+            logger.error(f"⚠️ Consensus Orchestration Failed: {e}")
+            quant_result.consensus_analysis = {
+                "error": "Reasoning Expert Unavailable",
+                "details": str(e),
+                "fallback": True,
+            }
+
+        return quant_result
 
     def _calculate_team_rolling_features(self, games_df: pd.DataFrame) -> pd.DataFrame:
         """

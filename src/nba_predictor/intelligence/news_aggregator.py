@@ -1,81 +1,204 @@
 """
 NewsIntelligence Module
 -----------------------
-Aggregates real-time news from various sources (Twitter/X, Odds API, RSS) to feed
-into the BayesianUpdater for dynamic prediction adjustments.
+Aggregates real-time news from "Truly Free" sources (Rotowire Scraping, RSS Feeds).
+Feeds into the NanoGPT Consensus Engine for "Thinking" analysis.
 """
 
+import json
 import logging
-import os
-import requests
-from typing import List, Dict, Optional
+import sqlite3
 from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+
+# Implemented scrapers
+try:
+    from .scrapers import RotowireInjuryScraper, RSSNewsProvider, ESPNInjuryScraper
+except ImportError:
+    # Handle case where scrapers.py might not be importable yet during dev
+    from src.nba_predictor.intelligence.scrapers import (
+        RotowireInjuryScraper,
+        RSSNewsProvider,
+        ESPNInjuryScraper,
+    )
 
 logger = logging.getLogger(__name__)
 
 
-class NewsAggregator:
+class CompositeNewsAggregator:
     """
-    Aggregates news and identifies potential impact events (e.g., injuries).
+    Aggregates news from multiple free sources with caching and deduplication.
     """
 
-    def __init__(
-        self, twitter_api_key: Optional[str] = None, odds_api_key: Optional[str] = None
-    ):
-        self.twitter_api_key = twitter_api_key or os.getenv("TWITTER_API_KEY")
-        self.odds_api_key = odds_api_key or os.getenv("THE_ODDS_API_KEY")
+    def __init__(self, cache_db_path: str = "data/persistent/news_cache.db"):
+        self.cache_db_path = Path(cache_db_path)
+        self.injury_scraper = RotowireInjuryScraper()
+        self.espn_scraper = ESPNInjuryScraper()
+        self.rss_provider = RSSNewsProvider()
 
-        # Key accounts to monitor (if we had real Twitter API access)
-        self.key_accounts = ["ShamsCharania", "wojespn", "Underdog__NBA"]
+        self._init_cache()
 
-    def get_latest_news(self, team_id: int) -> List[Dict]:
+    def _init_cache(self):
+        """Initialize SQLite cache for news and injuries."""
+        try:
+            self.cache_db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(self.cache_db_path)
+            c = conn.cursor()
+
+            # Table for injuries
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS injuries (
+                    player TEXT,
+                    team TEXT,
+                    status TEXT,
+                    details TEXT,
+                    source TEXT,
+                    scraped_at TIMESTAMP,
+                    PRIMARY KEY (player, team)
+                )
+            """)
+
+            # Table for news
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS news (
+                    link TEXT PRIMARY KEY,
+                    title TEXT,
+                    summary TEXT,
+                    source TEXT,
+                    published TIMESTAMP,
+                    scraped_at TIMESTAMP
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"❌ Failed to init news cache: {e}")
+
+    def get_latest_news(self, team_name: Optional[str] = None) -> list[dict]:
         """
-        Get latest news for a specific team.
+        Get combined news/injuries.
 
         Args:
-            team_id: NBA Team ID.
-
-        Returns:
-            List of news items with 'text', 'source', 'timestamp', 'impact_score'.
+            team_name: Filter by team name (e.g., "Lakers", "Los Angeles Lakers")
         """
         news_items = []
 
-        # 1. Check The Odds API for line movements (proxy for news)
-        # If line moves significantly against a team, it implies bad news (injury)
-        odds_news = self._check_odds_movement(team_id)
-        if odds_news:
-            news_items.extend(odds_news)
+        # 1. Fetch & Cache Data (if stale)
+        self._refresh_data_if_needed()
 
-        # 2. Check Twitter/X (Simulated/Placeholder for now)
-        # In a real production env, we would call the Twitter API here.
-        # For now, we return an empty list or mock data if in dev mode.
+        # 2. Query Cache
+        try:
+            conn = sqlite3.connect(self.cache_db_path)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+
+            # Injuries
+            query = "SELECT * FROM injuries"
+            params = []
+            if team_name:
+                query += " WHERE team LIKE ?"
+                # Basic matching: "Lakers" matches "Lakers", "LAL" etc requires mapping
+                # For now, simplistic partial match
+                params.append(f"%{team_name}%")
+
+            c.execute(query, params)
+            for row in c.fetchall():
+                news_items.append(
+                    {
+                        "type": "injury",
+                        "player": row["player"],
+                        "team": row["team"],
+                        "status": row["status"],
+                        "text": f"{row['player']} ({row['team']}) is {row['status']}: {row['details']}",
+                        "source": row["source"],
+                        "timestamp": row["scraped_at"],
+                    }
+                )
+
+            # News
+            query = "SELECT * FROM news ORDER BY published DESC LIMIT 50"
+            c.execute(query)
+            for row in c.fetchall():
+                # Filter relevant global news or specific team news if logic allows
+                # RSS feeds are often general. We include them for broad context.
+                news_items.append(
+                    {
+                        "type": "news",
+                        "title": row["title"],
+                        "text": f"{row['title']} - {row['summary']}",
+                        "source": row["source"],
+                        "timestamp": row["published"],
+                    }
+                )
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"❌ Error reading news cache: {e}")
 
         return news_items
 
-    def _check_odds_movement(self, team_id: int) -> List[Dict]:
-        """
-        Check for significant odds movement that might indicate news.
-        """
-        # Placeholder logic: In a real implementation, this would compare
-        # current odds vs opening odds from self.odds_api_client
-        return []
+    def _refresh_data_if_needed(self):
+        """Refresh data if cache is older than 1 hour."""
+        try:
+            conn = sqlite3.connect(self.cache_db_path)
+            c = conn.cursor()
 
-    def parse_injury_report(self, text: str) -> Optional[Dict]:
-        """
-        Parse a text string to identify injury information.
+            # Check last update
+            c.execute("SELECT MAX(scraped_at) FROM injuries")
+            last_scrape = c.fetchone()[0]
 
-        Args:
-            text: News text (e.g., "LeBron James (ankle) is OUT tonight").
+            should_update = True
+            if last_scrape:
+                last_dt = datetime.fromisoformat(last_scrape)
+                if datetime.now() - last_dt < timedelta(minutes=60):
+                    should_update = False
 
-        Returns:
-            Dictionary with 'player', 'status', 'impact_score' if injury found.
-        """
-        text_lower = text.lower()
+            if should_update:
+                logger.info("🔄 Refreshing News & Injury Data (Scraping)...")
 
-        # Simple keyword matching
-        if "out" in text_lower or "doubtful" in text_lower:
-            # Logic to extract player name would go here (NER or regex)
-            # For now, we return a generic structure
-            return {"type": "injury", "status": "OUT", "confidence": 0.9}
+                # 1. Injuries - Try Rotowire first, then ESPN
+                injuries = self.injury_scraper.scrape()
+                if not injuries:
+                    logger.warning(
+                        "⚠️ Rotowire scrape empty/failed. Attempting ESPN fallback..."
+                    )
+                    injuries = self.espn_scraper.scrape()
 
-        return None
+                if injuries:
+                    # Upsert (Replace)
+                    c.execute(
+                        "DELETE FROM injuries"
+                    )  # Simple strategy: replace all snapshot
+                    c.executemany(
+                        """
+                        INSERT INTO injuries (player, team, status, details, source, scraped_at)
+                        VALUES (:player, :team, :status, :details, :source, :scraped_at)
+                    """,
+                        injuries,
+                    )
+
+                # 2. RSS News
+                news = self.rss_provider.fetch_all()
+                if news:
+                    # Insert ignore duplicates
+                    c.executemany(
+                        """
+                        INSERT OR IGNORE INTO news (link, title, summary, source, published, scraped_at)
+                        VALUES (:link, :title, :summary, :source, :published, :scraped_at)
+                    """,
+                        news,
+                    )
+
+                conn.commit()
+                logger.info("✅ News data refreshed and cached.")
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"❌ Failed to refresh data: {e}")
+
+
+# Backward compatibility alias
+NewsAggregator = CompositeNewsAggregator
