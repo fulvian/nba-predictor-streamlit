@@ -1174,10 +1174,74 @@ def render_step_2_predictor():
         unsafe_allow_html=True,
     )
 
+    # --- NEW: MARKET LINE INPUT (before prediction for enhanced consensus) ---
+    st.markdown("#### 📊 Market Context (Required Step)")
+    st.caption(
+        "Enter the bookmaker's Over/Under line for enhanced consensus analysis. "
+        "Click 'Run Analysis' when ready. Use 0 for simulation without market line."
+    )
+
+    col_input, col_btn = st.columns([2, 1])
+    with col_input:
+        # Use session state to persist the value across reruns
+        market_line_key = f"market_line_{game.get('game_id', 'unknown')}"
+        market_line_input = st.number_input(
+            "Bookmaker O/U Line",
+            min_value=0.0,  # 0 = no market line (simulation mode)
+            max_value=280.0,
+            value=st.session_state.get(market_line_key),  # Default: None (empty field)
+            step=0.5,
+            placeholder="e.g. 224.5 (or 0 for no line)",
+            help="Enter the total points line (0 = standard mode without market blend)",
+            key=market_line_key,
+        )
+
+    # Convert 0 or None to None for the pipeline
+    market_line = (
+        market_line_input if market_line_input and market_line_input > 0 else None
+    )
+
+    with col_btn:
+        st.write("")  # Spacer for alignment
+        run_analysis = st.button(
+            "🚀 Run Analysis",
+            key="btn_run_consensus_analysis",
+            type="primary",
+            help="Click to start ML + Consensus analysis with current settings",
+        )
+
+    # Show mode info
+    if market_line:
+        st.info(
+            f"✅ Market line: **{market_line}** — Weighted blend mode (Quant 15% + Consensus 40% + Market 45%)"
+        )
+    elif market_line_input == 0:
+        st.warning("⚠️ Market line = 0 — Standard ML + Consensus mode (no market blend)")
+    else:
+        st.caption("💡 Insert bookmaker line or 0 for simulation mode")
+
+    st.markdown("---")
+
     # Check if prediction already exists in state to avoid re-running ML on every rerun
+    # BUT: if market_line changed, we need to re-run
+    cached_market_line = st.session_state.get(
+        f"cached_market_line_{game.get('game_id')}"
+    )
     prediction = WICState.get_prediction()
 
-    if not prediction:
+    # Force re-run if market_line changed AND analysis was triggered
+    if prediction and cached_market_line != market_line and run_analysis:
+        prediction = None  # Clear cache to force re-run
+        st.session_state[f"cached_market_line_{game.get('game_id')}"] = market_line
+
+    # CRITICAL: Only run analysis when user explicitly clicks the button
+    if not prediction and not run_analysis:
+        st.info(
+            "👆 Insert market line above and click **Run Analysis** to start prediction."
+        )
+        return  # Stop here - don't auto-run consensus
+
+    if run_analysis and not prediction:
         with st.spinner("Running Advanced ML Analysis..."):
             try:
                 # Parse date
@@ -1187,12 +1251,14 @@ def render_step_2_predictor():
 
                 # Call Unified Hybrid Consensus Pipeline
                 # Uses MoE: Quant Expert + News/Injuries + Reasoning Expert
+                # NEW: Pass market_line for enhanced weighted blend
                 prediction_result = pipeline.predict_unified_with_consensus(
                     team1=game.get("home_team"),
                     team2=game.get("away_team"),
                     line=game.get("total_line", 220.0),
                     home_team=game.get("home_team"),
                     validate_prediction=True,
+                    market_line=market_line,  # NEW: Pass bookmaker line for weighted blend
                 )
 
                 # Derive Standard Error from Confidence Interval (Approximate)
@@ -1273,23 +1339,31 @@ def render_step_3_analyst():
         unsafe_allow_html=True,
     )
 
-    # 1. Get Manual Input (Central Line)
-    st.markdown(f"#### {assets.ICON_TARGET} Market Input", unsafe_allow_html=True)
-    st.markdown("""
-    Enter **Central Line** from bookmaker (the point total where Over/Under odds are ~2.00).
-    """)
+    # 1. Get Market Line (Auto-populated from Step 2)
+    # Retrieve the market line already entered in Step 2
+    market_line_key = f"market_line_{game.get('game_id', 'unknown')}"
+    saved_market_line = st.session_state.get(market_line_key, 0.0)
 
-    col_input, col_info = st.columns([1, 2])
-    with col_input:
-        central_line = st.number_input(
-            "Central Line (Points)",
-            min_value=150.0,
-            max_value=300.0,
-            value=None,
-            step=0.5,
-            help="The total points line where Over and Under are priced equally (50% probability).",
-            placeholder="e.g. 224.5",
-        )
+    # Auto-use the saved value (convert 0 to None)
+    central_line = saved_market_line if saved_market_line > 0 else None
+
+    if central_line:
+        st.success(f"✅ Using market line from Step 2: **{central_line}**")
+    else:
+        # Fallback: allow manual input only if not set
+        st.markdown(f"#### {assets.ICON_TARGET} Market Input", unsafe_allow_html=True)
+        st.warning("⚠️ No market line was set in Step 2. Please enter it now:")
+        col_input, col_info = st.columns([1, 2])
+        with col_input:
+            central_line = st.number_input(
+                "Central Line (Points)",
+                min_value=150.0,
+                max_value=300.0,
+                value=None,
+                step=0.5,
+                help="The total points line where Over and Under are priced equally.",
+                placeholder="e.g. 224.5",
+            )
 
     if central_line:
         # 2. Perform Analysis using LegacyRiskManager

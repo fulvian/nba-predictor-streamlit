@@ -527,10 +527,15 @@ class UnifiedHybridPipeline:
         line: float,
         home_team: Optional[str] = None,
         validate_prediction: bool = True,
+        market_line: Optional[float] = None,
     ) -> UnifiedPredictionResult:
         """
         Produce a unified prediction using MoE (Quant + Qualitative/News).
         Implements Bayesian Fusion with Circuit Breakers.
+
+        Enhanced with Market Line Integration:
+        - If market_line provided: Uses weighted blend (Quant 15% + Consensus 40% + Market 45%)
+        - If market_line not provided: Falls back to original behavior
         """
         # 1. Get Base Quantitative Prediction
         quant_result = self.predict_unified(
@@ -550,11 +555,28 @@ class UnifiedHybridPipeline:
             news_context.extend(t1_news)
             news_context.extend(t2_news)
 
+            # Calculate deviation from market if line provided
+            deviation_pts = None
+            deviation_std = None
+            if market_line:
+                deviation_pts = quant_result.predicted_total - market_line
+                # ~8 points is typical std dev for NBA totals
+                deviation_std = deviation_pts / 8.0
+
             consensus_context = {
                 "team1": team1,
                 "team2": team2,
                 "predicted_total": f"{quant_result.predicted_total:.1f}",
                 "confidence": f"{quant_result.confidence * 100:.1f}%",
+                # NEW: Market context for informed consensus
+                "market_line": market_line,
+                "deviation_from_market": f"{deviation_pts:+.1f} pts"
+                if deviation_pts is not None
+                else "N/A",
+                "deviation_std": f"{deviation_std:+.2f}σ"
+                if deviation_std is not None
+                else "N/A",
+                "market_context_available": market_line is not None,
                 "stats": {
                     "over_prob": f"{quant_result.over_probability:.1%}",
                     "under_prob": f"{quant_result.under_probability:.1%}",
@@ -607,24 +629,58 @@ class UnifiedHybridPipeline:
                         adj_final = adj_proposal
                         reasoning_suffix = ""
 
-                    # --- BAYESIAN FUSION FORMULA ---
-                    # Unified = Quant + (Weight * Adj)
-                    # Weight Logic: Low Risk = 0.3, Med Risk = 0.15
-                    w_llm = 0.3 if "LOW" in risk else 0.15
+                    # --- ENHANCED BAYESIAN FUSION FORMULA ---
+                    # ENHANCED: Higher weights when market context is available
+                    if market_line is not None:
+                        # Full formula: Quant(15%) + Consensus(40%) + Market(45%)
+                        w_quant = 0.15
+                        w_consensus = 0.40 if "LOW" in risk else 0.25
+                        w_market = 1.0 - w_quant - w_consensus
 
-                    # Calculate Adjustment Impact
-                    actual_impact = adj_final * w_llm
+                        # Calculate consensus-adjusted prediction
+                        consensus_pred = quant_result.raw_quant_prediction + adj_final
+
+                        # Weighted blend
+                        quant_result.unified_prediction = (
+                            quant_result.raw_quant_prediction * w_quant
+                            + consensus_pred * w_consensus
+                            + market_line * w_market
+                        )
+
+                        # Calculate effective adjustment for display
+                        actual_impact = (
+                            quant_result.unified_prediction
+                            - quant_result.raw_quant_prediction
+                        )
+                        fusion_type = "WEIGHTED_BLEND"
+
+                        logger.info(
+                            f"📊 Weighted Blend: Quant({w_quant:.0%})={quant_result.raw_quant_prediction:.1f} + "
+                            f"Consensus({w_consensus:.0%})={consensus_pred:.1f} + "
+                            f"Market({w_market:.0%})={market_line:.1f} = {quant_result.unified_prediction:.1f}"
+                        )
+                    else:
+                        # Original formula: Quant + (Weight * Adj)
+                        # Weight Logic: Low Risk = 0.45, Med Risk = 0.25 (INCREASED from 0.30/0.15)
+                        w_llm = 0.45 if "LOW" in risk else 0.25
+
+                        # Calculate Adjustment Impact
+                        actual_impact = adj_final * w_llm
+
+                        # Update unified prediction
+                        quant_result.unified_prediction = (
+                            quant_result.predicted_total + actual_impact
+                        )
+                        fusion_type = "ADDITIVE"
+                        w_quant = 1.0 - w_llm
+                        w_consensus = w_llm
+                        w_market = 0.0
 
                     # Update Result Objects
                     quant_result.consensus_adjustment = actual_impact
-                    quant_result.unified_prediction = (
-                        quant_result.predicted_total + actual_impact
-                    )
-                    quant_result.predicted_total = (
-                        quant_result.unified_prediction
-                    )  # Update getter
+                    quant_result.predicted_total = quant_result.unified_prediction
 
-                    # Store Analysis
+                    # Store Analysis (Enhanced with market context)
                     quant_result.consensus_analysis = {
                         "original_response": data,
                         "proposed_adjustment": original_proposal,
@@ -632,14 +688,21 @@ class UnifiedHybridPipeline:
                         "applied_adjustment": actual_impact,
                         "circuit_breakers_triggered": (adj_final != original_proposal),
                         "circuit_breaker_details": reasoning_suffix.strip(),
-                        "fusion_weight": w_llm,
+                        "fusion_type": fusion_type,
+                        "fusion_weights": {
+                            "quant": w_quant,
+                            "consensus": w_consensus,
+                            "market": w_market,
+                        },
+                        "market_line": market_line,
+                        "deviation_from_market": deviation_pts,
                         "risk_level": risk,
                         "reasoning": data.get("reasoning", "") + reasoning_suffix,
                     }
 
                     score = f"{conf_score * 100:.0f}"
                     logger.info(
-                        f"✅ Consensus Orchestration Complete. Score: {score}% Adj: {actual_impact}"
+                        f"✅ Consensus Orchestration Complete. Score: {score}% Adj: {actual_impact:.2f} Type: {fusion_type}"
                     )
 
                 except Exception as parse_err:
