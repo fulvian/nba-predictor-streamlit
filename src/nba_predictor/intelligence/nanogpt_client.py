@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import sys
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -243,34 +243,104 @@ class NanoGPTClient:
         system_prompt = "You are a specialized NBA Reasoning Expert. Analyze the quantitative data and qualitative news to provide a consensus prediction."
 
         try:
-            return asyncio.run(
+            raw_response = asyncio.run(
                 self._query_consensus_async(prompt, system_prompt, complexity)
             )
+            return self._aggregate_consensus_results(raw_response)
         except Exception as e:
             logger.error(f"❌ NanoGPT Consensus Sync Error: {e}")
             return {"error": str(e), "fallback": True}
 
+    def _aggregate_consensus_results(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Aggregate results from multiple models in the consensus response.
+        """
+        try:
+            results = response.get("results", [])
+            if not results:
+                # Check if it's a single response format (fallback)
+                if "point_adjustment" in response:
+                    return response
+                return {"error": "No results found", "fallback": True}
+
+            total_adj = 0.0
+            total_conf = 0.0
+            valid_count = 0
+            risk_levels = []
+            reasonings = []
+
+            for res in results:
+                try:
+                    content_str = res.get("content", "{}")
+                    # Extract JSON from markdown code block if present
+                    if "```json" in content_str:
+                        content_str = (
+                            content_str.split("```json")[1].split("```")[0].strip()
+                        )
+                    elif "```" in content_str:
+                        content_str = content_str.split("```")[1].strip()
+
+                    data = json.loads(content_str)
+
+                    total_adj += float(data.get("point_adjustment", 0.0))
+                    total_conf += float(data.get("confidence", 0.0))
+                    risk_levels.append(data.get("risk_level", "HIGH").upper())
+                    reasonings.append(
+                        f"{res.get('model', 'Model')}: {data.get('reasoning', '')}"
+                    )
+                    valid_count += 1
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Failed to parse model result: {e}")
+                    continue
+
+            if valid_count == 0:
+                return {"error": "No valid model results", "fallback": True}
+
+            avg_adj = total_adj / valid_count
+            avg_conf = total_conf / valid_count
+
+            # Determine aggregate risk (Conservatively take the highest reported risk)
+            if "HIGH" in risk_levels:
+                final_risk = "HIGH"
+            elif "MED" in risk_levels:
+                final_risk = "MED"
+            else:
+                final_risk = "LOW"
+
+            return {
+                "point_adjustment": avg_adj,
+                "confidence": avg_conf,
+                "risk_level": final_risk,
+                "reasoning": " | ".join(reasonings[:3]),  # Limit to 3 for brevity
+                "model_count": valid_count,
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to aggregate consensus results: {e}")
+            return {"error": str(e), "fallback": True}
+
     def _construct_prompt(self, context: dict[str, Any]) -> str:
-        """
-        Formats the context dictionary into a clear text prompt for the LLM.
-        """
         team1 = context.get("team1", "Team A")
         team2 = context.get("team2", "Team B")
+        predicted_total = context.get("predicted_total", "N/A")
 
         prompt_lines = [
-            f"Analyze the NBA matchup between {team1} and {team2}.",
-            "## Quantitative Signal (The Quant Expert)",
-            f"- Predicted Total: {context.get('predicted_total', 'N/A')}",
-            f"- Model Confidence: {context.get('confidence', 'N/A')}",
-            f"- Key Stats: {json.dumps(context.get('stats', {}), indent=2)}",
+            "You are a professional 'Sharp' NBA Bettor and Handicapper.",
+            "Your goal is to identify if the Quantitative Model is missing critical context (injuries, news, motivation) and propose a specific POINT ADJUSTMENT.",
             "",
-            "## Qualitative Signal (The News Feed)",
-            "Recent News & Injuries:",
+            f"Matchup: {team1} vs {team2}",
+            "",
+            "## Quantitative Model Baseline",
+            f"- Predicted Total: {predicted_total}",
+            f"- Model Confidence: {context.get('confidence', 'N/A')}",
+            f"- Stats Key: {json.dumps(context.get('stats', {}), indent=2)}",
+            "",
+            "## News & Context Stream",
         ]
 
         news = context.get("news", [])
         if news:
-            for item in news[:10]:  # Limit to top 10 relevant items
+            for item in news[:12]:
                 prompt_lines.append(
                     f"- [{item.get('type', 'news').upper()}]: {item.get('text', '')}"
                 )
@@ -278,12 +348,30 @@ class NanoGPTClient:
             prompt_lines.append("- No significant recent news found.")
 
         prompt_lines.append("")
-        prompt_lines.append("## Task")
+        prompt_lines.append("## Task: Market Inefficiency Detection")
         prompt_lines.append(
-            "Provide a consensus analysis. Does the news support or contradict the quantitative model? Are there key player missing items that the stats model might miss?"
+            "Analyze the news against the stats. Does the news suggest the Total should be Higher or Lower?"
         )
         prompt_lines.append(
-            "Return a valid JSON object with keys: 'consensus_score' (0-100), 'reasoning' (string), 'risk_level' (low/med/high)."
+            "You must propose a 'point_adjustment' (e.g., -3.5 if news is bearish for scoring, +2.0 if bullish)."
+        )
+        prompt_lines.append(
+            "If news is standard/priced-in, 'point_adjustment' should be 0."
+        )
+        prompt_lines.append("")
+        prompt_lines.append("## Output Format (JSON ONLY)")
+        prompt_lines.append("Return valid JSON with these exact keys:")
+        prompt_lines.append(
+            "- 'point_adjustment': (float) The proposed adjustment to the Total (Max +/- 10, but be realistic)."
+        )
+        prompt_lines.append(
+            "- 'confidence': (float) 0-100. How sure are you of this adjustment?"
+        )
+        prompt_lines.append(
+            "- 'risk_level': 'LOW' (Clear edge), 'MED' (Standard), 'HIGH' (Conflicting info/Chaos)."
+        )
+        prompt_lines.append(
+            "- 'reasoning': (string) Concise sharp analysis justifying the adjustment."
         )
 
         return "\n".join(prompt_lines)

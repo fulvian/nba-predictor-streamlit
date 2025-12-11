@@ -978,57 +978,81 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
         home_team = game.get("home_team", "Home")
         away_team = game.get("away_team", "Away")
 
-    predicted_total = prediction.get("predicted_total", 0)
-    confidence = prediction.get("confidence", 0)  # Already 0-100 in V2 mapping
+    # Extract Fusion Data
+    raw_quant = prediction.get("raw_quant_prediction")
+    unified_pred = prediction.get("unified_prediction")
+    consensus_adj = prediction.get("consensus_adjustment", 0.0)
 
-    recommendation = prediction.get("recommendation", "No Bet")
+    # Fallback for old models/runs
+    if raw_quant is None:
+        raw_quant = prediction.get("predicted_total", 0.0)
+        unified_pred = prediction.get("predicted_total", 0.0)
+
+    # Extract standard fields safely
+    # Check for "confidence" first (standard in V2), fallback to "model_confidence"
+    confidence = prediction.get("confidence")
+    if confidence is None:
+        confidence = prediction.get("model_confidence", 0.0)
+
+    recommendation = prediction.get("recommendation", "No Recommendation")
 
     # Consensus Data - Parse nested NanoGPT response structure
-    # Structure: {"meta": {...}, "results": [...], "consensus": "JSON_STRING"}
     consensus_raw = prediction.get("consensus_analysis", {})
 
-    # Handle fallback case (consensus orchestration failed)
-    if consensus_raw.get("fallback"):
-        consensus_score = "N/A"
-        reasoning = f"Reasoning Engine Unavailable: {consensus_raw.get('details', 'Unknown error')}"
-        risk_level = "Unknown"
+    # New Logic: Get Consensus Adjustment Details
+    # Prioritize 'consensus_adjustment' from top-level if available, else derive from analysis
+    consensus_adj = prediction.get("consensus_adjustment")
+    if consensus_adj is None:
+        if isinstance(consensus_raw, dict):
+            consensus_adj = consensus_raw.get("applied_adjustment", 0.0)
+        else:
+            consensus_adj = 0.0
+
+    cons_adjustment_val = consensus_adj  # Sync local var
+
+    if isinstance(consensus_raw, dict) and "applied_adjustment" in consensus_raw:
+        # It's the new format
+        cons_adjustment_val = consensus_raw.get("applied_adjustment", 0.0)
+        reasoning = consensus_raw.get("reasoning", "No reasoning available.")
+        risk_level = consensus_raw.get("risk_level", "UNKNOWN")
+        # Confidence logic for display
+        # If we have successful fusion, we can assume 'High' confidence in the mechanism,
+        # but let's grab the LLM's confidence if available in 'original_response'
+        orig = consensus_raw.get("original_response", {})
+        conf_val = float(orig.get("confidence", 0)) if isinstance(orig, dict) else 0
+        consensus_score = f"{conf_val}%"
     else:
-        # Parse the nested 'consensus' field (it's a JSON string)
-        try:
-            consensus_str = consensus_raw.get("consensus", "{}")
-            if isinstance(consensus_str, str):
-                import json
-
-                consensus_parsed = json.loads(consensus_str) if consensus_str else {}
-            else:
-                consensus_parsed = consensus_str if consensus_str else {}
-
-            # Map NanoGPT fields to dashboard fields
-            consensus_score = consensus_parsed.get(
-                "confidence", consensus_raw.get("meta", {}).get("successful", "N/A")
-            )
-            if isinstance(consensus_score, (int, float)):
-                consensus_score = f"{consensus_score}%"
-
-            reasoning = consensus_parsed.get(
-                "reasoning_summary", "No detailed reasoning available."
-            )
-
-            # Infer risk level from action and confidence
-            action = consensus_parsed.get("action", "HOLD")
-            conf_value = consensus_parsed.get("confidence", 50)
-            if action == "HOLD" or conf_value < 50:
-                risk_level = "High"
-            elif conf_value >= 75:
-                risk_level = "Low"
-            else:
-                risk_level = "Medium"
-
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.warning(f"Failed to parse consensus JSON: {e}")
+        # Old/Fallback Logic
+        if consensus_raw.get("fallback"):
             consensus_score = "N/A"
-            reasoning = "Consensus parsing error. Check logs."
+            reasoning = f"Reasoning Engine Unavailable: {consensus_raw.get('details', 'Unknown error')}"
             risk_level = "Unknown"
+        else:
+            # Try parsing legacy format JSON string
+            try:
+                consensus_str = consensus_raw.get("consensus", "{}")
+                if isinstance(consensus_str, str):
+                    import json
+
+                    consensus_parsed = (
+                        json.loads(consensus_str) if consensus_str else {}
+                    )
+                else:
+                    consensus_parsed = consensus_str if consensus_str else {}
+
+                consensus_score = consensus_parsed.get("confidence", "N/A")
+                if isinstance(consensus_score, (int, float)):
+                    consensus_score = f"{consensus_score}%"
+                reasoning = consensus_parsed.get(
+                    "reasoning_summary", "No detailed reasoning available."
+                )
+                risk_level = (
+                    "High" if consensus_parsed.get("action") == "HOLD" else "Low"
+                )
+            except:
+                consensus_score = "N/A"
+                reasoning = "N/A"
+                risk_level = "N/A"
 
     # Store parsed consensus for later use
     consensus = {
@@ -1037,6 +1061,13 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
         "risk_level": risk_level,
         "fallback": consensus_raw.get("fallback"),
     }
+
+    # Determine Consensus Color
+    adj_color = "var(--color-text-secondary)"
+    if consensus_adj > 0:
+        adj_color = "#4caf50"  # Green
+    elif consensus_adj < 0:
+        adj_color = "#ff4b4b"  # Red
 
     # Create HTML Card (Editorial Style v7 - with Assets)
     card_html = f"""
@@ -1047,16 +1078,18 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
     </div>
     <div class="stats-grid">
         <div class="stat-box">
-            <div class="stat-label">{assets.ICON_ANALYTICS} Predicted Total</div>
-            <div class="stat-value">{predicted_total:.1f}</div>
+            <div class="stat-label">{assets.ICON_ANALYTICS} Unified Total</div>
+            <div class="stat-value" style="color: var(--color-accent-primary);">{unified_pred:.1f}</div>
+            <div class="stat-sublabel">Quant Baseline: {raw_quant:.1f}</div>
+        </div>
+        <div class="stat-box">
+             <div class="stat-label">Consensus Impact</div>
+             <div class="stat-value" style="color: {adj_color};">{consensus_adj:+.1f} pts</div>
+             <div class="stat-sublabel">Risk: {risk_level}</div>
         </div>
         <div class="stat-box">
             <div class="stat-label">{assets.ICON_BRAIN} Confidence</div>
             <div class="stat-value">{confidence:.1f}%</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-label">Consensus Score</div>
-            <div class="stat-value" style="font-size: 1.4rem;">{consensus_score}</div>
         </div>
     </div>
     <div class="rec-box">
@@ -1285,10 +1318,63 @@ def render_step_3_analyst():
         optimal_bet = risk_manager.calculate_optimal_bet(opportunities)
 
         if optimal_bet:
+            # --- STRATEGIC OVERRIDE (Consensus Awareness) ---
+            # Retrieve Risk Level from Prediction State to adjust stake
+            consensus_data = prediction.get("consensus_analysis", {})
+            risk_level = "UNKNOWN"
+            if isinstance(consensus_data, dict):
+                risk_level = consensus_data.get("risk_level", "UNKNOWN")
+
+            # Normalize Risk Level
+            risk_norm = str(risk_level).upper()
+
+            # Calculate Penalty Multiplier (Dynamic Beta Adjustment)
+            penalty_multiplier = 1.0
+            penalty_reason = []
+
+            # Risk Tier Penalties (Empirically calibrated via Consensus)
+            if "HIGH" in risk_norm:
+                penalty_multiplier = 0.25  # Severe penalty for high risk
+                penalty_reason.append("High Consensus Risk (0.25x)")
+            elif "MED" in risk_norm:
+                penalty_multiplier = 0.50  # Conservative penalty
+                penalty_reason.append("Medium Consensus Risk (0.50x)")
+
+            # Extreme Edge Dampener (>20% Edge check)
+            # If edge is massive but risk is not LOW, assume potential overfit/hallucination
+            edge_val = optimal_bet.get("edge", 0)
+            if edge_val > 0.20 and "LOW" not in risk_norm:
+                penalty_multiplier *= 0.5
+                penalty_reason.append("Extreme Edge Dampener (0.5x)")
+
+            # Apply Penalty to Stake
+            raw_stake = optimal_bet["stake"]
+            final_stake = raw_stake * penalty_multiplier
+
+            # Floor (Min €1.00) - Only if there was a bet initially
+            if final_stake > 0:
+                final_stake = max(1.0, final_stake)
+
+            # Update Optimal Bet Object with Override Data
+            optimal_bet["original_stake"] = raw_stake
+            optimal_bet["stake"] = final_stake
+            optimal_bet["penalty_multiplier"] = penalty_multiplier
+            optimal_bet["penalty_reason"] = (
+                " + ".join(penalty_reason) if penalty_reason else "None"
+            )
             st.markdown(
                 f"### {assets.ICON_LIGHTBULB} System Recommendation (Optimal Bet)",
                 unsafe_allow_html=True,
             )
+
+            # Display Strategic Override Warning if active
+            if penalty_multiplier < 1.0:
+                reason = optimal_bet.get("penalty_reason", "Risk Adjustment")
+                orig_stake = optimal_bet.get("original_stake", 0)
+                st.warning(
+                    f"⚠️ **Strategic Override Active**: Stake reduced by {(1 - penalty_multiplier):.0%} ({reason}). "
+                    f"Original Calculation: €{orig_stake:.2f}"
+                )
 
             # Display Optimal Bet Card
             opt_col1, opt_col2, opt_col3, opt_col4 = st.columns(4)

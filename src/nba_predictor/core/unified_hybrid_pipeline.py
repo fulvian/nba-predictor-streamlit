@@ -116,6 +116,11 @@ class UnifiedPredictionResult:
     bayesian_update: Optional[Dict[str, Any]] = None
     consensus_analysis: Optional[Dict[str, Any]] = None
 
+    # NEW: Hybrid Bayesian Fusion Fields
+    raw_quant_prediction: Optional[float] = None
+    consensus_adjustment: Optional[float] = 0.0
+    unified_prediction: Optional[float] = None
+
 
 class UnifiedHybridPipeline:
     """
@@ -524,41 +529,35 @@ class UnifiedHybridPipeline:
         validate_prediction: bool = True,
     ) -> UnifiedPredictionResult:
         """
-        Orchestrate the Mixture of Experts (MoE): Quant + News + Reasoning.
-
-        Pattern: "Hybrid with Graceful Degradation"
-        1. Quant Expert: Fast statistical prediction.
-        2. Context: Gather real-time news/injuries.
-        3. Reasoning Expert: NanoGPT Consensus analysis (with timeout/fallback).
+        Produce a unified prediction using MoE (Quant + Qualitative/News).
+        Implements Bayesian Fusion with Circuit Breakers.
         """
-        # 1. Execute Quant Expert (Unified Pipeline)
-        # This is the "System 1" fast response
+        # 1. Get Base Quantitative Prediction
         quant_result = self.predict_unified(
             team1, team2, line, home_team, validate_prediction
         )
 
-        try:
-            # 2. Gather Context (News & Injuries)
-            # We map "Team Name" -> "Team Name" (Aggregator handles fuzzy match if needed)
-            news_context = []
+        # Initialize Fusion Fields with defaults
+        quant_result.raw_quant_prediction = quant_result.predicted_total
+        quant_result.consensus_adjustment = 0.0
+        quant_result.unified_prediction = quant_result.predicted_total
 
-            # Fetch news for both teams
+        try:
+            # 2. Gather Context
+            news_context = []
             t1_news = self.news_aggregator.get_latest_news(team1)
             t2_news = self.news_aggregator.get_latest_news(team2)
-
-            # Combine
             news_context.extend(t1_news)
             news_context.extend(t2_news)
 
-            # 3. Prepare Context for Consensus
             consensus_context = {
                 "team1": team1,
                 "team2": team2,
-                "predicted_total": quant_result.predicted_total,
+                "predicted_total": f"{quant_result.predicted_total:.1f}",
                 "confidence": f"{quant_result.confidence * 100:.1f}%",
                 "stats": {
-                    "over_prob": quant_result.over_probability,
-                    "under_prob": quant_result.under_probability,
+                    "over_prob": f"{quant_result.over_probability:.1%}",
+                    "under_prob": f"{quant_result.under_probability:.1%}",
                     "model_weights": quant_result.model_weights,
                 },
                 "news": [
@@ -567,35 +566,91 @@ class UnifiedHybridPipeline:
                 ],
             }
 
-            # 4. Query Reasoning Expert (System 2)
-            # This is a blocking call but with strict timeout in the client
-            logger.info(f"🧠 Invoking Consensus Reasoning for {team1} vs {team2}...")
+            # 3. Query LLM (Sharp Advisor)
             consensus_response = self.consensus_client.query_consensus_sync(
                 consensus_context
             )
 
-            # 5. Enrich Result
-            quant_result.consensus_analysis = consensus_response
+            # 4. Parse & Apply Bayesian Fusion with Circuit Breakers
+            if consensus_response and not consensus_response.get("fallback"):
+                try:
+                    # Parse JSON from consensus field if nested, or use direct dict
+                    if "consensus" in consensus_response:
+                        raw_cons = consensus_response["consensus"]
+                        if isinstance(raw_cons, str):
+                            data = json.loads(raw_cons)
+                        else:
+                            data = raw_cons
+                    else:
+                        # Support flat structure (new AGGREGATED client behavior)
+                        data = consensus_response
 
-            # Log successful orchestration - parse nested consensus JSON
-            try:
-                import json
+                    # Extract Signals
+                    # Extract Signals
+                    original_proposal = float(data.get("point_adjustment", 0.0))
+                    conf_score = float(data.get("confidence", 0)) / 100.0
+                    risk = str(data.get("risk_level", "HIGH")).upper()
 
-                consensus_str = consensus_response.get("consensus", "{}")
-                consensus_parsed = (
-                    json.loads(consensus_str)
-                    if isinstance(consensus_str, str)
-                    else consensus_str
-                )
-                score = consensus_parsed.get("confidence", "N/A")
-            except (json.JSONDecodeError, TypeError):
-                score = "N/A"
-            logger.info(f"✅ Consensus Orchestration Complete. Score: {score}%")
+                    # --- CIRCUIT BREAKERS (Safety Layer) ---
+                    # Rule 1: Hard Cap +/- 5.0 (Scientific Threshold)
+                    adj_proposal = max(-5.0, min(5.0, original_proposal))
+
+                    # Rule 2: Risk Check
+                    if "HIGH" in risk:
+                        adj_final = 0.0
+                        reasoning_suffix = " [ignored due to HIGH RISK]"
+                    # Rule 3: Confidence Check
+                    elif conf_score < 0.60:
+                        adj_final = 0.0
+                        reasoning_suffix = " [ignored due to LOW CONFIDENCE]"
+                    else:
+                        adj_final = adj_proposal
+                        reasoning_suffix = ""
+
+                    # --- BAYESIAN FUSION FORMULA ---
+                    # Unified = Quant + (Weight * Adj)
+                    # Weight Logic: Low Risk = 0.3, Med Risk = 0.15
+                    w_llm = 0.3 if "LOW" in risk else 0.15
+
+                    # Calculate Adjustment Impact
+                    actual_impact = adj_final * w_llm
+
+                    # Update Result Objects
+                    quant_result.consensus_adjustment = actual_impact
+                    quant_result.unified_prediction = (
+                        quant_result.predicted_total + actual_impact
+                    )
+                    quant_result.predicted_total = (
+                        quant_result.unified_prediction
+                    )  # Update getter
+
+                    # Store Analysis
+                    quant_result.consensus_analysis = {
+                        "original_response": data,
+                        "proposed_adjustment": original_proposal,
+                        "applied_adjustment_pre_weight": adj_proposal,
+                        "applied_adjustment": actual_impact,
+                        "circuit_breakers_triggered": (adj_final != original_proposal),
+                        "circuit_breaker_details": reasoning_suffix.strip(),
+                        "fusion_weight": w_llm,
+                        "risk_level": risk,
+                        "reasoning": data.get("reasoning", "") + reasoning_suffix,
+                    }
+
+                    score = f"{conf_score * 100:.0f}"
+                    logger.info(
+                        f"✅ Consensus Orchestration Complete. Score: {score}% Adj: {actual_impact}"
+                    )
+
+                except Exception as parse_err:
+                    logger.error(
+                        f"Failed to parse Consensus JSON for Fusion: {parse_err}"
+                    )
+                    quant_result.consensus_analysis = consensus_response
+            else:
+                quant_result.consensus_analysis = consensus_response
 
         except Exception as e:
-            # GRACEFUL DEGRADATION:
-            # If the reasoning expert fails (timeout, error, process crash),
-            # we MUST still return the valid quantitative prediction.
             logger.error(f"⚠️ Consensus Orchestration Failed: {e}")
             quant_result.consensus_analysis = {
                 "error": "Reasoning Expert Unavailable",
@@ -2884,7 +2939,17 @@ class UnifiedHybridPipeline:
         """
         try:
             # 1. Get latest news impact
-            news_impact = self.news_aggregator.get_latest_news(list(team_ids))
+            news_items = self.news_aggregator.get_latest_news(list(team_ids))
+
+            # Map news items to impact scores (Heuristic for now to avoid TypeError)
+            impact_scores = []
+            for item in news_items:
+                if isinstance(item, dict) and item.get("type") == "injury":
+                    status = str(item.get("status", "")).lower()
+                    if "out" in status:
+                        impact_scores.append(1.0)  # Standard impact
+                    elif "questionable" in status or "doubtful" in status:
+                        impact_scores.append(0.5)  # Reduced impact
 
             # 2. Update prediction using Bayesian logic
             # Calculate standard deviation from confidence interval (approx width / 4 for 95% CI)
@@ -2895,7 +2960,7 @@ class UnifiedHybridPipeline:
             update_result = self.bayesian_updater.update_prediction(
                 baseline_mean=prediction_result.predicted_total,
                 baseline_std=baseline_std,
-                injury_impacts=news_impact,
+                injury_impacts=impact_scores,
             )
 
             # Handle return types
