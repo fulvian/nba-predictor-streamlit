@@ -177,10 +177,10 @@ def verify_project_structure() -> bool:
             "src/nba_predictor": SRC_PATH / "nba_predictor",
             "src/nba_predictor/__init__.py": SRC_PATH / "nba_predictor" / "__init__.py",
             "src/nba_predictor/streamlit": SRC_PATH / "nba_predictor" / "streamlit",
-            "src/nba_predictor/streamlit/new_wic_dashboard.py": SRC_PATH
+            "src/nba_predictor/streamlit/new_wic_dashboard_v2.py": SRC_PATH
             / "nba_predictor"
             / "streamlit"
-            / "new_wic_dashboard.py",
+            / "new_wic_dashboard_v2.py",
             "src/nba_predictor/core": SRC_PATH / "nba_predictor" / "core",
             "src/nba_predictor/utils": SRC_PATH / "nba_predictor" / "utils",
         }
@@ -221,7 +221,7 @@ def launch_application() -> bool:
             / "src"
             / "nba_predictor"
             / "streamlit"
-            / "new_wic_dashboard.py"
+            / "new_wic_dashboard_v2.py"
         )
 
         if not script_path.exists():

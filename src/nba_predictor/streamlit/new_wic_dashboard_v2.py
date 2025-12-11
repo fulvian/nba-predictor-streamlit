@@ -1392,62 +1392,36 @@ def render_step_3_analyst():
         optimal_bet = risk_manager.calculate_optimal_bet(opportunities)
 
         if optimal_bet:
-            # --- STRATEGIC OVERRIDE (Consensus Awareness) ---
-            # Retrieve Risk Level from Prediction State to adjust stake
             consensus_data = prediction.get("consensus_analysis", {})
             risk_level = "UNKNOWN"
             if isinstance(consensus_data, dict):
                 risk_level = consensus_data.get("risk_level", "UNKNOWN")
 
-            # Normalize Risk Level
-            risk_norm = str(risk_level).upper()
-
-            # Calculate Penalty Multiplier (Dynamic Beta Adjustment)
-            penalty_multiplier = 1.0
-            penalty_reason = []
-
-            # Risk Tier Penalties (Empirically calibrated via Consensus)
-            if "HIGH" in risk_norm:
-                penalty_multiplier = 0.25  # Severe penalty for high risk
-                penalty_reason.append("High Consensus Risk (0.25x)")
-            elif "MED" in risk_norm:
-                penalty_multiplier = 0.50  # Conservative penalty
-                penalty_reason.append("Medium Consensus Risk (0.50x)")
-
-            # Extreme Edge Dampener (>20% Edge check)
-            # If edge is massive but risk is not LOW, assume potential overfit/hallucination
-            edge_val = optimal_bet.get("edge", 0)
-            if edge_val > 0.20 and "LOW" not in risk_norm:
-                penalty_multiplier *= 0.5
-                penalty_reason.append("Extreme Edge Dampener (0.5x)")
-
-            # Apply Penalty to Stake
-            raw_stake = optimal_bet["stake"]
-            final_stake = raw_stake * penalty_multiplier
-
-            # Floor (Min €1.00) - Only if there was a bet initially
-            if final_stake > 0:
-                final_stake = max(1.0, final_stake)
-
-            # Update Optimal Bet Object with Override Data
-            optimal_bet["original_stake"] = raw_stake
-            optimal_bet["stake"] = final_stake
-            optimal_bet["penalty_multiplier"] = penalty_multiplier
-            optimal_bet["penalty_reason"] = (
-                " + ".join(penalty_reason) if penalty_reason else "None"
+            # Re-run analysis with Risk Level context (to apply correct penalties/scaling)
+            # This is slightly inefficient (running twice) but ensures we get the *risk-adjusted* stake
+            opportunities = risk_manager.analyze_betting_opportunities(
+                distribution=distribution,
+                central_line=central_line,
+                bankroll=total_bankroll,
+                risk_level=risk_level,
             )
+            optimal_bet = risk_manager.calculate_optimal_bet(opportunities)
+
+        if optimal_bet:
+            # Note: Strategic Penalties and Small Bankroll Scaling are now
+            # handled internally by LegacyRiskManager.calculate_advanced_stake(..., risk_level=risk_level)
+
             st.markdown(
                 f"### {assets.ICON_LIGHTBULB} System Recommendation (Optimal Bet)",
                 unsafe_allow_html=True,
             )
 
             # Display Strategic Override Warning if active
-            if penalty_multiplier < 1.0:
-                reason = optimal_bet.get("penalty_reason", "Risk Adjustment")
-                orig_stake = optimal_bet.get("original_stake", 0)
+            # Display Strategic Override Warning if active (Logic moved to RiskManager, so we check implicit signals)
+            # We can't see the internal multiplier easily, but we can check if Risk is High
+            if "HIGH" in str(risk_level).upper() and optimal_bet["stake"] > 0:
                 st.warning(
-                    f"⚠️ **Strategic Override Active**: Stake reduced by {(1 - penalty_multiplier):.0%} ({reason}). "
-                    f"Original Calculation: €{orig_stake:.2f}"
+                    f"⚠️ **Strategic Risk Adjustment**: Stake heavily penalized due to HIGH risk assessment. "
                 )
 
             # Display Optimal Bet Card

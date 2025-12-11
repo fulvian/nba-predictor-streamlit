@@ -201,79 +201,121 @@ class LegacyRiskManager:
         quality_data: Optional[Dict] = None,
         bet_direction: Optional[str] = None,  # Kept for backward compatibility
         kelly_fraction: float = 0.5,  # Half-Kelly = industry standard (Ziemba, Thorp)
+        risk_level: str = "UNKNOWN",  # NEW: Consensus Risk Level
     ) -> float:
         """
-        🎯 KELLY CRITERION STAKE CALCULATOR - Industry Standard Implementation
+        🎯 KELLY CRITERION STAKE CALCULATOR - With Small Bankroll Scaling
 
-        Based on academic literature (Ziemba, MacLean, Thorp) and professional standards:
-        - Formula: f* = (b*p - q) / b where b = odds-1, p = win prob, q = 1-p
-        - Default: Half-Kelly (50%) as recommended by professionals
-        - Max stake: 5% of bankroll (industry standard upper bound)
-        - Min stake: 1% of bankroll or €1.00
-
-        References:
-        - "The Kelly Capital Growth Investment Criterion" (MacLean, Thorp, Ziemba)
-        - "Fortune's Formula" (Poundstone)
-        - Pinnacle betting guidelines
+        Updated to solve granularity issues for small bankrolls (< €200).
+        Includes 'Small Bankroll Scaling Mode' validated by NanoGPT Consensus.
 
         Parameters:
-        - edge: Mathematical edge (not used directly - Kelly uses prob & odds)
-        - estimated_prob: Estimated win probability (0.0-1.0)
-        - odds: Decimal bookmaker odds (e.g., 1.90)
-        - bankroll: Available bankroll (uses current if None)
-        - quality_data: Quality data (optional, for compatibility)
-        - kelly_fraction: Fraction of Kelly to bet (default 0.5 = Half-Kelly)
-
-        Returns:
-            Recommended stake in Euro
+        - edge: Mathematical edge
+        - estimated_prob: Estimated win probability
+        - odds: Decimal odds
+        - bankroll: Available bankroll
+        - quality_data: Quality metrics
+        - risk_level: Consensus risk level (HIGH/MED/LOW)
         """
         # Use current bankroll if not specified
         if bankroll is None:
             bankroll = self.current_bankroll
 
-        # === KELLY CRITERION FORMULA ===
-        # f* = (b*p - q) / b
-        # where b = odds - 1, p = estimated_prob, q = 1 - p
+        # === 1. CONSENSUS RISK PENALTIES (Centralized) ===
+        # Apply penalties BEFORE scaling calculation
+        risk_norm = str(risk_level).upper()
+        penalty_multiplier = 1.0
 
-        b = odds - 1.0  # Net odds
+        if "HIGH" in risk_norm:
+            penalty_multiplier = 0.25  # Severe penalty
+            if self.debug_mode:
+                print(f"⚠️ High Risk Penalty applied (0.25x)")
+        elif "MED" in risk_norm:
+            penalty_multiplier = 0.50  # Moderate penalty
+            if self.debug_mode:
+                print(f"⚠️ Medium Risk Penalty applied (0.50x)")
+
+        # Dampen Extreme Edges if risk is not explicitly LOW
+        if edge > 0.20 and "LOW" not in risk_norm:
+            penalty_multiplier *= 0.5
+            if self.debug_mode:
+                print(f"⚠️ Extreme Edge Dampener applied (0.5x)")
+
+        # === 2. KELLY CRITERION FORMULA ===
+        b = odds - 1.0
         p = estimated_prob
         q = 1.0 - p
 
-        # Full Kelly fraction
         if b > 0:
             full_kelly = (b * p - q) / b
         else:
             full_kelly = 0.0
 
-        # Ensure non-negative (no bet if negative edge)
         full_kelly = max(0.0, full_kelly)
 
-        # === APPLY FRACTIONAL KELLY ===
-        # Industry standard: Half-Kelly (0.5) reduces volatility significantly
-        # while retaining ~75% of the growth rate (Ziemba et al.)
-        fractional_kelly = full_kelly * kelly_fraction
+        # === 3. SMALL BANKROLL SCALING MODE (The Fix) ===
+        # If bankroll is small (< 200), we scale the fraction to use more of the allowed range
+        # This prevents everything flattening to €1.00
 
-        # === STAKE LIMITS (Industry Standards) ===
-        # Min: 1% bankroll or €1.00 (whichever is greater)
-        min_stake = max(1.0, bankroll * 0.01)
+        effective_kelly_fraction = kelly_fraction
+        min_stake_pct = 0.01  # Default 1%
 
-        # Max: 5% bankroll (professional upper bound)
-        max_stake = bankroll * 0.05
+        # Scaling Logic validated by Consensus
+        if bankroll < 100.0:
+            # Boost fraction for tiny bankrolls to maintain granularity
+            # E.g. €80 bankroll -> boost fraction by ~1.8x
+            effective_kelly_fraction = kelly_fraction * 1.8
+            min_stake_pct = 0.005  # Lower floor to 0.5% (e.g. €0.40)
+            if self.debug_mode:
+                print(f"🚀 Small Bankroll Scaling Active (<100): 1.8x boost")
 
-        # Calculate raw stake
+        elif bankroll < 200.0:
+            effective_kelly_fraction = kelly_fraction * 1.4
+            min_stake_pct = 0.0075  # Lower floor to 0.75%
+            if self.debug_mode:
+                print(f"🚀 Small Bankroll Scaling Active (<200): 1.4x boost")
+
+        # === 4. CALCULATE RAW STAKE ===
+        # Combine: Kelly * Fraction * Penalty
+        fractional_kelly = full_kelly * effective_kelly_fraction * penalty_multiplier
+
         raw_stake = bankroll * fractional_kelly
 
-        # === NO BET CONDITIONS ===
-        # 1. Probability too low (< 50% = no value expected)
-        # 2. Kelly suggests 0 or negative
+        # === 5. STAKE LIMITS ===
+        # Min: 1.00 OR min_stake_pct (Safe Floor)
+        # For small bankrolls, we explicitly check against absolute min €1.00 later
+        # But we use min_stake_pct to decide if the bet is "worthy"
+
+        limit_min_stake = max(1.0, bankroll * min_stake_pct)
+        # Note: For €82 bankroll, max(1.0, 0.41) = 1.0.
+        # This was the bug. Use min_stake_pct check FIRST.
+
+        # Max: 5% of actual bankroll (hard safety cap)
+        max_stake = bankroll * 0.05
+
+        # === 6. FINAL VALIDATION ===
         if estimated_prob < 0.50 or fractional_kelly <= 0:
             return 0.0
 
-        # Apply limits
-        final_stake = min(raw_stake, max_stake)
-        final_stake = max(final_stake, min_stake)
+        # Check against "Worthiness" floor (unclamped)
+        # If the raw calculated stake is tiny (e.g. < 0.5% bankroll), kill it.
+        if raw_stake < (bankroll * min_stake_pct):
+            if self.debug_mode:
+                print(f"❌ Stake too small ({raw_stake:.2f} < {min_stake_pct:.1%})")
+            return 0.0
 
-        # Round appropriately
+        # Apply Clamping
+        final_stake = raw_stake
+
+        # Upper bound
+        final_stake = min(final_stake, max_stake)
+
+        # Lower bound (Bookmaker Limitation)
+        # We must bet at least €1.00. Use ceiling if close, or just clamp.
+        # If we passed the "worthiness" check above, we bump to €1.00 minimum.
+        final_stake = max(1.0, final_stake)
+
+        # Rounding
         if final_stake >= 10:
             return round(final_stake, 0)
         elif final_stake >= 1:
@@ -379,7 +421,12 @@ class LegacyRiskManager:
             return round(final_stake, 2)
 
     def calculate_quality_score(
-        self, edge: float, estimated_prob: float, odds: float
+        self,
+        edge: float,
+        estimated_prob: float,
+        odds: float,
+        llm_risk_level: Optional[str] = None,
+        llm_confidence: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Calcola un punteggio di qualità avanzato (replica esatta legacy).
@@ -390,6 +437,7 @@ class LegacyRiskManager:
         - Risk Score: Analizza il profilo rischio/rendimento
         - Consistency Score: Premia la consistenza del modello
         - Final Quality: Combinazione pesata con scaling intelligente
+        - Enriched Quality: Aggiustamento dinamico basato su LLM Risk/Confidence
         """
 
         # 1. EDGE SCORE - Normalizza il vantaggio matematico (0-100)
@@ -474,6 +522,33 @@ class LegacyRiskManager:
             final_quality = 0.2 + (raw_score - 40) / 20 * 0.3  # 40-60 → 0.2-0.5
         else:
             final_quality = raw_score / 40 * 0.2  # 0-40 → 0.0-0.2
+
+        # 6. ENRICHMENT SCORE - Aggiustamento dinamico basato su LLM Risk/Confidence
+        if llm_risk_level is not None:
+            # Determine Risk Penalty
+            risk_upper = str(llm_risk_level).upper()
+            if "HIGH" in risk_upper:
+                risk_penalty = 0.4
+            elif "MED" in risk_upper:
+                risk_penalty = 0.2
+            else:  # LOW
+                risk_penalty = 0.0
+
+            # Apply formula: QS_enriched = QS * (1 - Penalty) * (1 + k*Conf*(1-Penalty))
+            enriched_quality = final_quality * (1.0 - risk_penalty)
+
+            # Apply Confidence Boost only if Risk is not High (Penalty < 0.3)
+            # and we have a valid confidence score
+            if risk_penalty < 0.3 and llm_confidence is not None:
+                # k factor for boost (0.2 recommended)
+                k_boost = 0.2
+                # Boost is proportional to confidence and inversely proportional to risk
+                # If Conf=0.9, Low Risk -> Boost = 1 + (0.2 * 0.9 * 1.0) = 1.18 (+18%)
+                boost_factor = 1.0 + (k_boost * llm_confidence * (1.0 - risk_penalty))
+                enriched_quality *= boost_factor
+
+            # Bounds checking
+            final_quality = max(0.0, min(1.0, enriched_quality))
 
         return {
             "quality_score": final_quality,
@@ -624,6 +699,7 @@ class LegacyRiskManager:
         odds_list: List[Dict] = None,
         central_line: float = None,
         bankroll: float = None,
+        risk_level: str = "UNKNOWN",  # NEW: Pass consensus risk level
     ) -> List[Dict[str, Any]]:
         """
         Analisi completa opportunità di betting (replica esatta legacy).

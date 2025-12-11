@@ -254,6 +254,7 @@ class NanoGPTClient:
     def _aggregate_consensus_results(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """
         Aggregate results from multiple models in the consensus response.
+        Updated for Hybrid Strategy: Extracts both Point Adjustment and Uncertainty Factor.
         """
         try:
             results = response.get("results", [])
@@ -264,7 +265,7 @@ class NanoGPTClient:
                 return {"error": "No results found", "fallback": True}
 
             total_adj = 0.0
-            total_conf = 0.0
+            total_uncertainty = 0.0
             valid_count = 0
             risk_levels = []
             reasonings = []
@@ -282,8 +283,18 @@ class NanoGPTClient:
 
                     data = json.loads(content_str)
 
+                    # Extract Bias (Point Adjustment)
                     total_adj += float(data.get("point_adjustment", 0.0))
-                    total_conf += float(data.get("confidence", 0.0))
+
+                    # Extract Uncertainty/Volatility
+                    # Some models might optionally return 'confidence' instead of uncertainty.
+                    # We map: Uncertainty = 1 - (Confidence/100) or use explicit 'uncertainty_factor'
+                    unc = data.get("uncertainty_factor")
+                    if unc is None:
+                        conf = float(data.get("confidence", 50.0))
+                        unc = 1.0 - (conf / 100.0)
+                    total_uncertainty += float(unc)
+
                     risk_levels.append(data.get("risk_level", "HIGH").upper())
                     reasonings.append(
                         f"{res.get('model', 'Model')}: {data.get('reasoning', '')}"
@@ -297,7 +308,7 @@ class NanoGPTClient:
                 return {"error": "No valid model results", "fallback": True}
 
             avg_adj = total_adj / valid_count
-            avg_conf = total_conf / valid_count
+            avg_uncertainty = total_uncertainty / valid_count
 
             # Determine aggregate risk (Conservatively take the highest reported risk)
             if "HIGH" in risk_levels:
@@ -309,7 +320,7 @@ class NanoGPTClient:
 
             return {
                 "point_adjustment": avg_adj,
-                "confidence": avg_conf,
+                "uncertainty_factor": avg_uncertainty,
                 "risk_level": final_risk,
                 "reasoning": " | ".join(reasonings[:3]),  # Limit to 3 for brevity
                 "model_count": valid_count,
@@ -323,19 +334,22 @@ class NanoGPTClient:
         team1 = context.get("team1", "Team A")
         team2 = context.get("team2", "Team B")
         predicted_total = context.get("predicted_total", "N/A")
+        market_line = context.get("market_line", "N/A")
 
         prompt_lines = [
-            "You are a professional 'Sharp' NBA Bettor and Handicapper.",
-            "Your goal is to identify if the Quantitative Model is missing critical context (injuries, news, motivation) and propose a specific POINT ADJUSTMENT.",
+            "You are a professional 'Sharp' NBA Bettor and Risk Analyst.",
+            "Your goal is to identify Market Inefficiencies properly weighted by Uncertainty.",
             "",
             f"Matchup: {team1} vs {team2}",
             "",
-            "## Quantitative Model Baseline",
-            f"- Predicted Total: {predicted_total}",
+            "## Quantitative Baseline",
+            f"- Model Prediction: {predicted_total} pts",
+            f"- Market Line: {market_line}",
+            f"- Deviation: {context.get('deviation_from_market', 'N/A')}",
             f"- Model Confidence: {context.get('confidence', 'N/A')}",
             f"- Stats Key: {json.dumps(context.get('stats', {}), indent=2)}",
             "",
-            "## News & Context Stream",
+            "## News & Context",
         ]
 
         news = context.get("news", [])
@@ -348,30 +362,30 @@ class NanoGPTClient:
             prompt_lines.append("- No significant recent news found.")
 
         prompt_lines.append("")
-        prompt_lines.append("## Task: Market Inefficiency Detection")
+        prompt_lines.append("## Task: Hybrid Evaluation (Bias + Variance)")
         prompt_lines.append(
-            "Analyze the news against the stats. Does the news suggest the Total should be Higher or Lower?"
+            "1. **Point Adjustment (Bias)**: Based on NEWS/CONTEXT, should the Total be Higher or Lower than the Model/Market line?"
         )
         prompt_lines.append(
-            "You must propose a 'point_adjustment' (e.g., -3.5 if news is bearish for scoring, +2.0 if bullish)."
+            "   - E.g. 'Star out -> -3.0 pts', 'Pace up -> +2.0 pts'. If priced in, use 0."
         )
         prompt_lines.append(
-            "If news is standard/priced-in, 'point_adjustment' should be 0."
+            "2. **Uncertainty Factor (Variance)**: How volatile/unpredictable is this game?"
         )
+        prompt_lines.append("   - 0.0 = Extremely Stable (Full Confidence)")
+        prompt_lines.append("   - 1.0 = Pure Chaos/Gambling (Zero Confidence)")
         prompt_lines.append("")
         prompt_lines.append("## Output Format (JSON ONLY)")
         prompt_lines.append("Return valid JSON with these exact keys:")
         prompt_lines.append(
-            "- 'point_adjustment': (float) The proposed adjustment to the Total (Max +/- 10, but be realistic)."
+            "- 'point_adjustment': (float) The proposed adjustment to the Total (Max +/- 15)."
         )
         prompt_lines.append(
-            "- 'confidence': (float) 0-100. How sure are you of this adjustment?"
+            "- 'uncertainty_factor': (float) 0.0 to 1.0. YOUR ESTIMATE OF VOLATILITY."
         )
+        prompt_lines.append("- 'risk_level': 'LOW', 'MED', 'HIGH'.")
         prompt_lines.append(
-            "- 'risk_level': 'LOW' (Clear edge), 'MED' (Standard), 'HIGH' (Conflicting info/Chaos)."
-        )
-        prompt_lines.append(
-            "- 'reasoning': (string) Concise sharp analysis justifying the adjustment."
+            "- 'reasoning': (string) Concise analysis justifying BOTH the adjustment and the uncertainty."
         )
 
         return "\n".join(prompt_lines)

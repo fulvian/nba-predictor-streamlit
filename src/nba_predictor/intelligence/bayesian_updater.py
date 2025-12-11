@@ -39,26 +39,79 @@ class BayesianUpdater:
     def __init__(self, simulation_runs: int = 5000):
         """
         Initialize the Bayesian Updater.
-
-        Args:
-            simulation_runs: Number of Monte Carlo simulation runs (default 5000).
         """
         self.simulation_runs = simulation_runs
+        # Top 50 NBA Players (2024-25) for Dynamic Tiering
+        # This acts as a 'Tier 1/2' lookup. Others are assumed Starters/Bench.
+        self.STAR_PLAYERS = {
+            "Nikola Jokic",
+            "Giannis Antetokounmpo",
+            "Luka Doncic",
+            "Joel Embiid",
+            "Shai Gilgeous-Alexander",
+            "Jayson Tatum",
+            "Stephen Curry",
+            "Kevin Durant",
+            "LeBron James",
+            "Anthony Davis",
+            "Devin Booker",
+            "Anthony Edwards",
+            "Jalen Brunson",
+            "Tyrese Haliburton",
+            "Kawhi Leonard",
+            "Donovan Mitchell",
+            "Victor Wembanyama",
+            "Bam Adebayo",
+            "De'Aaron Fox",
+            "Domantas Sabonis",
+            "Ja Morant",
+            "Kyrie Irving",
+            "Paul George",
+            "Damian Lillard",
+            "Jimmy Butler",
+            "Zion Williamson",
+            "Trae Young",
+            "Lauri Markkanen",
+            "Karl-Anthony Towns",
+            "Jaylen Brown",
+            "Tyrese Maxey",
+            "Pascal Siakam",
+            "Jamal Murray",
+            "DeMar DeRozan",
+            "Julius Randle",
+            "Chet Holmgren",
+            "Paolo Banchero",
+            "Scottie Barnes",
+            "Alperen Sengun",
+            "LaMelo Ball",
+        }
+
+    def get_player_tier_impact(self, player_name: str) -> float:
+        """
+        Determine impact score based on player tier.
+
+        Returns:
+            float: Impact score (e.g., 2.5 for Star, 1.0 for Starter)
+        """
+        if not player_name:
+            return 0.5
+
+        # Normalize comparison
+        player_norm = player_name.strip().title()
+
+        # Check explicit star list
+        if player_norm in self.STAR_PLAYERS:
+            return 3.0  # Star Tier
+
+        # Heuristic for other distinct names or logic could go here
+        # For now, default to Starter/Rotation level
+        return 1.2
 
     def map_impact_to_likelihood(self, impact_score: float) -> float:
         """
         Map an injury impact score to a likelihood adjustment factor.
-
-        Args:
-            impact_score: Impact score from InjuryImpactAnalyzer (e.g., 1.5 for starter).
-
-        Returns:
-            Likelihood adjustment factor (negative impact reduces score/prob).
         """
-        # Simple linear mapping for now:
-        # Impact 1.0 (Bench) -> -1.0 point adjustment
-        # Impact 2.0 (Star) -> -3.0 point adjustment
-        # This is a simplified heuristic that should be refined with historical data.
+        # Linear mapping: Impact * -1.5 (e.g., Star 3.0 * -1.5 = -4.5 pts)
         return -1.5 * impact_score
 
     def update_prediction(
@@ -66,14 +119,6 @@ class BayesianUpdater:
     ) -> BayesianUpdateResult:
         """
         Update a prediction based on injury impacts using Monte Carlo simulation.
-
-        Args:
-            baseline_mean: Original predicted score (mean).
-            baseline_std: Original prediction standard deviation (uncertainty).
-            injury_impacts: List of impact scores for new injuries.
-
-        Returns:
-            BayesianUpdateResult containing updated metrics.
         """
         # 1. Calculate Total Impact Adjustment
         total_adjustment = sum(
@@ -84,12 +129,14 @@ class BayesianUpdater:
         # The mean shifts by the total adjustment
         # The uncertainty (std) increases because news introduces volatility
         posterior_mean = baseline_mean + total_adjustment
-        posterior_std = (
-            baseline_std * 1.15
-        )  # Increase uncertainty by 15% due to late news
+
+        # Dynamic Uncertainty Increase: More impact = more uncertainty
+        volatility_factor = 1.0 + (
+            sum(injury_impacts) * 0.1
+        )  # +10% std per impact unit
+        posterior_std = baseline_std * volatility_factor
 
         # 3. Run Monte Carlo Simulation
-        # Generate 5000 samples from the posterior distribution
         simulated_scores = np.random.normal(
             posterior_mean, posterior_std, self.simulation_runs
         )
@@ -102,19 +149,43 @@ class BayesianUpdater:
         ci_low = float(np.percentile(simulated_scores, 2.5))
         ci_high = float(np.percentile(simulated_scores, 97.5))
 
-        # Calculate Win Probability (assuming target is > opponent_score,
-        # but here we just return the score distribution update for now)
-        # For a binary probability update, we would need the opponent's score distribution.
-        # Here we assume this is a Total Score prediction or Team Score prediction.
-
         return BayesianUpdateResult(
-            original_prob=0.0,  # Placeholder, depends on context (win vs total)
-            updated_prob=0.0,  # Placeholder
+            original_prob=0.0,
+            updated_prob=0.0,
             original_score_dist=(baseline_mean, baseline_std),
             updated_score_dist=(sim_mean, sim_std),
             confidence_interval=(ci_low, ci_high),
             simulation_runs=self.simulation_runs,
         )
+
+    def update_prediction_with_items(
+        self, baseline_mean: float, baseline_std: float, news_items: List[Dict]
+    ) -> BayesianUpdateResult:
+        """
+        Wrapper to handle raw news items and calculate dynamic impact.
+        """
+        impact_scores = []
+        for item in news_items:
+            if isinstance(item, dict) and item.get("type") == "injury":
+                status = str(item.get("status", "")).lower()
+                player = item.get("player", "")
+
+                # Base Impact from Tier
+                base_impact = self.get_player_tier_impact(player)
+
+                # Status Multiplier
+                if "out" in status:
+                    mult = 1.0
+                elif "doubtful" in status:
+                    mult = 0.75
+                elif "questionable" in status:
+                    mult = 0.5
+                else:
+                    mult = 0.2  # Probable/Available
+
+                impact_scores.append(base_impact * mult)
+
+        return self.update_prediction(baseline_mean, baseline_std, impact_scores)
 
     def update_win_probability(
         self,
@@ -132,7 +203,6 @@ class BayesianUpdater:
         new_team_mean, new_team_std = team_update.updated_score_dist
 
         # Calculate original win prob
-        # Z = (Mean_Team - Mean_Opponent) / sqrt(Std_Team^2 + Std_Opponent^2)
         z_orig = (team_mean - opponent_mean) / np.sqrt(team_std**2 + opponent_std**2)
         orig_prob = norm.cdf(z_orig)
 

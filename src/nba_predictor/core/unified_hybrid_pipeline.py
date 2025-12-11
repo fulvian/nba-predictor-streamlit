@@ -607,37 +607,58 @@ class UnifiedHybridPipeline:
                         # Support flat structure (new AGGREGATED client behavior)
                         data = consensus_response
 
-                    # Extract Signals
-                    # Extract Signals
+                    # Extract Signals with Adaptive Logic
                     original_proposal = float(data.get("point_adjustment", 0.0))
                     conf_score = float(data.get("confidence", 0)) / 100.0
+
+                    # Get Uncertainty (Variance) - Default to inverse of confidence if missing
+                    uncertainty = float(
+                        data.get("uncertainty_factor", 1.0 - conf_score)
+                    )
                     risk = str(data.get("risk_level", "HIGH")).upper()
 
                     # --- CIRCUIT BREAKERS (Safety Layer) ---
-                    # Rule 1: Hard Cap +/- 5.0 (Scientific Threshold)
-                    adj_proposal = max(-5.0, min(5.0, original_proposal))
+                    # Rule 1: Hard Cap +/- 6.0 (Slightly relaxed for strong signals)
+                    adj_proposal = max(-6.0, min(6.0, original_proposal))
 
-                    # Rule 2: Risk Check
-                    if "HIGH" in risk:
+                    # Rule 2: Risk/Uncertainty Gate
+                    if "HIGH" in risk and uncertainty > 0.8:
                         adj_final = 0.0
-                        reasoning_suffix = " [ignored due to HIGH RISK]"
-                    # Rule 3: Confidence Check
-                    elif conf_score < 0.60:
+                        reasoning_suffix = " [ignored due to HIGH RISK + UNCERTAINTY]"
+                    elif uncertainty > 0.9:
                         adj_final = 0.0
-                        reasoning_suffix = " [ignored due to LOW CONFIDENCE]"
+                        reasoning_suffix = " [decision ignored: PURE GAMBLE]"
                     else:
                         adj_final = adj_proposal
                         reasoning_suffix = ""
 
-                    # --- ENHANCED BAYESIAN FUSION FORMULA ---
-                    # ENHANCED: Higher weights when market context is available
-                    if market_line is not None:
-                        # Full formula: Quant(15%) + Consensus(40%) + Market(45%)
-                        w_quant = 0.15
-                        w_consensus = 0.40 if "LOW" in risk else 0.25
-                        w_market = 1.0 - w_quant - w_consensus
+                    # --- ADAPTIVE BIAS-VARIANCE BLENDING ---
+                    # Formula: P_final = (P_quant * w_quant) + ((P_quant + Bias) * w_llm) + (P_market * w_market)
+                    # Weights constitute the "Information Manifold"
 
-                        # Calculate consensus-adjusted prediction
+                    BASE_LLM_WEIGHT = 0.50  # Max weight for LLM if Uncertainty = 0
+
+                    # Calculate Dynamic LLM Weight (Adaptive to Variance)
+                    w_llm_raw = BASE_LLM_WEIGHT * (1.0 - uncertainty)
+                    w_llm = max(0.05, w_llm_raw)  # Min 5% to respect insight
+
+                    if market_line is not None:
+                        # Full Fusion: Quant + LLM + Market
+                        w_quant = 0.20
+
+                        # Remaining weight goes to Market (The Efficient Frontier)
+                        w_market = max(0.0, 1.0 - w_quant - w_llm)
+
+                        # Normalize if sum != 1.0 (float precision)
+                        total_w = w_quant + w_llm + w_market
+                        w_quant /= total_w
+                        w_llm /= total_w
+                        w_market /= total_w
+
+                        # Alias for downstream consistency
+                        w_consensus = w_llm
+
+                        # Calculate consensus-adjusted prediction component
                         consensus_pred = quant_result.raw_quant_prediction + adj_final
 
                         # Weighted blend
@@ -647,33 +668,33 @@ class UnifiedHybridPipeline:
                             + market_line * w_market
                         )
 
-                        # Calculate effective adjustment for display
+                        # Impact calc
                         actual_impact = (
                             quant_result.unified_prediction
                             - quant_result.raw_quant_prediction
                         )
-                        fusion_type = "WEIGHTED_BLEND"
+                        fusion_type = "ADAPTIVE_BLEND_MARKET"
 
                         logger.info(
-                            f"📊 Weighted Blend: Quant({w_quant:.0%})={quant_result.raw_quant_prediction:.1f} + "
-                            f"Consensus({w_consensus:.0%})={consensus_pred:.1f} + "
-                            f"Market({w_market:.0%})={market_line:.1f} = {quant_result.unified_prediction:.1f}"
+                            f"📊 Adaptive Blend (U={uncertainty:.2f}): "
+                            f"Q({w_quant:.0%}) + LLM({w_consensus:.0%}) + Mkt({w_market:.0%}) "
+                            f"-> {quant_result.unified_prediction:.1f}"
                         )
                     else:
-                        # Original formula: Quant + (Weight * Adj)
-                        # Weight Logic: Low Risk = 0.45, Med Risk = 0.25 (INCREASED from 0.30/0.15)
-                        w_llm = 0.45 if "LOW" in risk else 0.25
+                        # Partial Fusion: Quant + LLM only
+                        # Rescale weights to sum to 1
+                        total_w = 0.20 + w_llm  # Base quant + Calc LLM
+                        norm_quant = 0.20 / total_w
+                        norm_llm = w_llm / total_w
 
-                        # Calculate Adjustment Impact
-                        actual_impact = adj_final * w_llm
+                        actual_impact = adj_final * norm_llm
 
-                        # Update unified prediction
                         quant_result.unified_prediction = (
                             quant_result.predicted_total + actual_impact
                         )
-                        fusion_type = "ADDITIVE"
-                        w_quant = 1.0 - w_llm
-                        w_consensus = w_llm
+                        fusion_type = "ADAPTIVE_ADDITIVE"
+                        w_quant = norm_quant
+                        w_consensus = norm_llm  # Alias for logging
                         w_market = 0.0
 
                     # Update Result Objects
@@ -3004,26 +3025,16 @@ class UnifiedHybridPipeline:
             # 1. Get latest news impact
             news_items = self.news_aggregator.get_latest_news(list(team_ids))
 
-            # Map news items to impact scores (Heuristic for now to avoid TypeError)
-            impact_scores = []
-            for item in news_items:
-                if isinstance(item, dict) and item.get("type") == "injury":
-                    status = str(item.get("status", "")).lower()
-                    if "out" in status:
-                        impact_scores.append(1.0)  # Standard impact
-                    elif "questionable" in status or "doubtful" in status:
-                        impact_scores.append(0.5)  # Reduced impact
-
-            # 2. Update prediction using Bayesian logic
+            # 2. Update prediction using Bayesian logic with Dynamic Impact
             # Calculate standard deviation from confidence interval (approx width / 4 for 95% CI)
             ci_low, ci_high = prediction_result.confidence_interval
             baseline_std = (ci_high - ci_low) / 4.0 if ci_high > ci_low else 15.0
 
-            # This uses the specialized component instead of simplified inline logic
-            update_result = self.bayesian_updater.update_prediction(
+            # Use the new Dynamic Impact method that handles Star/Tier logic internally
+            update_result = self.bayesian_updater.update_prediction_with_items(
                 baseline_mean=prediction_result.predicted_total,
                 baseline_std=baseline_std,
-                injury_impacts=impact_scores,
+                news_items=news_items,
             )
 
             # Handle return types
