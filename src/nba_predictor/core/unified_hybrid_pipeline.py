@@ -590,7 +590,7 @@ class UnifiedHybridPipeline:
 
             # 3. Query LLM (Sharp Advisor)
             consensus_response = self.consensus_client.query_consensus_sync(
-                consensus_context
+                consensus_context, complexity="nba_predictor"
             )
 
             # 4. Parse & Apply Bayesian Fusion with Circuit Breakers

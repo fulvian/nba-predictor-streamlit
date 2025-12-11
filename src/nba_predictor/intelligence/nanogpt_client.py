@@ -183,7 +183,7 @@ class NanoGPTClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        complexity: str = "simple",
+        complexity: str = "nba_predictor",
     ) -> dict[str, Any]:
         """
         Connects to the server, runs the query, and disconnects.
@@ -229,7 +229,7 @@ class NanoGPTClient:
             await client.stop()
 
     def query_consensus_sync(
-        self, context: dict[str, Any], complexity: str = "simple"
+        self, context: dict[str, Any], complexity: str = "nba_predictor"
     ) -> dict[str, Any]:
         """
         Synchronous wrapper for integration into the blocking pipeline.
