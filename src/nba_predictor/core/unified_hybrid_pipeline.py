@@ -51,6 +51,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 # Enhanced pipeline data integration
 from nba_predictor.core.data_store import UnifiedDataStore
 from nba_predictor.core.roster_injury_schemas import TeamRoster, InjuryInfo
+from nba_predictor.core.prediction_logger import PredictionLogger
 
 # Research pipeline components
 from ..features.research_features import enhance_nba_features, validate_input_data
@@ -190,6 +191,9 @@ class UnifiedHybridPipeline:
         self.consensus_client = NanoGPTClient(
             timeout=180
         )  # 3 min timeout for multi-model consensus
+
+        # Logging Component (Phase 2.2)
+        self.prediction_logger = PredictionLogger()
 
         # Model components
         self.trained_model: Optional[Any] = None
@@ -636,20 +640,27 @@ class UnifiedHybridPipeline:
                     # Formula: P_final = (P_quant * w_quant) + ((P_quant + Bias) * w_llm) + (P_market * w_market)
                     # Weights constitute the "Information Manifold"
 
-                    BASE_LLM_WEIGHT = 0.50  # Max weight for LLM if Uncertainty = 0
-
-                    # Calculate Dynamic LLM Weight (Adaptive to Variance)
-                    w_llm_raw = BASE_LLM_WEIGHT * (1.0 - uncertainty)
-                    w_llm = max(0.05, w_llm_raw)  # Min 5% to respect insight
-
                     if market_line is not None:
                         # Full Fusion: Quant + LLM + Market
-                        w_quant = 0.20
+                        # UPDATED STRATEGY: "Reasoning-First / High-Alpha" (User Request Phase 2.1)
+                        # Target Profile:
+                        # - Quant: 30% (Statistical Floor)
+                        # - LLM: 35-70% (Reasoning Engine - scales with consensus clarity)
+                        # - Market: Residual (Max 35%, Avg ~20-25%)
 
-                        # Remaining weight goes to Market (The Efficient Frontier)
+                        w_quant = 0.30
+
+                        # Calculate Dynamic LLM Weight
+                        # Target Range: [0.35, 0.70]
+                        # If Uncertainty=0.0 (Unanimous) -> 0.70
+                        # If Uncertainty=1.0 (Chaos) -> 0.35 (Floor)
+                        w_llm_target = 0.70 * (1.0 - uncertainty)
+                        w_llm = max(0.35, min(0.70, w_llm_target))
+
+                        # Remaining weight goes to Market (The Efficient Frontier Reference)
                         w_market = max(0.0, 1.0 - w_quant - w_llm)
 
-                        # Normalize if sum != 1.0 (float precision)
+                        # Normalize precisely (float precision safeguard)
                         total_w = w_quant + w_llm + w_market
                         w_quant /= total_w
                         w_llm /= total_w
@@ -681,10 +692,12 @@ class UnifiedHybridPipeline:
                             f"-> {quant_result.unified_prediction:.1f}"
                         )
                     else:
-                        # Partial Fusion: Quant + LLM only
-                        # Rescale weights to sum to 1
-                        total_w = 0.20 + w_llm  # Base quant + Calc LLM
-                        norm_quant = 0.20 / total_w
+                        # Partial Fusion: Quant + LLM only (No Market)
+                        # Rescale weights relative to each other (30 vs 35-70)
+                        # If w_llm=0.70 (30+70=100) -> Quant=30%, LLM=70%
+                        # If w_llm=0.35 (30+35=65) -> Quant=46%, LLM=54%
+                        total_w = 0.30 + w_llm
+                        norm_quant = 0.30 / total_w
                         norm_llm = w_llm / total_w
 
                         actual_impact = adj_final * norm_llm
@@ -741,6 +754,58 @@ class UnifiedHybridPipeline:
                 "details": str(e),
                 "fallback": True,
             }
+
+        # --- LOGGING (Phase 2.2) ---
+        try:
+            # Construct a game_id if one doesn't exist contextually
+            # Note: This assumes prediction is for "today/upcoming".
+            # In a full rebuild, pass game_id/date explicitly.
+            _today_str = datetime.now().strftime("%Y%m%d")
+            # Normalize team names for ID
+            _home = team1.replace(" ", "")
+            _away = team2.replace(" ", "")
+            _game_id = f"{_today_str}-{_home}-{_away}"
+
+            # Extract weights safely
+            _weights = {"quant": 1.0, "consensus": 0.0, "market": 0.0}
+            if (
+                quant_result.consensus_analysis
+                and "fusion_weights" in quant_result.consensus_analysis
+            ):
+                _weights = quant_result.consensus_analysis["fusion_weights"]
+
+            # Extract LLM details
+            _llm_adj = quant_result.consensus_adjustment
+            _llm_rationale = ""
+            _llm_uncert = None
+            if quant_result.consensus_analysis:
+                _llm_rationale = quant_result.consensus_analysis.get("reasoning", "")
+
+                # Try to parse risk/uncertainty
+                _risk_str = quant_result.consensus_analysis.get("risk_level", "MEDIUM")
+                _llm_risk = _risk_str
+
+            self.prediction_logger.log_prediction(
+                game_id=_game_id,
+                home_team=team1,
+                away_team=team2,
+                game_date=datetime.now().date(),
+                quant_pred=quant_result.raw_quant_prediction
+                if quant_result.raw_quant_prediction
+                else quant_result.predicted_total,
+                final_pred=quant_result.unified_prediction
+                if quant_result.unified_prediction
+                else quant_result.predicted_total,
+                weights=_weights,
+                quant_version="unified_hybrid_v1.0",  # specific version
+                market_line=market_line,
+                llm_adjustment=_llm_adj,
+                llm_rationale=_llm_rationale,
+                llm_version="consensus_hybrid",
+                llm_risk_level=_llm_risk if "_llm_risk" in locals() else "UNKNOWN",
+            )
+        except Exception as log_err:
+            logger.error(f"Failed to log prediction: {log_err}")
 
         return quant_result
 

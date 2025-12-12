@@ -27,11 +27,14 @@ logger = logging.getLogger(__name__)
 # --- CONFIGURATION: REAL NanoGPT Consensus Engine (Production) ---
 # Enforce usage of local project implementation instead of mocks
 # Use -m flag to enable relative imports within the package
-os.environ["NANOGPT_CONSENSUS_COMMAND"] = (
-    "/Users/fulvioventura/NanoGPT-Consensus-MCP/.venv/bin/python"
-)
-os.environ["NANOGPT_CONSENSUS_ARGS"] = '["-m", "nanogpt_consensus.server"]'
-os.environ["NANOGPT_CONSENSUS_CWD"] = "/Users/fulvioventura/NanoGPT-Consensus-MCP/src"
+# --- CONFIGURATION: REAL NanoGPT Consensus Engine (Production) ---
+# Enforce usage of local project implementation instead of mocks
+# Use -m flag to enable relative imports within the package
+# os.environ["NANOGPT_CONSENSUS_COMMAND"] = (
+#     "/Users/fulvioventura/NanoGPT-Consensus-MCP/.venv/bin/python"
+# )
+# os.environ["NANOGPT_CONSENSUS_ARGS"] = '["-m", "nanogpt_consensus.server"]'
+# os.environ["NANOGPT_CONSENSUS_CWD"] = "/Users/fulvioventura/NanoGPT-Consensus-MCP/src"
 # -----------------------------------------------------------------
 
 # Fix relative import for direct execution
@@ -1121,6 +1124,29 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
         if consensus.get("fallback"):
             st.warning("⚠️ Reasoning Engine Fallback Mode (Quant Only)")
 
+    # --- DYNAMIC FUSION WEIGHTS VISUALIZATION ---
+    fusion_weights = consensus.get("fusion_weights", {})
+    if fusion_weights:
+        with st.expander("⚖️ Dynamic Model Weights (Adaptive Blend)", expanded=False):
+            w_cols = st.columns(3)
+            w_quant = fusion_weights.get("quant", 0.0)
+            w_llm = fusion_weights.get("consensus", 0.0)
+            w_mkt = fusion_weights.get("market", 0.0)
+
+            w_cols[0].metric(
+                "Quant Model", f"{w_quant:.1%}", help="Fixed statistical baseline"
+            )
+            w_cols[1].metric(
+                "Consensus Agent",
+                f"{w_llm:.1%}",
+                help="Dynamic weight based on certainty",
+            )
+            w_cols[2].metric(
+                "Market implied",
+                f"{w_mkt:.1%}",
+                help="Residual weight (Efficient Frontier)",
+            )
+
     # Detailed Stats Expanders
     with st.expander("Advanced Analytics & Factors", expanded=False):
         cols = st.columns(2)
@@ -1213,7 +1239,7 @@ def render_step_2_predictor():
     # Show mode info
     if market_line:
         st.info(
-            f"✅ Market line: **{market_line}** — Weighted blend mode (Quant 15% + Consensus 40% + Market 45%)"
+            f"✅ Market line: **{market_line}** — Weighted blend mode (Dynamic weights via Uncertainty-gating)"
         )
     elif market_line_input == 0:
         st.warning("⚠️ Market line = 0 — Standard ML + Consensus mode (no market blend)")
@@ -1293,6 +1319,7 @@ def render_step_2_predictor():
 
                 # Store in State
                 WICState.set_prediction(prediction)
+                st.rerun()
 
             except Exception as e:
                 st.error(f"MoE Consensus Pipeline Failed: {str(e)}")

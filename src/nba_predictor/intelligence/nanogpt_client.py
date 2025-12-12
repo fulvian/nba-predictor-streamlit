@@ -172,12 +172,16 @@ class NanoGPTClient:
 
         # Load config
         self.command = os.getenv("NANOGPT_CONSENSUS_COMMAND", "uvx")
-        args_str = os.getenv("NANOGPT_CONSENSUS_ARGS", '["nanogpt-consensus"]')
+        # Updated to use the correct executable name exposed by the package
+        args_str = os.getenv(
+            "NANOGPT_CONSENSUS_ARGS",
+            '["--from", "nanogpt-consensus", "nanogpt-consensus-server"]',
+        )
         self.cwd = os.getenv("NANOGPT_CONSENSUS_CWD", None)
         try:
             self.args = json.loads(args_str)
         except Exception:
-            self.args = ["nanogpt-consensus"]
+            self.args = ["--from", "nanogpt-consensus", "nanogpt-consensus-server"]
 
     async def _query_consensus_async(
         self,
