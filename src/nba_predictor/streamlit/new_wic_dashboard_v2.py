@@ -1278,6 +1278,10 @@ def render_step_2_predictor():
                     "recommendation": prediction_result.recommendation,
                     "standard_error": std_error,
                     "model_weights": prediction_result.model_weights,
+                    # NEW: Pass exact fusion components to avoid UI fallback logic
+                    "raw_quant_prediction": prediction_result.raw_quant_prediction,
+                    "unified_prediction": prediction_result.unified_prediction,
+                    "consensus_adjustment": prediction_result.consensus_adjustment,
                     # Enhanced Context
                     "consensus_analysis": prediction_result.consensus_analysis,
                     "injury_impact": prediction_result.injury_impact,
