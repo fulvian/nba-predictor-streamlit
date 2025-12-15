@@ -597,29 +597,30 @@ class UnifiedHybridPipeline:
             confidence=calibrated_confidence, bucket_stats=bucket_stats
         )
 
+        killed_by_validator = False
+
         if not is_safe:
             logger.warning(
-                f"[KILL-SWITCH ACTIVATED] Bet VETOED for {team1} vs {team2}. "
-                f"Reason: {kill_switch_reason}"
+                f"[KILL-SWITCH WARNING] Statistical Foundation Weak for {team1} vs {team2}. "
+                f"Reason: {kill_switch_reason}. "
+                "Proceeding with Consensus but flagging Quantitative Baseline as UNRELIABLE."
             )
-            # Store calibrated confidence but mark as vetoed
-            quant_result.calibrated_confidence = calibrated_confidence
+            # Mark as technically vetoed for "Pure Quant" bets, but allow Consensus to override/analyze
             quant_result.kill_switch_active = True
             quant_result.kill_switch_reason = kill_switch_reason
-            return quant_result  # Return early, bet should NOT be placed
+            killed_by_validator = True
+        else:
+            # Standard Pass
+            quant_result.kill_switch_active = False
+            logger.info(
+                f"[CALIBRATION] {team1} vs {team2}: "
+                f"Raw={raw_confidence:.3f} → Calibrated={calibrated_confidence:.3f} "
+                f"(Δ={calibrated_confidence - raw_confidence:+.3f}) [Kill-Switch: PASS]"
+            )
 
-        # Update result with calibrated confidence
+        # Always use calibrated confidence for downstream, even if low quality (Context knows it's risky)
         quant_result.calibrated_confidence = calibrated_confidence
-        quant_result.kill_switch_active = False
-        quant_result.confidence = (
-            calibrated_confidence  # Use calibrated for downstream logic
-        )
-
-        logger.info(
-            f"[CALIBRATION] {team1} vs {team2}: "
-            f"Raw={raw_confidence:.3f} → Calibrated={calibrated_confidence:.3f} "
-            f"(Δ={calibrated_confidence - raw_confidence:+.3f}) [Kill-Switch: PASS]"
-        )
+        quant_result.confidence = calibrated_confidence
 
         try:
             # 2. Gather Context
@@ -642,6 +643,10 @@ class UnifiedHybridPipeline:
                 "team2": team2,
                 "predicted_total": f"{quant_result.predicted_total:.1f}",
                 "confidence": f"{quant_result.confidence * 100:.1f}%",
+                # Inject Kill-Switch Warning into Context
+                "statistical_warning": f"WARNING: Quantitative model has insufficient samples (Kill-Switch Active). Reason: {kill_switch_reason}"
+                if killed_by_validator
+                else "None",
                 # NEW: Market context for informed consensus
                 "market_line": market_line,
                 "deviation_from_market": f"{deviation_pts:+.1f} pts"
