@@ -204,6 +204,33 @@ def verify_project_structure() -> bool:
         return False
 
 
+def cleanup_persistent_processes(port: int = 8501) -> None:
+    """
+    Terminates any process listening on the specified port.
+    "Terminating process and restart: I processi vanno sempre terminati in maniera atomica, chirurgica e in maniera sicura."
+    """
+    try:
+        import subprocess
+
+        # Find PID using lsof
+        # -t: terse output (only PIDs)
+        # -i: Internet files
+        # :port: The port to check
+        result = subprocess.run(
+            ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True
+        )
+
+        pids = result.stdout.strip().split()
+        if pids:
+            logger.info(f"🧹 Clearing port {port} (PIDs: {pids})...")
+            for pid in pids:
+                if pid:
+                    subprocess.run(["kill", "-9", pid], check=False)
+            logger.info(f"✅ Port {port} cleared successfully.")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to cleanup port {port}: {e}")
+
+
 def launch_application() -> bool:
     """
     Launch the NBA Predictor application.
@@ -212,6 +239,14 @@ def launch_application() -> bool:
         bool: True if launch successful, False otherwise
     """
     try:
+        # User Rule: "Devi sempre verificare prima del riavvio... script di avvio... verificare i processi vecchi"
+        port_env = os.environ.get("STREAMLIT_SERVER_PORT", "8501")
+        try:
+            target_port = int(port_env)
+            cleanup_persistent_processes(target_port)
+        except ValueError:
+            pass  # Use default logic if port isn't valid int
+
         logger.info("🚀 Launching NBA Predictor Development Environment")
         logger.info(f"📁 Project root: {PROJECT_ROOT}")
 
