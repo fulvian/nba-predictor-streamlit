@@ -1005,7 +1005,7 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
     calibrated_conf = prediction.get("calibrated_confidence")
 
     # Consensus Data - Parse nested NanoGPT response structure
-    consensus_raw = prediction.get("consensus_analysis", {})
+    consensus_raw = prediction.get("consensus_analysis") or {}
 
     # New Logic: Get Consensus Adjustment Details
     # Prioritize 'consensus_adjustment' from top-level if available, else derive from analysis
