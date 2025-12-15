@@ -76,7 +76,11 @@ from ..analytics.ev_calculator import EVCalculator
 from ..intelligence.bayesian_updater import BayesianUpdater
 from ..intelligence.news_aggregator import CompositeNewsAggregator
 from ..intelligence.nanogpt_client import NanoGPTClient
+from ..features.research_features import enhance_nba_features
+from ..ml.feature_engineering import AdvancedFeatureEngine
 from ..intelligence.feedback_loop import FeedbackLoop
+from ..intelligence.probability_calibrator import PlattCalibrator
+from ..intelligence.bayesian_validator import BayesianConfidenceValidator
 
 # Configure logging
 logging.basicConfig(
@@ -122,6 +126,11 @@ class UnifiedPredictionResult:
     raw_quant_prediction: Optional[float] = None
     consensus_adjustment: Optional[float] = 0.0
     unified_prediction: Optional[float] = None
+
+    # Calibration fields (Model Redesign - Pillar 2 & 4)
+    calibrated_confidence: Optional[float] = None  # Platt-scaled confidence
+    kill_switch_active: Optional[bool] = None  # Bayesian Kill-Switch status
+    kill_switch_reason: Optional[str] = None  # Reason if vetoed
 
 
 class UnifiedHybridPipeline:
@@ -181,6 +190,7 @@ class UnifiedHybridPipeline:
 
         # Initialize Research Pipeline Components (Algorithms)
         self.feature_scaler = RobustScaler()
+        self.feature_engine = AdvancedFeatureEngine()  # Pillar 1 - Feature Engineering
         self.shap_explainer: Optional[Any] = None
 
         # Initialize New Analytical Components
@@ -193,6 +203,25 @@ class UnifiedHybridPipeline:
             timeout=180
         )  # 3 min timeout for multi-model consensus
         self.feedback_loop = FeedbackLoop()
+
+        # Probability Calibration (Pillar 2 - Model Redesign)
+        self.calibrator = PlattCalibrator(regularization_strength=0.01)
+        self.bayesian_validator = BayesianConfidenceValidator(
+            min_samples=50,  # Consensus requirement: N>=50 per bucket
+            max_bucket_ece=0.15,  # Consensus requirement: ECE<0.15
+        )
+        # Try to load pre-trained calibrator
+        calibrator_path = self.model_path / "probability_calibrator.pkl"
+        if calibrator_path.exists():
+            try:
+                self.calibrator.load(str(calibrator_path))
+                logger.info(
+                    f"[CALIBRATION] Loaded pre-trained calibrator from {calibrator_path}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[CALIBRATION] Failed to load calibrator: {e}. Using untrained."
+                )
 
         # Logging Component (Phase 2.2)
         self.prediction_logger = PredictionLogger()
@@ -552,6 +581,45 @@ class UnifiedHybridPipeline:
         quant_result.raw_quant_prediction = quant_result.predicted_total
         quant_result.consensus_adjustment = 0.0
         quant_result.unified_prediction = quant_result.predicted_total
+
+        # 2. PROBABILITY CALIBRATION (Pillar 2 - Model Redesign)
+        raw_confidence = quant_result.confidence
+        calibrated_confidence = self.calibrator.calibrate(raw_confidence)
+
+        # 3. BAYESIAN KILL-SWITCH (Pillar 4 - Model Redesign)
+        # Get bucket statistics for this confidence level
+        bucket_stats = self.calibrator.get_bucket_stats(
+            calibrated_confidence, window=0.1
+        )
+
+        # Check if bet should be allowed (Consensus requirements: n>=50, ECE<0.15)
+        is_safe, kill_switch_reason = self.bayesian_validator.should_allow_bet(
+            confidence=calibrated_confidence, bucket_stats=bucket_stats
+        )
+
+        if not is_safe:
+            logger.warning(
+                f"[KILL-SWITCH ACTIVATED] Bet VETOED for {team1} vs {team2}. "
+                f"Reason: {kill_switch_reason}"
+            )
+            # Store calibrated confidence but mark as vetoed
+            quant_result.calibrated_confidence = calibrated_confidence
+            quant_result.kill_switch_active = True
+            quant_result.kill_switch_reason = kill_switch_reason
+            return quant_result  # Return early, bet should NOT be placed
+
+        # Update result with calibrated confidence
+        quant_result.calibrated_confidence = calibrated_confidence
+        quant_result.kill_switch_active = False
+        quant_result.confidence = (
+            calibrated_confidence  # Use calibrated for downstream logic
+        )
+
+        logger.info(
+            f"[CALIBRATION] {team1} vs {team2}: "
+            f"Raw={raw_confidence:.3f} → Calibrated={calibrated_confidence:.3f} "
+            f"(Δ={calibrated_confidence - raw_confidence:+.3f}) [Kill-Switch: PASS]"
+        )
 
         try:
             # 2. Gather Context
@@ -1236,6 +1304,19 @@ class UnifiedHybridPipeline:
 
                 traceback.print_exc()
                 raise
+
+            # --- PHASE 3: Pillar 1 - Advanced Feature Engineering ---
+            logger.info("🔧 Applying AdvancedFeatureEngine (Pillar 1)...")
+            try:
+                # enhanced_df uses team1/team2 prefixes, which our engine now supports
+                enhanced_df = self.feature_engine.add_all_features(enhanced_df)
+                logger.info(
+                    f"✅ Advanced features added: {len(enhanced_df.columns)} total columns"
+                )
+            except Exception as e:
+                logger.error(f"❌ AdvancedFeatureEngine failed: {e}")
+                # Don't fail the whole pipeline, just log and continue with missing features
+                # But ensures we don't crash
 
             # Create enhanced features using all data sources (from enhanced pipeline)
             features_list = []
@@ -3320,6 +3401,42 @@ class UnifiedHybridPipeline:
 
                     # Create a composite dataframe representing this "hypothetical game"
                     composite_game = prediction_features.copy()
+
+                    # --- PILLAR 1: Apply Advanced Feature Engineering (Pace, Rest, Form) ---
+                    try:
+                        # Convert to DataFrame for the engine
+                        _temp_df = pd.DataFrame([composite_game])
+                        # Ensure date/team columns exist for Rest Days logic if possible
+                        # (They might be missing in prediction_features, but engine handles it gracefully or skips)
+                        if "GAME_DATE" not in _temp_df.columns:
+                            _temp_df["GAME_DATE"] = (
+                                pd.Timestamp.now()
+                            )  # Approximate for API calls if needed
+
+                        _temp_df = self.feature_engine.add_all_features(_temp_df)
+
+                        # Update composite_game with new features
+                        # Convert back to dict, handling float32/numpy types
+                        _new_feats = _temp_df.iloc[0].to_dict()
+                        for k, v in _new_feats.items():
+                            if (
+                                k not in composite_game
+                            ):  # Don't overwrite existing validated features yet
+                                composite_game[k] = v
+
+                        # Align 'pace_matchup' to 'pace' if not present
+                        if (
+                            "pace" not in composite_game
+                            and "pace_matchup" in composite_game
+                        ):
+                            composite_game["pace"] = composite_game["pace_matchup"]
+
+                        logger.info(
+                            f"✅ Advanced features injected for prediction: {list(_new_feats.keys())[-5:]}"
+                        )
+
+                    except Exception as e:
+                        logger.warning(f"⚠️ Advanced feature injection failed: {e}")
 
                     # =========================================================
                     # FEATURE ALIGNMENT FIX: Compute all 86 missing features

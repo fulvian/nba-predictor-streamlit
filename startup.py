@@ -208,14 +208,14 @@ def cleanup_persistent_processes(port: int = 8501) -> None:
     """
     Terminates any process listening on the specified port.
     "Terminating process and restart: I processi vanno sempre terminati in maniera atomica, chirurgica e in maniera sicura."
+    Try SIGTERM first (gentle), then SIGKILL (force) if needed.
     """
     try:
         import subprocess
+        import time
+        import signal
 
         # Find PID using lsof
-        # -t: terse output (only PIDs)
-        # -i: Internet files
-        # :port: The port to check
         result = subprocess.run(
             ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True
         )
@@ -223,10 +223,37 @@ def cleanup_persistent_processes(port: int = 8501) -> None:
         pids = result.stdout.strip().split()
         if pids:
             logger.info(f"🧹 Clearing port {port} (PIDs: {pids})...")
+
+            # 1. Gentle Termination (SIGTERM)
             for pid in pids:
                 if pid:
-                    subprocess.run(["kill", "-9", pid], check=False)
-            logger.info(f"✅ Port {port} cleared successfully.")
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+
+            # Wait for processes to exit
+            time.sleep(2)
+
+            # 2. Force Kill (SIGKILL) if still alive
+            result_check = subprocess.run(
+                ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True
+            )
+            data_left = result_check.stdout.strip().split()
+            if data_left:
+                logger.warning(
+                    f"⚠️ processes {data_left} still alive. Forcing SIGKILL..."
+                )
+                for pid in data_left:
+                    if pid:
+                        try:
+                            os.kill(int(pid), signal.SIGKILL)
+                        except:
+                            pass
+                logger.info(f"✅ Port {port} cleared (Forcefully).")
+            else:
+                logger.info(f"✅ Port {port} cleared successfully (Gentle).")
+
     except Exception as e:
         logger.warning(f"⚠️ Failed to cleanup port {port}: {e}")
 
@@ -263,9 +290,11 @@ def launch_application() -> bool:
             logger.error(f"❌ Application file not found: {script_path}")
             return False
 
-        logger.info("📋 Starting Betting Workflow Dashboard...")
-        logger.info("🎯 Features: Real NBA Data, ML Predictions, Live Odds")
-        logger.info("✅ Context7 Best Practices - Development Mode")
+        logger.info("📋 Starting Dashboard V2 (Deploy w/ Calibration & Kill-Switch)...")
+        logger.info(
+            "🎯 Features: Real Data, Platt Calibration (ECE<0.1), Bayesian Safety, Feedback Loop"
+        )
+        logger.info("✅ Context7 Best Practices - Deployment Mode")
 
         # Build the command
         import subprocess

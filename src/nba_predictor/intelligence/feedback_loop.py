@@ -102,12 +102,10 @@ class FeedbackLoop:
             logger.error(f"Error fetching history for {team_name}: {e}")
             return []
 
-    def calculate_weighted_bias(
-        self, history: list[dict], alpha: float = 0.25
-    ) -> float:
+    def calculate_weighted_bias(self, history: list[dict], alpha: float = 0.4) -> float:
         """
         Calculates Exponential Moving Average (EMA) of forecast errors.
-        Alpha 0.25 gives adequate weight to the last ~4 games without chasing noise.
+        Alpha 0.4 (Aggressive) emphasizes recent games to catch streak-based biases.
         """
         if not history:
             return 0.0
@@ -127,6 +125,18 @@ class FeedbackLoop:
                 ema = (error * alpha) + (ema * (1 - alpha))
 
         return ema
+
+    def analyze_shap_bias(self, team_name: str, recent_games: list[dict]) -> str:
+        """
+        Analyzes SHAP values from recent losses to identify feature-specific blindspots.
+        (Placeholder for when SHAP values are persisted in DB)
+        """
+        # In Phase 2, we will query the 'bet_features' table for SHAP values of high-error games.
+        # extraction logic:
+        # 1. Identify games with Error > 10.0
+        # 2. Look up their SHAP contributions
+        # 3. Find features that consistently pushed the prediction in the wrong direction
+        return ""
 
     def generate_correction_prompt(self, team1: str, team2: str) -> str:
         """

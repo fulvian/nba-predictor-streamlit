@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/scripts/train_unified_model.py", line 16, in <module>
+    from src.nba_predictor.core.unified_hybrid_pipeline import UnifiedHybridPipeline
+  File "/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/core/unified_hybrid_pipeline.py", line 581
+    logger.info("🔧 Calculating rolling features using shared logic...")
+    ^
+SyntaxError: invalid syntax

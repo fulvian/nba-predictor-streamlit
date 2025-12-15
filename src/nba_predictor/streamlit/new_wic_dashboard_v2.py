@@ -999,6 +999,11 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
 
     recommendation = prediction.get("recommendation", "No Recommendation")
 
+    # NEW: Safety & Calibration Data
+    kill_switch_active = prediction.get("kill_switch_active", False)
+    kill_switch_reason = prediction.get("kill_switch_reason", "")
+    calibrated_conf = prediction.get("calibrated_confidence")
+
     # Consensus Data - Parse nested NanoGPT response structure
     consensus_raw = prediction.get("consensus_analysis", {})
 
@@ -1072,6 +1077,17 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
     elif consensus_adj < 0:
         adj_color = "#ff4b4b"  # Red
 
+    # KILL SWITCH BANNER
+    if kill_switch_active:
+        st.error(f"⛔ **BET VETOED BY BAYESIAN KILL-SWITCH**: {kill_switch_reason}")
+
+    # Confidence Display Logic
+    conf_display = f"{confidence:.1f}%"
+    conf_sublabel = ""
+    if calibrated_conf is not None:
+        conf_display = f"{calibrated_conf:.1f}%"
+        conf_sublabel = f"<div class='stat-sublabel'>Raw: {confidence:.1f}%</div>"
+
     # Create HTML Card (Editorial Style v7 - with Assets)
     card_html = f"""
 <div class="game-card">
@@ -1092,7 +1108,8 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
         </div>
         <div class="stat-box">
             <div class="stat-label">{assets.ICON_BRAIN} Confidence</div>
-            <div class="stat-value">{confidence:.1f}%</div>
+            <div class="stat-value">{conf_display}</div>
+            {conf_sublabel}
         </div>
     </div>
     <div class="rec-box">
@@ -1299,6 +1316,9 @@ def render_step_2_predictor():
                 prediction = {
                     "predicted_total": prediction_result.predicted_total,
                     "confidence": prediction_result.confidence,  # Already 0-100%
+                    "calibrated_confidence": prediction_result.calibrated_confidence,
+                    "kill_switch_active": prediction_result.kill_switch_active,
+                    "kill_switch_reason": prediction_result.kill_switch_reason,
                     "over_probability": prediction_result.over_probability,
                     "under_probability": prediction_result.under_probability,
                     "recommendation": prediction_result.recommendation,

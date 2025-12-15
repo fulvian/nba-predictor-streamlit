@@ -1,0 +1,24 @@
+2025-12-09 17:14:19,853 - __main__ - INFO - 🚀 Starting Unified Model Retraining...
+2025-12-09 17:14:19,854 - nba_predictor.core.data_store - INFO - Initializing UnifiedDataStore
+2025-12-09 17:14:20,576 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Loaded team mapping: 30 teams
+2025-12-09 17:14:20,576 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🎯 UNIFIED HYBRID PIPELINE INITIALIZED - 'Prendi il meglio da entrambi i sistemi'
+2025-12-09 17:14:20,576 - __main__ - INFO - 📊 Training model with new feature optimizations (EWMA, Interactions)...
+2025-12-09 17:14:20,576 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🚀 TRAINING UNIFIED HYBRID MODEL - 'Prendi il meglio da entrambi i sistemi'
+2025-12-09 17:14:20,576 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🔄 Loading ALL INTEGRATED DATA SOURCES (Enhanced Pipeline Integration)...
+2025-12-09 17:14:20,727 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ NBA real games loaded: 5996 games
+2025-12-09 17:14:20,782 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Player stats loaded: 1926 records
+2025-12-09 17:14:21,369 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Rosters loaded: 1056 records
+2025-12-09 17:14:21,381 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Injuries loaded: 72 records
+2025-12-09 17:14:21,444 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Game results loaded: 4007 records
+2025-12-09 17:14:21,449 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Player momentum loaded: 450 records
+2025-12-09 17:14:21,449 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🎯 ALL INTEGRATED DATA SOURCES LOADED: 6 sources
+2025-12-09 17:14:21,450 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🔧 Creating UNIFIED FEATURES (Enhanced Data + Research Algorithms)...
+2025-12-09 17:14:21,457 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🔍 DEBUG: Available columns: ['GAME_ID', 'GAME_DATE_EST', 'HOME_TEAM_ID', 'AWAY_TEAM_ID', 'HOME_SCORE', 'AWAY_SCORE', 'TOTAL_SCORE', 'HOME_FGM', 'HOME_FGA', 'HOME_FG3M', 'HOME_FG3A', 'HOME_FTM', 'HOME_FTA', 'HOME_OREB', 'HOME_DREB']
+2025-12-09 17:14:21,459 - src.nba_predictor.core.unified_hybrid_pipeline - WARNING - ⚠️ Column 'home_team' has only 2 unique values - skipping
+2025-12-09 17:14:21,461 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ HOME_TEAM_NAME mapped from 'HOME_TEAM_ID' (31 unique teams)
+2025-12-09 17:14:21,462 - src.nba_predictor.core.unified_hybrid_pipeline - WARNING - ⚠️ Column 'away_team' has only 2 unique values - skipping
+2025-12-09 17:14:21,465 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ AWAY_TEAM_NAME mapped from 'AWAY_TEAM_ID' (31 unique teams)
+2025-12-09 17:14:21,465 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🔍 FINAL: HOME teams: 31, AWAY teams: 31
+2025-12-09 17:14:21,476 - src.nba_predictor.core.unified_hybrid_pipeline - WARNING - ⚠️ Found 1 games with unrealistic scores. Score range: 351.0 - 351.0
+2025-12-09 17:14:21,476 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - ✅ Mapped NBA data to standard format: 5995 games, avg total: 226.2
+2025-12-09 17:14:21,477 - src.nba_predictor.core.unified_hybrid_pipeline - INFO - 🔧 Calculating rolling features using shared logic...

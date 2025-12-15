@@ -1,0 +1,184 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.14, pytest-8.4.1, pluggy-1.6.0
+rootdir: /Users/fulvioventura/nba-predictor-streamlit
+configfile: pyproject.toml
+plugins: xdist-3.7.0, anyio-4.9.0, httpx-0.35.0, cov-4.1.0, mock-3.14.1, dash-3.1.1, asyncio-1.0.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+src/nba_predictor/tests/test_pipeline_integration.py F/opt/homebrew/lib/python3.11/site-packages/coverage/report_core.py:109: CoverageWarning: Couldn't parse Python file '/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/core/unified_hybrid_pipeline_temp.py' (couldnt-parse)
+  coverage._warn(msg, slug="couldnt-parse")
+/opt/homebrew/lib/python3.11/site-packages/coverage/report_core.py:109: CoverageWarning: Couldn't parse Python file '/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/streamlit/components/responsive_design_system.py' (couldnt-parse)
+  coverage._warn(msg, slug="couldnt-parse")
+/opt/homebrew/lib/python3.11/site-packages/coverage/report_core.py:109: CoverageWarning: Couldn't parse Python file '/Users/fulvioventura/nba-predictor-streamlit/src/nba_predictor/utils/auto_settlement_v2.py' (couldnt-parse)
+  coverage._warn(msg, slug="couldnt-parse")
+                   [100%]
+
+=================================== FAILURES ===================================
+____ TestUnifiedHybridPipelineIntegration.test_predict_unified_integration _____
+
+self = <src.nba_predictor.tests.test_pipeline_integration.TestUnifiedHybridPipelineIntegration object at 0x137cb3c50>
+pipeline = <src.nba_predictor.core.unified_hybrid_pipeline.UnifiedHybridPipeline object at 0x137ce6c50>
+
+    def test_predict_unified_integration(self, pipeline):
+        # Mock internal methods to avoid complex data loading
+        pipeline.load_all_integrated_data = MagicMock(return_value={})
+        pipeline._create_unified_prediction_features = MagicMock(
+            return_value={"feat1": 1.0}
+        )
+        pipeline._analyze_unified_injury_impact = MagicMock(return_value={})
+        pipeline._analyze_unified_roster_changes = MagicMock(return_value={})
+        pipeline._analyze_unified_player_momentum = MagicMock(return_value={})
+        pipeline._analyze_unified_head_to_head = MagicMock(return_value={})
+        pipeline._get_unified_feature_importance = MagicMock(return_value={})
+        pipeline._analyze_four_factors_impact = MagicMock(return_value={})
+        pipeline._analyze_unified_teams = MagicMock(return_value={})
+        pipeline._get_model_weights = MagicMock(return_value={})
+        pipeline._calculate_dynamic_envelope = MagicMock(return_value=None)
+    
+        # Mock EV analysis return
+        pipeline.ev_calculator.calculate_ev.return_value = MagicMock(
+            ev_percentage=5.0, edge=0.05, kelly_stake_percentage=0.01, is_value_bet=True
+        )
+    
+        # Mock Bayesian update return
+        pipeline.news_aggregator.get_latest_news.return_value = [{"impact_score": 1.0}]
+        pipeline.bayesian_updater.update_prediction.return_value = MagicMock(
+            updated_score_dist=(222.0, 12.0), confidence_interval=(200, 244)
+        )
+    
+        # Run prediction
+        result = pipeline.predict_unified(team1="Lakers", team2="Warriors", line=220.0)
+    
+        # Verify EV analysis was called
+        assert pipeline.ev_calculator.calculate_ev.called
+        assert result.ev_analysis is not None
+>       assert result.ev_analysis["is_value"] is True
+E       AssertionError: assert <MagicMock name='EVCalculator().calculate_ev().to_dict().__getitem__()' id='5231602384'> is True
+
+src/nba_predictor/tests/test_pipeline_integration.py:86: AssertionError
+
+--------- coverage: platform darwin, python 3.11.14-final-0 ----------
+Name                                                                                 Stmts   Miss Branch BrPart  Cover   Missing
+--------------------------------------------------------------------------------------------------------------------------------
+src/api/__init__.py                                                                      2      2      0      0     0%   7-16
+src/api/nba_prediction_api.py                                                          276    276     58      0     0%   11-670
+src/features/__init__.py                                                                 2      2      0      0     0%   7-14
+src/features/nba_features.py                                                           307    307    101      0     0%   9-626
+src/models/__init__.py                                                                   6      6      0      0     0%   13-28
+src/nba_predictor/__init__.py                                                            8      0      0      0   100%
+src/nba_predictor/analytics/ev_calculator.py                                            44     26     10      0    37%   56-59, 71-74, 86-89, 103-153
+src/nba_predictor/api/__init__.py                                                        3      3      0      0     0%   7-10
+src/nba_predictor/api/ball_dont_lie_client.py                                          176    176     42      0     0%   16-371
+src/nba_predictor/api/data_provider.py                                                 458    458    140      0     0%   16-1005
+src/nba_predictor/api/multi_source_provider.py                                         211    211     48      0     0%   14-416
+src/nba_predictor/api/nba_client.py                                                    419    419    126      0     0%   7-1028
+src/nba_predictor/api/nba_official_client.py                                           112    112     32      0     0%   7-239
+src/nba_predictor/api/odds_client.py                                                   286    286     76      0     0%   7-735
+src/nba_predictor/bankroll/__init__.py                                                  28     28      0      0     0%   13-115
+src/nba_predictor/bankroll/audit.py                                                    228    228     54      0     0%   7-758
+src/nba_predictor/bankroll/calculator.py                                               181    181     68      0     0%   7-453
+src/nba_predictor/bankroll/engine.py                                                   228    228     98      0     0%   7-660
+src/nba_predictor/bankroll/exceptions.py                                               125    125      2      0     0%   7-389
+src/nba_predictor/bankroll/manager.py                                                  288    288     60      0     0%   7-784
+src/nba_predictor/bankroll/migration.py                                                501    501    140      0     0%   7-1367
+src/nba_predictor/bankroll/models.py                                                   167    167     34      0     0%   7-511
+src/nba_predictor/bankroll/reconciliation.py                                           360    360    131      0     0%   7-1052
+src/nba_predictor/bankroll/risk.py                                                     214    214     78      0     0%   7-721
+src/nba_predictor/bankroll/security.py                                                 264    264    111      0     0%   7-773
+src/nba_predictor/cli.py                                                               189    189     50      0     0%   14-373
+src/nba_predictor/core/__init__.py                                                       3      0      0      0   100%
+src/nba_predictor/core/complete_data_populator.py                                      200    200     36      0     0%   18-367
+src/nba_predictor/core/data_persistence_bridge.py                                      170    170     44      0     0%   16-543
+src/nba_predictor/core/data_population_engine.py                                       182    182     37      0     0%   21-454
+src/nba_predictor/core/data_store.py                                                   303    273    102      0     7%   56-70, 87-122, 126-150, 154-168, 185-201, 220-277, 294-345, 362-412, 429-489, 504-528, 534-553, 573-605, 622-654, 668-715, 729-776, 785-803, 807-814, 818, 822
+src/nba_predictor/core/data_store_extensions.py                                        150    150     39      0     0%   14-490
+src/nba_predictor/core/fase1_game_results_downloader.py                                151    151     26      0     0%   20-320
+src/nba_predictor/core/fase2_context7_player_downloader.py                             267    267     54      0     0%   15-615
+src/nba_predictor/core/fase2_player_statistics_downloader.py                           211    211     40      0     0%   20-450
+src/nba_predictor/core/game_analytics_engine.py                                        213    213     34      0     0%   13-528
+src/nba_predictor/core/injury_tracker.py                                               289    289     62      0     0%   7-624
+src/nba_predictor/core/lineup_analytics_downloader.py                                  159    159     36      0     0%   7-408
+src/nba_predictor/core/mock_injury_generator.py                                         81     81     28      0     0%   7-204
+src/nba_predictor/core/mock_lineup_generator.py                                         61     61      6      0     0%   7-178
+src/nba_predictor/core/nba_stats_updater.py                                            185    185     42      0     0%   12-447
+src/nba_predictor/core/research_prediction_pipeline.py                                 373    373     78      0     0%   14-1152
+src/nba_predictor/core/roster_downloader.py                                            187    187     46      0     0%   7-375
+src/nba_predictor/core/roster_injury_schemas.py                                        200     10     26      0    92%   116-118, 147-149, 227-230
+src/nba_predictor/core/roster_injury_store_extensions.py                               184    184     48      0     0%   7-449
+src/nba_predictor/core/statistics_data_schemas.py                                      158    158     58      0     0%   17-410
+src/nba_predictor/core/statistics_download_engine.py                                   291    291     55      0     0%   19-708
+src/nba_predictor/core/statistics_store_extensions.py                                  137    137     26      0     0%   18-417
+src/nba_predictor/core/sync_engine.py                                                  151    132     20      0    11%   49-62, 95-207, 226-261, 278-313, 328-356, 375-406, 415, 429-433, 445-459, 468-485
+src/nba_predictor/core/time_series_validator.py                                         33     25     16      0    16%   49-81, 100-113, 126-133
+src/nba_predictor/core/unified_hybrid_pipeline.py                                     1210    995    414     15    14%   227, 232, 239-299, 314-425, 441-529, 553-779, 791-1052, 1056-1082, 1103-1194, 1200-1206, 1212-1219, 1223-1229, 1233-1244, 1248-1257, 1263-1269, 1273-1278, 1282-1287, 1291-1297, 1303-1325, 1331-1350, 1359-1384, 1390-1412, 1418-1444, 1452-1513, 1534-1764, 1768-1785, 1797-1830, 1842-1876, 1888-1924, 1959-1971, 1973->1976, 1992, 1999-2000, 2011->2025, 2013-2018, 2036-2037, 2097-2103, 2120-2129, 2177-2189, 2229->2235, 2240-2242, 2256->2263, 2259-2260, 2275-2291, 2330-2332, 2347-2446, 2460-2597, 2601, 2641-2680, 2686-2708, 2714-2730, 2734-2748, 2754-2794, 2800-2812, 2818-2824, 2830-2847, 2853-2870, 2876-2900, 2906-2923, 2929-2932, 2965-2967, 2973-2975, 2981-2983, 2987-2999, 3003-3030, 3036-3066, 3070-3139, 3178, 3194-3201
+src/nba_predictor/core/unified_ml_interface.py                                          84     84     14      0     0%   13-586
+src/nba_predictor/explainability/__init__.py                                             2      0      0      0   100%
+src/nba_predictor/explainability/shap_explainer.py                                     147    124     51      1    12%   29-33, 42->46, 69-104, 121-144, 172-222, 241-262, 281-304, 323-357, 383-446, 466-501, 527-591
+src/nba_predictor/features/research_features.py                                        166    149    101      0     6%   51-92, 106-120, 136-172, 185-220, 233-300, 313-394, 407-485, 501-524, 543-560, 581-611, 623-685
+src/nba_predictor/intelligence/bayesian_updater.py                                      37     18      4      0    51%   46, 62, 79-110, 131-145
+src/nba_predictor/intelligence/news_aggregator.py                                       24     13      4      0    39%   25-29, 41-53, 61, 73-81
+src/nba_predictor/models/lightgbm_model.py                                              51     39     22      0    16%   20-23, 61-120, 143-168, 178, 215-239
+src/nba_predictor/models/stacked_ensemble.py                                           134    112     42      0    12%   21-23, 29-31, 40-41, 72-130, 146-222, 235-264, 274-286, 304-346, 366-461
+src/nba_predictor/streamlit/__init__.py                                                  1      1      0      0     0%   10
+src/nba_predictor/streamlit/assets.py                                                   45     45      0      0     0%   8-94
+src/nba_predictor/streamlit/components/__init__.py                                       1      1      0      0     0%   19
+src/nba_predictor/streamlit/components/accessibility_features.py                       416    416    144      0     0%   15-983
+src/nba_predictor/streamlit/components/adaptive_ui_layouts.py                          379    379    154      0     0%   7-776
+src/nba_predictor/streamlit/components/advanced_ml_operations_dashboard.py             733    733    391      0     0%   16-1780
+src/nba_predictor/streamlit/components/e2e_testing_framework.py                        516    516    108      0     0%   14-1100
+src/nba_predictor/streamlit/components/enhanced_prediction_bridge_professional.py      204    204     86      0     0%   13-566
+src/nba_predictor/streamlit/components/enhanced_prediction_bridge_real_data.py         339    339    113      0     0%   12-960
+src/nba_predictor/streamlit/components/enhanced_prediction_bridge_v2.py                247    247     63      0     0%   12-579
+src/nba_predictor/streamlit/components/enhanced_predictions_dashboard.py               300    300    118      0     0%   14-754
+src/nba_predictor/streamlit/components/error_handling/__init__.py                        8      8      0      0     0%   20-121
+src/nba_predictor/streamlit/components/error_handling/enhanced_error_classifier.py     320    320    116      0     0%   21-827
+src/nba_predictor/streamlit/components/error_handling/error_message_formatter.py       225    225     84      0     0%   21-731
+src/nba_predictor/streamlit/components/error_handling/error_reporter.py                363    363    165      0     0%   21-917
+src/nba_predictor/streamlit/components/error_handling/retry_manager.py                 345    345    140      0     0%   21-859
+src/nba_predictor/streamlit/components/error_handling/state_integration.py             290    290    118      0     0%   21-813
+src/nba_predictor/streamlit/components/intelligent_cache.py                            448    448    206      0     0%   19-953
+src/nba_predictor/streamlit/components/live_data_streaming.py                          432    432    175      0     0%   20-1051
+src/nba_predictor/streamlit/components/ml_integration_bridge.py                        458    458    136      0     0%   15-1182
+src/nba_predictor/streamlit/components/performance_monitoring_system.py                443    443    159      0     0%   9-1069
+src/nba_predictor/streamlit/components/pwa_features.py                                 296    296     54      0     0%   16-1307
+src/nba_predictor/streamlit/components/real_time_updates.py                            351    351    142      0     0%   19-727
+src/nba_predictor/streamlit/components/state_manager.py                                400    400    174      0     0%   20-910
+src/nba_predictor/streamlit/components/state_validators/__init__.py                      4      4      0      0     0%   20-33
+src/nba_predictor/streamlit/components/state_validators/ml_state_validator.py          380    380    166      0     0%   20-1232
+src/nba_predictor/streamlit/components/sync_dashboard.py                               169    169     82      0     0%   7-348
+src/nba_predictor/streamlit/components/uat_testing_framework.py                        478    478    163      0     0%   9-1202
+src/nba_predictor/streamlit/components/wic_components.py                                96     96     58      0     0%   6-260
+src/nba_predictor/streamlit/config/__init__.py                                           2      2      0      0     0%   6-17
+src/nba_predictor/streamlit/config/deployment_config.py                                168    168     70      0     0%   7-382
+src/nba_predictor/streamlit/new_wic_dashboard.py                                       783    783    402      0     0%   6-1672
+src/nba_predictor/streamlit/styling_system.py                                           79     79     44      0     0%   7-461
+src/nba_predictor/streamlit/utils/__init__.py                                            2      2      0      0     0%   6-8
+src/nba_predictor/streamlit/utils/cache_manager.py                                     101    101     18      0     0%   8-375
+src/nba_predictor/streamlit/utils/wic_state_manager.py                                  53     53     28      0     0%   6-79
+src/nba_predictor/testing/__init__.py                                                    2      2      0      0     0%   11-18
+src/nba_predictor/testing/betting_system_integration_testing.py                        623    623    166      0     0%   29-1733
+src/nba_predictor/testing/system_validator.py                                          412    412     78      0     0%   7-1305
+src/nba_predictor/utils/__init__.py                                                      1      0      0      0   100%
+src/nba_predictor/utils/auto_bet_settlement.py                                         171    171     60      0     0%   14-412
+src/nba_predictor/utils/betting_database_manager.py                                    300    300    108      0     0%   17-882
+src/nba_predictor/utils/betting_database_manager_fixed.py                              227    227     40      0     0%   11-479
+src/nba_predictor/utils/cache_manager.py                                               277    277     94      0     0%   7-631
+src/nba_predictor/utils/database_cleanup.py                                            182    182     30      0     0%   14-422
+src/nba_predictor/utils/exceptions.py                                                  107     81     42      0    17%   27-30, 34-39, 54-58, 73-77, 99-105, 127-133, 155-161, 183-189, 204-208, 230-236, 258-264, 286-292, 314-320
+src/nba_predictor/utils/legacy_risk_manager.py                                         381    381    183      0     0%   19-1029
+src/nba_predictor/utils/manual_odds_calculator.py                                      210    210    146      0     0%   8-575
+src/nba_predictor/utils/nba_schedule_fallback.py                                       148    148     50      0     0%   13-334
+src/nba_predictor/utils/nba_timezone_utils.py                                          217    217     64      0     0%   6-515
+src/nba_predictor/utils/robust_bet_settlement.py                                       199    199     76      0     0%   14-588
+src/nba_predictor/utils/team_normalizer.py                                              29     29     14      0     0%   1-165
+src/websocket_backup_test/__init__.py                                                    2      2      0      0     0%   7-13
+src/websocket_backup_test/nba_websocket.py                                             242    242     80      0     0%   7-526
+--------------------------------------------------------------------------------------------------------------------------------
+TOTAL                                                                                24882  24258   8178     16     2%
+Coverage HTML written to dir htmlcov
+Coverage XML written to file coverage.xml
+
+=========================== short test summary info ============================
+FAILED src/nba_predictor/tests/test_pipeline_integration.py::TestUnifiedHybridPipelineIntegration::test_predict_unified_integration
+============================== 1 failed in 23.95s ==============================
