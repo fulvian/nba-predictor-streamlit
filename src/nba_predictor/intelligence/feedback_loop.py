@@ -65,8 +65,13 @@ class FeedbackLoop:
                     )
 
                     # Simplify: We just need total score prediction vs actual total
-                    # Assuming prediction_data has 'total' and home/away score gives actual.
-                    pred_total = float(prediction_data.get("total", 0.0))
+                    # UPDATE: Actual DB key is 'predicted_total' (or sometimes 'unified_prediction')
+                    pred_total = float(
+                        prediction_data.get("predicted_total")
+                        or prediction_data.get("unified_prediction")
+                        or prediction_data.get("total")
+                        or 0.0
+                    )
 
                     if row[5] is None or row[6] is None:
                         continue  # Skip if no scores
