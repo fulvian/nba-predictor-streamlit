@@ -200,8 +200,8 @@ class UnifiedHybridPipeline:
         # Enhanced Intelligence Components
         self.news_aggregator = CompositeNewsAggregator()
         self.consensus_client = NanoGPTClient(
-            timeout=180
-        )  # 3 min timeout for multi-model consensus
+            timeout=600
+        )  # 10 min timeout for multi-model consensus with thinking models
         self.feedback_loop = FeedbackLoop()
 
         # Probability Calibration (Pillar 2 - Model Redesign)
