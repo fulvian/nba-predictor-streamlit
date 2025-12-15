@@ -1,6 +1,6 @@
 import json
 import logging
-import sqlite3
+import duckdb
 from pathlib import Path
 
 # Setup Logger
@@ -32,40 +32,37 @@ class FeedbackLoop:
             return []
 
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            # FIX: Use duckdb instead of sqlite3 for .duckdb files
+            conn = duckdb.connect(self.db_path, read_only=True)
 
-            # Query DuckDB (via sqlite3 connector if mostly compatible, or duckdb lib)
-            # Assuming sqlite3 for local dev compatibility, but production might need duckdb lib.
-            # Using standard SQL.
+            # Query DuckDB
             # Updated: Use 'created_at' instead of 'date' and include WON/LOST statuses.
             query = """
-                SELECT
+                SELECT 
                     created_at,
                     home_team,
                     away_team,
-                    prediction,
+                    prediction, 
                     result,
                     home_score,
                     away_score,
                     bet_id
-                FROM bets
+                FROM bets 
                 WHERE (home_team = ? OR away_team = ?)
                   AND status IN ('SETTLED', 'WON', 'LOST')
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC 
                 LIMIT ?
             """
-            cursor.execute(query, (team_name, team_name, limit))
-            rows = cursor.fetchall()
+            rows = conn.execute(query, [team_name, team_name, limit]).fetchall()
 
             history = []
             for row in rows:
                 try:
+                    # DuckDB returns tuples, indexing is same
                     # Parse JSON fields if they are stored as strings
                     prediction_data = (
                         json.loads(row[3]) if isinstance(row[3], str) else row[3]
                     )
-                    # result_data = json.loads(row[4]) if isinstance(row[4], str) else row[4]
 
                     # Simplify: We just need total score prediction vs actual total
                     # Assuming prediction_data has 'total' and home/away score gives actual.
