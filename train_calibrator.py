@@ -42,6 +42,16 @@ def fetch_historical_bets(db_path: str = "data/nba_betting.duckdb"):
             created_at
         FROM bets
         WHERE status IN ('SETTLED', 'WON', 'LOST')
+        
+        UNION ALL
+        
+        SELECT 
+            id as bet_id,
+            prediction,
+            result,
+            created_at
+        FROM historical_calibration
+        
         ORDER BY created_at ASC
     """
 

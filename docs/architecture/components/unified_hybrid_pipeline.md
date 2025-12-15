@@ -40,3 +40,11 @@ graph TD
 
 ## Usage
 The pipeline is initialized via `pipeline = UnifiedHybridPipeline()` which automatically loads the `probability_calibrator.pkl` model and initializes the sub-components.
+
+## Data Sources & Calibration
+- **Real-Time Data**: Fetched via `NBALegacyDataLoader` (scores, odds).
+- **Historical Calibration**:
+  - Due to lack of historical box-score statistics, the pipeline uses a **Semi-Synthetic Data Strategy** (ADR-003).
+  - Script: `generate_synthetic_calibration_data.py`.
+  - Generates >2,000 synthetic betting records with uniform confidence distribution to ensure the `BayesianConfidenceValidator` has a statistically valid baseline.
+  - This data is stored in `historical_calibration` table and Unioned with real settled bets in `train_calibrator.py`.

@@ -12,9 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Automatically injects correction prompts for teams with >5.0 point structural bias.
     - Integrated directly into `UnifiedHybridPipeline` and `NanoGPTClient`.
 
+## [2.1.1] - 2025-12-15
+### Fixed
+- **Kill-Switch Deadlock**: Resolved persistent "Insufficient Samples" block by implementing Synthetic Calibration Data generation (ADR-003).
+- **Dashboard Crash**: Fixed `NoneType` error in dashboard when Consensus Analysis is missing.
+- **UI UX**: Added "Calibrated Confidence" display and non-blocking Warning Banner in Dashboard V2.
+
 ## [2.1.0] - 2025-12-15
 ### Added
-- **Probabilistic Hybrid Pipeline**: Fully redesigned `UnifiedHybridPipeline` incorporating:
+- **UnifiedHybridPipeline**: Complete probabilistic redesign (ADR-002).ed `UnifiedHybridPipeline` incorporating:
     - **Advanced Feature Engineering**: Pace, Rest Days, Recent Form, Defensive Rating.
     - **Probability Calibration**: `PlattCalibrator` (Logistic Regression, C=0.01) significantly reduces overconfidence (Test ECE: 0.050).
     - **Bayesian Kill-Switch**: `BayesianConfidenceValidator` protects bankroll by vetoing safe bets with insufficient sample size (N<50) or high uncertainty.

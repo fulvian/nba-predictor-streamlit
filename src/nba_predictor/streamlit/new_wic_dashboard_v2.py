@@ -1085,7 +1085,7 @@ def render_prediction_summary_v2(prediction: Dict[str, Any]):
     conf_display = f"{confidence:.1f}%"
     conf_sublabel = ""
     if calibrated_conf is not None:
-        conf_display = f"{calibrated_conf:.1f}%"
+        conf_display = f"{calibrated_conf * 100:.1f}%"
         conf_sublabel = f"<div class='stat-sublabel'>Raw: {confidence:.1f}%</div>"
 
     # Create HTML Card (Editorial Style v7 - with Assets)
