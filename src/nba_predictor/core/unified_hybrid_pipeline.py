@@ -76,6 +76,7 @@ from ..analytics.ev_calculator import EVCalculator
 from ..intelligence.bayesian_updater import BayesianUpdater
 from ..intelligence.news_aggregator import CompositeNewsAggregator
 from ..intelligence.nanogpt_client import NanoGPTClient
+from ..intelligence.feedback_loop import FeedbackLoop
 
 # Configure logging
 logging.basicConfig(
@@ -191,6 +192,7 @@ class UnifiedHybridPipeline:
         self.consensus_client = NanoGPTClient(
             timeout=180
         )  # 3 min timeout for multi-model consensus
+        self.feedback_loop = FeedbackLoop()
 
         # Logging Component (Phase 2.2)
         self.prediction_logger = PredictionLogger()
@@ -593,8 +595,15 @@ class UnifiedHybridPipeline:
             }
 
             # 3. Query LLM (Sharp Advisor)
+            # GENERATE META-LEARNING CONTEXT (Feedback Loop)
+            meta_learning_context = self.feedback_loop.generate_correction_prompt(
+                team1, team2
+            )
+
             consensus_response = self.consensus_client.query_consensus_sync(
-                consensus_context, complexity="nba_predictor"
+                consensus_context,
+                complexity="nba_predictor",
+                meta_learning_context=meta_learning_context,
             )
 
             # 4. Parse & Apply Bayesian Fusion with Circuit Breakers

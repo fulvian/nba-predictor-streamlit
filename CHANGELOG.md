@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ✨ New Features
+- **Meta-Learning Feedback Loop**: The Consensus Engine now "learns" from past errors using an EMA-based bias detection system.
+    - Automatically injects correction prompts for teams with >5.0 point structural bias.
+    - Integrated directly into `UnifiedHybridPipeline` and `NanoGPTClient`.
+
 ## [2.0.0] - 2024-10-27
 
 ### 🚀 Major Features

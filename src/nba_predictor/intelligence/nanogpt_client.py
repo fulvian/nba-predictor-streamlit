@@ -233,17 +233,22 @@ class NanoGPTClient:
             await client.stop()
 
     def query_consensus_sync(
-        self, context: dict[str, Any], complexity: str = "nba_predictor"
+        self,
+        context: dict[str, Any],
+        complexity: str = "nba_predictor",
+        meta_learning_context: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Synchronous wrapper for integration into the blocking pipeline.
 
         Args:
             context: Dictionary containing stats, news, and match info.
+            complexity: Complexity level/profile for consensus (default: "nba_predictor").
+            meta_learning_context: Optional string containing feedback loop insights.
         """
 
         # Construct the Prompt (System 2 Thinking)
-        prompt = self._construct_prompt(context)
+        prompt = self._construct_prompt(context, meta_learning_context)
         system_prompt = "You are a specialized NBA Reasoning Expert. Analyze the quantitative data and qualitative news to provide a consensus prediction."
 
         try:
@@ -334,7 +339,9 @@ class NanoGPTClient:
             logger.error(f"Failed to aggregate consensus results: {e}")
             return {"error": str(e), "fallback": True}
 
-    def _construct_prompt(self, context: dict[str, Any]) -> str:
+    def _construct_prompt(
+        self, context: dict[str, Any], meta_learning_context: Optional[str] = None
+    ) -> str:
         team1 = context.get("team1", "Team A")
         team2 = context.get("team2", "Team B")
         predicted_total = context.get("predicted_total", "N/A")
@@ -364,6 +371,11 @@ class NanoGPTClient:
                 )
         else:
             prompt_lines.append("- No significant recent news found.")
+
+        # Insert Meta-Learning Context if valid
+        if meta_learning_context:
+            prompt_lines.append("")
+            prompt_lines.append(meta_learning_context)
 
         prompt_lines.append("")
         prompt_lines.append("## Task: Hybrid Evaluation (Bias + Variance)")
