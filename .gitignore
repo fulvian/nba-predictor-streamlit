@@ -178,6 +178,8 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+*.duckdb
+*.duckdb.wal
 
 # Configuration files with sensitive data
 config.ini
