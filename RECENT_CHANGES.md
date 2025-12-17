@@ -21,7 +21,9 @@
 
 ## Bug Fixes
 - **402 Payment Required**: Resolved by removing incompatible memory headers for Flat Plan
-- **Token Limit Hit**: Thinking models now have adequate tokens for full reasoning
+- **Token Limit Limit**: Thinking models now have adequate tokens for full reasoning
+- **Data Corruption**: Fixed corrupted parquet files and betting records for 2025-12-14/16
+- **UI Deprecation**: Fixed `use_container_width` warnings in Dashboard V2
 
 ## Files Modified
 - `src/nba_predictor/intelligence/nanogpt_client.py`: Multi-persona prompt + 600s timeout

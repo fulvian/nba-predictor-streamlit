@@ -1552,7 +1552,7 @@ def render_step_3_analyst():
                 )
                 df_display["stake"] = df_display["stake"].map("€{:.2f}".format)
 
-                st.dataframe(df_display, use_container_width=True)
+                st.dataframe(df_display, width="stretch")
 
     # Navigation
     st.markdown("---")
@@ -2032,7 +2032,7 @@ def main():
             )
 
         st.markdown("---")
-        if st.button("New Analysis", use_container_width=True):
+        if st.button("New Analysis", width="stretch"):
             WICState.reset()
             st.rerun()
 
@@ -2057,7 +2057,7 @@ def main():
             st.metric("Locked", f"€{committed_bankroll:.2f}")
 
         st.markdown("---")
-        if st.button("Portfolio", use_container_width=True):
+        if st.button("Portfolio", width="stretch"):
             WICState.set_step(5)
             st.rerun()
 
