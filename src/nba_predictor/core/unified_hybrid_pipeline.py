@@ -81,6 +81,7 @@ from ..ml.feature_engineering import AdvancedFeatureEngine
 from ..intelligence.feedback_loop import FeedbackLoop
 from ..intelligence.probability_calibrator import PlattCalibrator
 from ..intelligence.bayesian_validator import BayesianConfidenceValidator
+from ..intelligence.bias_corrector import AsymmetricBiasCorrector, get_bias_corrector
 
 # Configure logging
 logging.basicConfig(
@@ -225,6 +226,10 @@ class UnifiedHybridPipeline:
 
         # Logging Component (Phase 2.2)
         self.prediction_logger = PredictionLogger()
+
+        # Bias Corrector (Phase 2.3 - Empirical Bias Correction)
+        self.bias_corrector = get_bias_corrector(enabled=True)
+        logger.info("[BIAS_CORRECTOR] Asymmetric bias corrector initialized")
 
         # Model components
         self.trained_model: Optional[Any] = None
@@ -888,6 +893,62 @@ class UnifiedHybridPipeline:
             )
         except Exception as log_err:
             logger.error(f"Failed to log prediction: {log_err}")
+
+        # --- BIAS CORRECTION (Phase 2.3 - Empirical Correction) ---
+        # Apply asymmetric bias correction based on empirical analysis of 97 bets
+        # OVER losses show +22 error (overestimation), UNDER losses show -25 error (underestimation)
+        try:
+            if market_line is not None:
+                # First check if bet should be filtered entirely (DANGER zone 220-230)
+                should_filter, filter_reason = self.bias_corrector.should_filter_bet(
+                    market_line
+                )
+                if should_filter:
+                    logger.warning(f"[BIAS_FILTER] {filter_reason}")
+                    # Don't block the bet, but mark it with reduced confidence
+                    quant_result.confidence = max(0.1, quant_result.confidence - 0.20)
+                    quant_result.kill_switch_reason = (
+                        quant_result.kill_switch_reason or ""
+                    ) + f" | {filter_reason}"
+
+                # Apply asymmetric correction to the final prediction
+                pre_correction = quant_result.predicted_total
+                correction_result = self.bias_corrector.correct_prediction(
+                    raw_prediction=quant_result.predicted_total,
+                    market_line=market_line,
+                    bet_direction=None,  # Will be inferred from prediction vs line
+                )
+
+                quant_result.predicted_total = correction_result.corrected_prediction
+                quant_result.unified_prediction = correction_result.corrected_prediction
+
+                # Apply confidence adjustment from zone analysis
+                quant_result.confidence = max(
+                    0.05,
+                    min(
+                        0.95,
+                        quant_result.confidence
+                        + correction_result.confidence_adjustment,
+                    ),
+                )
+
+                # Log the correction in consensus_analysis for transparency
+                if quant_result.consensus_analysis is None:
+                    quant_result.consensus_analysis = {}
+                quant_result.consensus_analysis["bias_correction"] = {
+                    "pre_correction": pre_correction,
+                    "post_correction": correction_result.corrected_prediction,
+                    "correction_applied": correction_result.correction_applied,
+                    "correction_type": correction_result.correction_type,
+                    "line_zone": correction_result.line_zone,
+                }
+
+                logger.info(
+                    f"[BIAS_CORRECTION] Applied: {pre_correction:.1f} → {correction_result.corrected_prediction:.1f} "
+                    f"(Δ{correction_result.correction_applied:+.1f}, zone={correction_result.line_zone})"
+                )
+        except Exception as bias_err:
+            logger.warning(f"[BIAS_CORRECTION] Failed to apply correction: {bias_err}")
 
         return quant_result
 
@@ -3123,19 +3184,30 @@ class UnifiedHybridPipeline:
             # Extract model probability (using over_probability as primary for total)
             model_prob = prediction_result.over_probability
 
-            # Get odds for the total (assuming standard -110 if not provided)
+            # Extract market line for filtering
+            market_line = None
             american_odds = -110
+
             if odds_data and "odds" in odds_data:
                 try:
-                    american_odds = odds_data["odds"]["total"]["over"]["price"]
-                except (KeyError, TypeError):
+                    total_data = odds_data["odds"].get("total", {}).get("over", {})
+                    american_odds = total_data.get("price", -110)
+                    market_line = float(total_data.get("point"))
+                except (KeyError, TypeError, ValueError):
                     pass
+
+            # Determine bet type based on probability
+            # If over_probability > 0.5, we are looking at OVER, else implicit UNDER
+            # But currently we are calculating EV for the OVER outcome based on over_probability
+            bet_type = "OVER"
 
             # Use the specialized EVCalculator
             ev_result = self.ev_calculator.calculate_ev(
                 model_prob=model_prob
                 / 100.0,  # Convert percentage to decimal if needed check
                 american_odds=american_odds,
+                market_line=market_line,
+                bet_type=bet_type,
             )
 
             # Convert EVResult object to dictionary if needed, or mapping
