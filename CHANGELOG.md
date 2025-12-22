@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2025-12-22
+
+### Fixed
+
+- **Schema Mismatch Error in Dashboard**: Resolved `DATABASE_ERROR: could not append value "7:30 pm ET"` by implementing explicit type casting in DuckDB queries using `::VARCHAR` syntax. This handles Parquet files with heterogeneous schemas (mixed Null/String types for `game_time` column).
+- **DuckDB-Polars Conversion**: Replaced `fetchall()` + `pl.DataFrame()` with native `.pl()` method for direct Arrow-based conversion, preventing schema inference errors.
+- **Streamlit Button API**: Fixed deprecated `width="stretch"` parameter in `st.button()`, replaced with `use_container_width=True`.
+
+### Technical Details
+
+- Root cause: File `games_2025-12-22.parquet` had `game_time` as String type while other files had Null type
+- Solution: Explicit column selection with `::VARCHAR` cast during `read_parquet` query
+- Files modified: `data_store.py`, `new_wic_dashboard_v2.py`
+
 ## [2.2.0] - 2025-12-15
 
 ### Added

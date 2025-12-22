@@ -429,13 +429,20 @@ class UnifiedDataStore:
         try:
             if date_range:
                 start_date, end_date = date_range
-                # Use DuckDB for efficient filtering with schema evolution handling
-                # Cast season to VARCHAR to handle mixed types (Int64 vs String)
+                # Use DuckDB for efficient filtering with explicit type casting
+                # ::VARCHAR syntax handles mixed types during read, preventing schema errors
                 query = f"""
-                SELECT * REPLACE (
-                    CAST(season AS VARCHAR) AS season,
-                    TRY_CAST(game_time AS VARCHAR) AS game_time
-                ) 
+                SELECT 
+                    game_id::VARCHAR AS game_id,
+                    game_date::VARCHAR AS game_date,
+                    home_team::VARCHAR AS home_team,
+                    away_team::VARCHAR AS away_team,
+                    season::VARCHAR AS season,
+                    game_time::VARCHAR AS game_time,
+                    status::VARCHAR AS status,
+                    home_score,
+                    away_score,
+                    match_id::VARCHAR AS match_id
                 FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
                 WHERE game_date BETWEEN '{start_date}' AND '{end_date}'
                 ORDER BY game_date
@@ -444,21 +451,24 @@ class UnifiedDataStore:
                 if self._duckdb_conn is None:
                     raise DatabaseError("DuckDB connection not initialized")
 
-                result = self._duckdb_conn.execute(query).fetchall()
-
-                # Convert to Polars DataFrame
-                if result and self._duckdb_conn.description:
-                    columns = [desc[0] for desc in self._duckdb_conn.description]
-                    df = pl.DataFrame(result, schema=columns, orient="row")
-                else:
-                    df = pl.DataFrame()
+                # Use native .pl() method for direct Polars conversion
+                # This handles mixed types correctly via Arrow format
+                df = self._duckdb_conn.execute(query).pl()
             else:
-                # Load all games data using DuckDB to handle schema evolution and type casting
+                # Load all games data using DuckDB with explicit type casting
+                # ::VARCHAR syntax handles mixed types during read, preventing schema errors
                 query = f"""
-                SELECT * REPLACE (
-                    CAST(season AS VARCHAR) AS season,
-                    TRY_CAST(game_time AS VARCHAR) AS game_time
-                ) 
+                SELECT 
+                    game_id::VARCHAR AS game_id,
+                    game_date::VARCHAR AS game_date,
+                    home_team::VARCHAR AS home_team,
+                    away_team::VARCHAR AS away_team,
+                    season::VARCHAR AS season,
+                    game_time::VARCHAR AS game_time,
+                    status::VARCHAR AS status,
+                    home_score,
+                    away_score,
+                    match_id::VARCHAR AS match_id
                 FROM read_parquet('{self.games_dir}/*.parquet', union_by_name=true)
                 ORDER BY game_date
                 """
@@ -466,13 +476,9 @@ class UnifiedDataStore:
                 if self._duckdb_conn is None:
                     raise DatabaseError("DuckDB connection not initialized")
 
-                result = self._duckdb_conn.execute(query).fetchall()
-
-                if result and self._duckdb_conn.description:
-                    columns = [desc[0] for desc in self._duckdb_conn.description]
-                    df = pl.DataFrame(result, schema=columns, orient="row")
-                else:
-                    df = pl.DataFrame()
+                # Use native .pl() method for direct Polars conversion
+                # This handles mixed types correctly via Arrow format
+                df = self._duckdb_conn.execute(query).pl()
 
             logger.info(
                 "Games data retrieved successfully",

@@ -2032,7 +2032,7 @@ def main():
             )
 
         st.markdown("---")
-        if st.button("New Analysis", width="stretch"):
+        if st.button("New Analysis", use_container_width=True):
             WICState.reset()
             st.rerun()
 
@@ -2057,7 +2057,7 @@ def main():
             st.metric("Locked", f"€{committed_bankroll:.2f}")
 
         st.markdown("---")
-        if st.button("Portfolio", width="stretch"):
+        if st.button("Portfolio", use_container_width=True):
             WICState.set_step(5)
             st.rerun()
 
