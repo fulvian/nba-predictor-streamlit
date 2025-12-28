@@ -1,13 +1,13 @@
 {
-  "session_id": "20251027_154729",
+  "session_id": "20251217_104809",
   "stats": {
     "total_tasks": 2,
     "completed_tasks": 2,
     "failed_tasks": 0,
     "total_games_downloaded": 7548,
     "total_bytes_stored": 0,
-    "start_time": "2025-10-27T15:47:29.992377",
-    "last_activity": "2025-10-27T15:47:36.252705",
+    "start_time": "2025-12-17T10:48:09.665456",
+    "last_activity": "2025-12-17T10:48:28.353285",
     "api_calls_made": 8
   },
   "active_tasks": {},
@@ -20,9 +20,9 @@
       "retries": 0,
       "max_retries": 5,
       "error": null,
-      "created_at": "2025-10-27T15:47:29.991954",
-      "started_at": "2025-10-27T15:47:29.992389",
-      "completed_at": "2025-10-27T15:47:33.378512",
+      "created_at": "2025-12-17T10:48:09.664549",
+      "started_at": "2025-12-17T10:48:09.665478",
+      "completed_at": "2025-12-17T10:48:20.805582",
       "chunk_info": {},
       "progress_info": {}
     },
@@ -34,9 +34,9 @@
       "retries": 0,
       "max_retries": 5,
       "error": null,
-      "created_at": "2025-10-27T15:47:29.991974",
-      "started_at": "2025-10-27T15:47:34.390468",
-      "completed_at": "2025-10-27T15:47:36.252682",
+      "created_at": "2025-12-17T10:48:09.664579",
+      "started_at": "2025-12-17T10:48:22.384265",
+      "completed_at": "2025-12-17T10:48:28.353214",
       "chunk_info": {},
       "progress_info": {}
     }

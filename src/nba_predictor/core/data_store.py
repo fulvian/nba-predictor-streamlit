@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import duckdb
 import polars as pl
+import pandas as pd
 
 from ..utils.exceptions import DatabaseError, FileNotFoundError, ValidationError
 
@@ -826,3 +827,155 @@ class UnifiedDataStore:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.close()
+
+    def integrate_clv_data(self) -> None:
+        """
+        Integrate scraped CLV (Closing Line Value) data from OddsPortal into the main dataset.
+
+        This method:
+        1. Loads all scraped Parquet files from odds_dir.
+        2. Parses the JSON-serialized 'closing_lines' column.
+        3. Merges with existing games data based on team names and approximate date.
+        4. Saves the enriched dataset back to DuckDB/Parquet.
+        """
+        import json
+
+        logger.info("Starting CLV data integration...")
+
+        # 1. Load scraped data
+        clv_files = list(Path("data/raw/odds_portal").glob("nba_clv_*.parquet"))
+        if not clv_files:
+            logger.warning("No CLV data files found in data/raw/odds_portal/")
+            return
+
+        logger.info(f"Found {len(clv_files)} CLV data files.")
+
+        # Load and concat all files
+        dfs = []
+        for f in clv_files:
+            try:
+                df = pl.read_parquet(f)
+                dfs.append(df)
+            except Exception as e:
+                logger.error(f"Error reading {f}: {e}")
+
+        if not dfs:
+            return
+
+        clv_df = pl.concat(dfs)
+        logger.info(f"Loaded {len(clv_df)} CLV records.")
+
+        # 2. Parse JSON columns and extracting key metrics (e.g., best balanced line)
+        # We need to process the 'closing_lines' which is a JSON string of a list of dicts.
+        # This is complex in Polars directly, might need iteration or map_elements (slow but effective).
+
+        # For efficiency, we can filter for the most relevant data point: "Main Line" (closest to even odds)
+        # But 'closing_lines' contains *all* alternative lines.
+
+        # Logic:
+        # - Deserialize JSON
+        # - Find line where abs(over_odds - under_odds) is minimized (balanced line)
+        #   OR line closest to 1.91 (standard)
+
+        def extract_main_line(json_str: str) -> dict:
+            try:
+                lines = json.loads(json_str)
+                if not lines:
+                    return {"main_line": None, "over_odds": None, "under_odds": None}
+
+                # Filter for lines with valid odds
+                valid_lines = [
+                    l
+                    for l in lines
+                    if l.get("odds_values") and len(l["odds_values"]) == 2
+                ]
+                if not valid_lines:
+                    return {"main_line": None, "over_odds": None, "under_odds": None}
+
+                # Heuristic: Find line with odds closest to 1.91 (approx balanced)
+                best_line = min(
+                    valid_lines,
+                    key=lambda x: abs(x["odds_values"][0] - 1.91)
+                    + abs(x["odds_values"][1] - 1.91),
+                )
+
+                return {
+                    "main_line": best_line.get("line_value"),
+                    "over_odds": best_line["odds_values"][0],
+                    "under_odds": best_line["odds_values"][1],
+                }
+            except:
+                return {"main_line": None, "over_odds": None, "under_odds": None}
+
+        # Apply extraction (converting to Pandas for this step might be easier given complex JSON logic, then back to Polars)
+        pdf = clv_df.to_pandas()
+        extracted = pdf["closing_lines"].apply(extract_main_line).apply(pd.Series)
+        pdf = pd.concat([pdf, extracted], axis=1)
+
+        # Rename for merge
+        pdf["clv_total"] = pdf["main_line"]
+        pdf["clv_over_odds"] = pdf["over_odds"]
+        pdf["clv_under_odds"] = pdf["under_odds"]
+
+        # Prepare for merge key normalization
+        # OddsPortal names: "Philadelphia 76ers", "Boston Celtics" -> Standard full names
+        # Internal DB might use abbreviations or full names. Check team_mapping.
+
+        # Simple normalization: lowercase
+        pdf["home_team_norm"] = pdf["home_team"].str.lower().str.strip()
+        pdf["away_team_norm"] = pdf["away_team"].str.lower().str.strip()
+
+        # Convert collecting date to date object if needed, though 'start_time' might be better if available
+        # The scraper collects 'date' string? Checking scraper... regex extraction "date".
+        # Assuming scraper has 'game_date' or similar. If not, we rely on season + fuzzy match?
+        # Scraper saves: url, home_team, away_team, score_home, score_away, season.
+        # It does NOT seem to extract exact date from the specific game page header (based on previous scraper code reading).
+        # Wait, get_season_results_urls gets listing pages. Scrape_game_data gets details.
+
+        # Strategy: Load Games from DB, fuzzy match on Home/Away + Season
+        # Since we have Home/Away and Season, that's usually unique (except playoffs vs regular season potentially repeating matchups? No, regular season specific matchups. Playoffs distinct.)
+        # Actually same matchup happens 2-4 times a season. We NEED game date or score correlation.
+        # Scraper has score_home, score_away. We can use Score + Teams as unique key!
+
+        enrich_df = pl.from_pandas(pdf)
+
+        # 3. Load existing games
+        games_df = self.get_games_data()
+        if games_df.is_empty():
+            logger.warning("No games data in DB to merge with.")
+            # For testing/dev, if no games exist, we can't merge but we can still save the processed CLV
+            logger.info("Saving unprocessed CLV data for inspection.")
+            enrich_df.write_parquet(self.base_path / "nba_clv_processed.parquet")
+            return
+
+        # Prepare Games DF
+        # Ensure team names are normalized
+        games_df = games_df.with_columns(
+            [
+                pl.col("home_team").str.to_lowercase().alias("home_team_norm"),
+                pl.col("away_team").str.to_lowercase().alias("away_team_norm"),
+            ]
+        )
+
+        # Join on Home, Away, Score Home, Score Away (Robust Key)
+        # Note: Scraper might have scores as ints or strings. DB as ints.
+
+        # Cast scores in enrich_df to Int64 if they are strings
+        enrich_df = enrich_df.with_columns(
+            [pl.col("score_home").cast(pl.Int64), pl.col("score_away").cast(pl.Int64)]
+        )
+
+        merged_df = games_df.join(
+            enrich_df,
+            on=["home_team_norm", "away_team_norm", "score_home", "score_away"],
+            how="left",
+            suffix="_odds",
+        )
+
+        # Save enriched data
+        # We save to a new file for analysis/verification
+        output_path = self.base_path / "games_clv_enriched.parquet"
+        merged_df.write_parquet(output_path)
+        logger.info(
+            f"Integrated CLV data. Enriched {len(enrich_df)} matching records. Saved to {output_path}."
+        )

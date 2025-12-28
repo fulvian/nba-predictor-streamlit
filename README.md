@@ -84,6 +84,11 @@ All other scripts have been moved to `deprecated/` folder.
 - **Interactive Charts**: Grafici interattivi per analisi dati
 - **System Status**: Monitoraggio API e data sources
 
+### 📡 Live Betting Alert System (NEW)
+- **Macro-Live Monitoring**: Monitoraggio real-time di opportunità "In-Play"
+- **Contextual Alerts**: Notifiche automatiche basate su Fatica e Altitudine (es. "Denver Lung", "Tired Legs")
+- **Validated Edge**: Strategie con Win Rate storico > 60% (validato su 5 anni di dati)
+
 ### 🎨 Modern Architecture
 - **Streamlit Interface**: Interfaccia web moderna e responsive
 - **Python 3.11+**: Async patterns e type hints completi

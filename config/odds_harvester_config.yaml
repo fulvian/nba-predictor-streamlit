@@ -1,0 +1,68 @@
+# OddsHarvester Configuration for NBA Over/Under Scraping
+# Reference: https://github.com/jordantete/OddsHarvester
+
+odds_harvester:
+  # Sport and league configuration
+  sport: basketball
+  league: usa-nba
+
+  # Markets to scrape
+  markets:
+    - over/under
+
+  # Target seasons (for historic scraping)
+  seasons:
+    - "2024-2025"
+    - "current"
+
+  # Preferred bookmakers (in priority order)
+  # Note: Bet365 may not be available for US markets
+  bookmakers:
+    - Pinnacle # Sharp bookmaker, efficient lines
+    - BetOnline # Available in dataset
+    - Bovada # Available in dataset
+    - DraftKings # US major
+    - FanDuel # US major
+
+  # Output configuration
+  output:
+    format: json # json or csv
+    path: data/odds_harvester_raw/
+
+  # Scraping settings
+  scraping:
+    headless: true # Run browser without UI
+    max_pages: null # null = all pages
+    concurrency: 3 # Concurrent browser tasks
+
+  save_logs: true
+  proxies:
+    - "socks5://127.0.0.1:9050"
+  # Proxy configuration (optional)
+  proxy:
+    enabled: false
+    # servers:
+    #   - "http://proxy1.com:8080 user1 pass1"
+    #   - "http://proxy2.com:8080 user2 pass2"
+
+# Priority bookmaker for closing line analysis
+# Pinnacle is preferred as the sharpest bookmaker with most efficient lines
+priority_bookmaker: Pinnacle
+
+# Fallback behavior when priority bookmaker not available
+fallback_to_average: true
+
+# Database configuration
+database:
+  path: data/nba_betting.duckdb
+  table: nba_totals_odds
+
+# Data sources
+data_sources:
+  kaggle:
+    totals_path: data/nba_odds_csv/nba_betting_totals.csv
+    games_path: data/nba_odds_csv/nba_games_all.csv
+    coverage: "2011-2018" # Kaggle dataset coverage
+
+  odds_harvester:
+    coverage: "2020-present" # What we scrape with OddsHarvester

@@ -190,3 +190,4 @@ secrets.json
 # Deprecated files
 deprecated/
 **/deprecated/
+data/nba_odds_csv/*.csv

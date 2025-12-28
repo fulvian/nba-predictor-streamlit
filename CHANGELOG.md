@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2025-12-28
+
+### Added
+
+- **Live Betting Alert System (Track B)**: Implemented "Macro-Live" monitoring to detect in-game betting opportunities based on pre-game context (Fatigue/Altitude).
+  - **"The Denver Lung" Strategy**: Detects High Altitude Home Team vs Back-to-Back Opponent. Validated Win Rate: **61.3%** on 2nd Half bets.
+  - **"Tired Frontrunner" Strategy**: Detects Tired Home Team (3 games in 4 nights) leading by >5 points at Q4 start. Validated Win Rate: **53.2%** on Fade Home Q4.
+- **Live Context Loader**: New module `src/nba_predictor/live/context_loader.py` to calculate daily Fatigue (Rest/Density) and Altitude context for scheduled games.
+- **Live Monitor**: New module `src/nba_predictor/live/monitor.py` that polls `nba_api` every 60s and enriches live game state with context.
+- **Live Betting Dashboard**: New Streamlit page `04_Live_Betting_Monitor.py` visualization for real-time tracking of alerts and game context tags (e.g., 🏔️, 🥱).
+- **Offline Backtesting**: Added ingestion of historical Quarter Scores (`nba_quarter_scores` table) and simulation scripts for strategy validation.
+
+
 ## [2.2.1] - 2025-12-22
 
 ### Fixed

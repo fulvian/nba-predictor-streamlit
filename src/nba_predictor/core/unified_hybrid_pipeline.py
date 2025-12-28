@@ -82,6 +82,8 @@ from ..intelligence.feedback_loop import FeedbackLoop
 from ..intelligence.probability_calibrator import PlattCalibrator
 from ..intelligence.bayesian_validator import BayesianConfidenceValidator
 from ..intelligence.bias_corrector import AsymmetricBiasCorrector, get_bias_corrector
+from ..intelligence.dynamic_bias import get_dynamic_bias_manager
+from ..intelligence.consensus_validator import get_consensus_validator
 
 # Configure logging
 logging.basicConfig(
@@ -228,8 +230,13 @@ class UnifiedHybridPipeline:
         self.prediction_logger = PredictionLogger()
 
         # Bias Corrector (Phase 2.3 - Empirical Bias Correction)
+        # Bias Corrector (Phase 2.3 - Empirical Bias Correction)
         self.bias_corrector = get_bias_corrector(enabled=True)
-        logger.info("[BIAS_CORRECTOR] Asymmetric bias corrector initialized")
+        self.dynamic_bias_manager = get_dynamic_bias_manager()
+        self.consensus_validator = get_consensus_validator()
+        logger.info(
+            "[INTELLIGENCE] Initialized BiasCorrector, DynamicBiasManager, ConsensusValidator"
+        )
 
         # Model components
         self.trained_model: Optional[Any] = None
@@ -708,94 +715,86 @@ class UnifiedHybridPipeline:
                     )
                     risk = str(data.get("risk_level", "HIGH")).upper()
 
-                    # --- CIRCUIT BREAKERS (Safety Layer) ---
-                    # Rule 1: Hard Cap +/- 6.0 (Slightly relaxed for strong signals)
-                    adj_proposal = max(-6.0, min(6.0, original_proposal))
+                    # --- REFOUNDED ARCHITECTURE (Phase 3) ---
+                    # 1. Consensus is VALIDATOR ONLY (No Additive Bias)
+                    # 2. Dynamic Bias (Momentum) is Applied
+                    # 3. Bayesian Shrinkage handles extreme deviations
 
-                    # Rule 2: Risk/Uncertainty Gate
-                    if "HIGH" in risk and uncertainty > 0.8:
-                        adj_final = 0.0
-                        reasoning_suffix = " [ignored due to HIGH RISK + UNCERTAINTY]"
-                    elif uncertainty > 0.9:
-                        adj_final = 0.0
-                        reasoning_suffix = " [decision ignored: PURE GAMBLE]"
-                    else:
-                        adj_final = adj_proposal
-                        reasoning_suffix = ""
+                    # A. Apply Dynamic Bias (Momentum Correction)
+                    # Get bias for Home and Away teams
+                    # We assume team1=Home, team2=Away for simplicity in this context,
+                    # but should check home_team param if critical.
+                    # Assuming standard call: predict(Home, Away)
+                    dynamic_bias = self.dynamic_bias_manager.get_game_bias(team1, team2)
 
-                    # --- ADAPTIVE BIAS-VARIANCE BLENDING ---
-                    # Formula: P_final = (P_quant * w_quant) + ((P_quant + Bias) * w_llm) + (P_market * w_market)
-                    # Weights constitute the "Information Manifold"
+                    # B. Base Prediction (Quant + Dynamic Bias)
+                    # We start from raw quant, apply dynamic bias
+                    base_prediction = quant_result.raw_quant_prediction + dynamic_bias
 
-                    if market_line is not None:
-                        # Full Fusion: Quant + LLM + Market
-                        # UPDATED STRATEGY: "Reasoning-First / High-Alpha" (User Request Phase 2.1)
-                        # Target Profile:
-                        # - Quant: 30% (Statistical Floor)
-                        # - LLM: 35-70% (Reasoning Engine - scales with consensus clarity)
-                        # - Market: Residual (Max 35%, Avg ~20-25%)
+                    logger.info(
+                        f"🌊 Dynamic Bias Applied: {quant_result.raw_quant_prediction:.1f} -> {base_prediction:.1f} (Bias={dynamic_bias:+.1f})"
+                    )
 
-                        w_quant = 0.30
-
-                        # Calculate Dynamic LLM Weight
-                        # Target Range: [0.35, 0.70]
-                        # If Uncertainty=0.0 (Unanimous) -> 0.70
-                        # If Uncertainty=1.0 (Chaos) -> 0.35 (Floor)
-                        w_llm_target = 0.70 * (1.0 - uncertainty)
-                        w_llm = max(0.35, min(0.70, w_llm_target))
-
-                        # Remaining weight goes to Market (The Efficient Frontier Reference)
-                        w_market = max(0.0, 1.0 - w_quant - w_llm)
-
-                        # Normalize precisely (float precision safeguard)
-                        total_w = w_quant + w_llm + w_market
-                        w_quant /= total_w
-                        w_llm /= total_w
-                        w_market /= total_w
-
-                        # Alias for downstream consistency
-                        w_consensus = w_llm
-
-                        # Calculate consensus-adjusted prediction component
-                        consensus_pred = quant_result.raw_quant_prediction + adj_final
-
-                        # Weighted blend
-                        quant_result.unified_prediction = (
-                            quant_result.raw_quant_prediction * w_quant
-                            + consensus_pred * w_consensus
-                            + market_line * w_market
-                        )
-
-                        # Impact calc
-                        actual_impact = (
-                            quant_result.unified_prediction
-                            - quant_result.raw_quant_prediction
-                        )
-                        fusion_type = "ADAPTIVE_BLEND_MARKET"
-
-                        logger.info(
-                            f"📊 Adaptive Blend (U={uncertainty:.2f}): "
-                            f"Q({w_quant:.0%}) + LLM({w_consensus:.0%}) + Mkt({w_market:.0%}) "
-                            f"-> {quant_result.unified_prediction:.1f}"
+                    # C. Bayesian Shrinkage (The Fail-Safe)
+                    if market_line:
+                        shrunk_prediction, shrinkage_weight, shrinkage_status = (
+                            self.bias_corrector.apply_bayesian_shrinkage(
+                                base_prediction, market_line
+                            )
                         )
                     else:
-                        # Partial Fusion: Quant + LLM only (No Market)
-                        # Rescale weights relative to each other (30 vs 35-70)
-                        # If w_llm=0.70 (30+70=100) -> Quant=30%, LLM=70%
-                        # If w_llm=0.35 (30+35=65) -> Quant=46%, LLM=54%
-                        total_w = 0.30 + w_llm
-                        norm_quant = 0.30 / total_w
-                        norm_llm = w_llm / total_w
+                        shrunk_prediction = base_prediction
+                        shrinkage_status = "NO_MARKET_LINE"
 
-                        actual_impact = adj_final * norm_llm
+                    # D. Consensus Validation (The Gate)
+                    # We use consensus ONLY to validate risk, not to add points.
+                    # Parse implied probability from consensus odds if available?
+                    # Current consensus payload has 'confidence' and 'risk_level'.
+                    # Deeper integration with Odds API needed for true "Fair Prob" check,
+                    # For now, we use the Risk Level from LLM.
 
-                        quant_result.unified_prediction = (
-                            quant_result.predicted_total + actual_impact
-                        )
-                        fusion_type = "ADAPTIVE_ADDITIVE"
-                        w_quant = norm_quant
-                        w_consensus = norm_llm  # Alias for logging
-                        w_market = 0.0
+                    is_valid_consensus = True
+                    validator_reason = "VALID"
+
+                    if market_line:
+                        # Simplified Validator Check based on LLM Risk Assessment
+                        if "HIGH" in risk and uncertainty > 0.8:
+                            is_valid_consensus = False
+                            validator_reason = f"CONSENSUS_REJECTION: Risk={risk}, Uncertainty={uncertainty:.2f}"
+
+                    # E. Final Unification
+                    # Unified Prediction is the Shrunk Prediction
+                    quant_result.unified_prediction = shrunk_prediction
+
+                    # Update metadata
+                    quant_result.consensus_adjustment = 0.0  # No additive bias
+                    quant_result.consensus_analysis = {
+                        "risk_level": risk,
+                        "uncertainty": uncertainty,
+                        "dynamic_bias": dynamic_bias,
+                        "shrinkage_status": shrinkage_status,
+                        "validator_status": validator_reason,
+                        "original_quant": quant_result.raw_quant_prediction,
+                        "market_line": market_line,
+                    }
+
+                    if not is_valid_consensus:
+                        # If Consensus Vetoes, we might want to kill the bet or flag it
+                        quant_result.kill_switch_active = True
+                        quant_result.kill_switch_reason = validator_reason
+                        logger.warning(f"⛔ Consensus VETO: {validator_reason}")
+
+                    fusion_type = "REFOUNDED_FAILSAFE"
+                    w_quant = 1.0  # Quant is King (after corrections)
+                    w_consensus = 0.0
+                    w_market = 0.0  # Market used via Shrinkage, not linear weight
+
+                    # Log the Refounded Decision
+                    logger.info(
+                        f"🛡️ Refounded Prediction: {quant_result.unified_prediction:.1f} "
+                        f"(Quant={quant_result.raw_quant_prediction:.1f}, Bias={dynamic_bias:+.1f}, "
+                        f"ShrinkStatus={shrinkage_status}, Risk={risk})"
+                    )
 
                     # Update Result Objects
                     quant_result.consensus_adjustment = actual_impact

@@ -193,6 +193,64 @@ class AsymmetricBiasCorrector:
 
         return False, ""
 
+    def apply_bayesian_shrinkage(
+        self, predicted_total: float, market_line: float
+    ) -> Tuple[float, float, str]:
+        """
+        Apply Bayesian Shrinkage to the prediction based on deviation from the market line.
+
+        Logic:
+        - If dev < 5%: Full trust in model.
+        - If dev > 5%: Decay trust exponentially.
+        - If dev > 10%: Warning/Block (Implied by very low weight).
+
+        Formula:
+        W = exp(-decay * (dev_pct - threshold)^2)
+
+        Args:
+            predicted_total: Model's raw prediction.
+            market_line: The market line (anchor).
+
+        Returns:
+            Tuple of (shrunk_prediction, weight_applied, status)
+        """
+        if market_line <= 0:
+            return predicted_total, 1.0, "INVALID_LINE"
+
+        dev_pts = abs(predicted_total - market_line)
+        dev_pct = dev_pts / market_line
+
+        # Thresholds
+        TRUST_THRESHOLD = 0.05  # 5% deviation is normal
+        CRITICAL_THRESHOLD = 0.10  # 10% deviation is extreme
+
+        if dev_pct <= TRUST_THRESHOLD:
+            return predicted_total, 1.0, "TRUST"
+
+        # Calculate Weight using Gaussian-like decay
+        # We want W=1 at 5% and W -> 0 as it approaches extreme
+        # Using a specialized decay function
+        decay_rate = 500.0  # Tunable parameter - Increased from 100 to 500 for stricter fail-safe
+        excess_dev = dev_pct - TRUST_THRESHOLD
+        weight = max(0.0, 1.0 / (1.0 + decay_rate * (excess_dev**2)))
+
+        # Calculate Shrunk Prediction
+        # Prediction = W * Model + (1-W) * Market
+        shrunk_prediction = (weight * predicted_total) + ((1.0 - weight) * market_line)
+
+        status = "SHRUNK"
+        if dev_pct > CRITICAL_THRESHOLD:
+            status = "CRITICAL_SHRINK"
+            # In critical territory, we shrink aggressively towards the line
+            # effectively killing the edge unless it's massive
+
+        logger.info(
+            f"📉 Bayesian Shrinkage: Dev={dev_pct:.1%} | W={weight:.2f} | "
+            f"Raw={predicted_total:.1f} -> Shrunk={shrunk_prediction:.1f}"
+        )
+
+        return shrunk_prediction, weight, status
+
     def get_stats(self) -> dict:
         """Get statistics about applied corrections."""
         if not self._correction_history:
