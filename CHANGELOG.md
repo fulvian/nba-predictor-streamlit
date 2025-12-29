@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2025-12-29
+
+### Added
+
+- **Project NEON: Premium UI/UX Redesign (Phase 14)**
+  - **Glassmorphism Design System**: Implemented `blur(20px) saturate(180%)` backdrop filters with HSL-based color tokens.
+  - **Premium Typography**: Integrated Google Fonts (Inter for UI, JetBrains Mono for data) with refined letter-spacing.
+  - **Animated Components**: Added CSS keyframes for `pulse`, `glow`, and `scanline` effects.
+  - **Status Indicators**: Pulsing status dots for LIVE/OFFLINE market states.
+  - **Gradient Fills**: Back (blue gradient) and Lay (pink gradient) cells in Order Book.
+  - **Scanline Overlay**: CRT-style retro effect via CSS pseudo-element.
+  - **Button Styles**: Premium `BUTTON_PRIMARY` and `BUTTON_DANGER` with shadows and transitions.
+
+### Fixed
+
+- **Reflex Badge Crash**: Changed unsupported `variant="subtle"` to `variant="soft"`.
+- **VarTypeError**: Replaced Python `if` statements with `rx.cond()` for State variables.
+- **React Hydration Error**: Refactored nested `rx.text` components to avoid illegal `<p>` nesting.
+
+### Changed
+
+- **Metric Cards**: Increased value font size from 1.8em to 2.2em with text glow.
+- **Market Scanner**: Added hover glow effects and volume gradient bars.
+- **System Telemetry**: Shows "AWAITING DATA STREAM..." placeholder when empty.
+
 ## [2.3.0] - 2025-12-28
 
 ### Added

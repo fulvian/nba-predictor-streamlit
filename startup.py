@@ -3,13 +3,17 @@
 🏀 NBA Predictor Development Startup Script
 Context7-compliant unified launcher for development environment.
 This script handles all setup, path configuration, and error handling.
+Updated for PROJECT NEON (Reflex UI).
 """
 
 import sys
 import os
 import logging
+import subprocess
+import time
+import signal
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 # Configure project root and paths
 PROJECT_ROOT = Path(__file__).parent.absolute()
@@ -34,12 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 def setup_environment() -> bool:
-    """
-    Setup development environment with proper configuration.
-
-    Returns:
-        bool: True if setup successful, False otherwise
-    """
+    """Setup development environment with proper configuration."""
     try:
         # Create necessary directories
         directories = [
@@ -47,6 +46,7 @@ def setup_environment() -> bool:
             PROJECT_ROOT / "logs",
             PROJECT_ROOT / "data" / "persistent",
             PROJECT_ROOT / "data" / "cache",
+            PROJECT_ROOT / "ui_reflex",
         ]
 
         for directory in directories:
@@ -65,7 +65,6 @@ def setup_environment() -> bool:
             logger.info("Environment variables loaded successfully")
         else:
             logger.warning(".env file not found, using default values")
-            # Set minimal defaults
             os.environ.setdefault("ENV", "development")
             os.environ.setdefault("DEBUG", "true")
 
@@ -86,21 +85,27 @@ def setup_environment() -> bool:
 
 
 def verify_dependencies() -> bool:
-    """
-    Verify that all required dependencies are available.
-
-    Returns:
-        bool: True if all dependencies available, False otherwise
-    """
+    """Verify that all required dependencies are available."""
     try:
         # Core dependencies
-        import streamlit as st
         import polars as pl
         import duckdb
         import pandas as pd
         import numpy as np
 
-        logger.info("✅ Core dependencies verified")
+        logger.info("✅ Core dependencies verified (Polars, DuckDB)")
+
+        # Verify Reflex via CLI instead of import (avoids Py3.9 generator crash)
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "reflex", "--help"],
+                check=True,
+                capture_output=True,
+            )
+            logger.info("✅ Reflex verified via CLI")
+        except subprocess.CalledProcessError:
+            logger.error("❌ Reflex CLI not found or failed")
+            return False
 
         # Optional dependencies with warnings
         optional_deps = {
@@ -165,24 +170,20 @@ def verify_dependencies() -> bool:
 
 
 def verify_project_structure() -> bool:
-    """
-    Verify that the project structure is correct.
-
-    Returns:
-        bool: True if structure is valid, False otherwise
-    """
+    """Verify that the project structure is correct."""
     try:
         # Check critical files and directories
         required_structure = {
             "src/nba_predictor": SRC_PATH / "nba_predictor",
-            "src/nba_predictor/__init__.py": SRC_PATH / "nba_predictor" / "__init__.py",
-            "src/nba_predictor/streamlit": SRC_PATH / "nba_predictor" / "streamlit",
-            "src/nba_predictor/streamlit/new_wic_dashboard_v2.py": SRC_PATH
-            / "nba_predictor"
-            / "streamlit"
-            / "new_wic_dashboard_v2.py",
-            "src/nba_predictor/core": SRC_PATH / "nba_predictor" / "core",
-            "src/nba_predictor/utils": SRC_PATH / "nba_predictor" / "utils",
+            "ui_reflex/rxconfig.py": PROJECT_ROOT / "ui_reflex" / "rxconfig.py",
+            "ui_reflex/neon_dashboard/state.py": PROJECT_ROOT
+            / "ui_reflex"
+            / "neon_dashboard"
+            / "state.py",
+            "ui_reflex/neon_dashboard/neon_dashboard.py": PROJECT_ROOT
+            / "ui_reflex"
+            / "neon_dashboard"
+            / "neon_dashboard.py",
         }
 
         missing_items = []
@@ -204,129 +205,67 @@ def verify_project_structure() -> bool:
         return False
 
 
-def cleanup_persistent_processes(port: int = 8501) -> None:
+def cleanup_persistent_processes(port: int = 3000) -> None:
     """
-    Terminates any process listening on the specified port.
-    "Terminating process and restart: I processi vanno sempre terminati in maniera atomica, chirurgica e in maniera sicura."
-    Try SIGTERM first (gentle), then SIGKILL (force) if needed.
+    Terminates Reflex processes (port 3000 frontend, 8000 backend).
     """
     try:
-        import subprocess
-        import time
-        import signal
+        # NOTE: Removed broad 'pkill' commands (e.g. pkill -f node) because they
+        # inadvertently kill the IDE/Agent processes.
+        # We rely solely on precise port-based cleanup below.
 
-        # Find PID using lsof
-        result = subprocess.run(
-            ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True
-        )
-
-        pids = result.stdout.strip().split()
-        if pids:
-            logger.info(f"🧹 Clearing port {port} (PIDs: {pids})...")
-
-            # 1. Gentle Termination (SIGTERM)
-            for pid in pids:
-                if pid:
-                    try:
-                        os.kill(int(pid), signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-
-            # Wait for processes to exit
-            time.sleep(2)
-
-            # 2. Force Kill (SIGKILL) if still alive
-            result_check = subprocess.run(
-                ["lsof", "-t", "-i", f":{port}"], capture_output=True, text=True
+        # 2. Check ports 3000 (Frontend) and 8000 (Backend)
+        for p_chk in [3000, 8000]:
+            result = subprocess.run(
+                ["lsof", "-t", "-i", f":{p_chk}"], capture_output=True, text=True
             )
-            data_left = result_check.stdout.strip().split()
-            if data_left:
-                logger.warning(
-                    f"⚠️ processes {data_left} still alive. Forcing SIGKILL..."
-                )
-                for pid in data_left:
+            pids = result.stdout.strip().split()
+            if pids:
+                logger.info(f"🧹 Clearing port {p_chk} (PIDs: {pids})...")
+                for pid in pids:
                     if pid:
                         try:
-                            os.kill(int(pid), signal.SIGKILL)
+                            # Verify it's not our own PID
+                            if int(pid) != os.getpid():
+                                os.kill(int(pid), signal.SIGTERM)
                         except:
                             pass
-                logger.info(f"✅ Port {port} cleared (Forcefully).")
-            else:
-                logger.info(f"✅ Port {port} cleared successfully (Gentle).")
 
     except Exception as e:
-        logger.warning(f"⚠️ Failed to cleanup port {port}: {e}")
+        logger.warning(f"⚠️ Failed to cleanup processes: {e}")
 
 
 def launch_application() -> bool:
     """
-    Launch the NBA Predictor application.
-
-    Returns:
-        bool: True if launch successful, False otherwise
+    Launch the NBA Predictor application (Reflex Version).
     """
     try:
-        # User Rule: "Devi sempre verificare prima del riavvio... script di avvio... verificare i processi vecchi"
-        port_env = os.environ.get("STREAMLIT_SERVER_PORT", "8501")
-        try:
-            target_port = int(port_env)
-            cleanup_persistent_processes(target_port)
-        except ValueError:
-            pass  # Use default logic if port isn't valid int
+        cleanup_persistent_processes()
 
-        logger.info("🚀 Launching NBA Predictor Development Environment")
+        logger.info("🚀 Launching PROJECT NEON (Reflex UI)")
         logger.info(f"📁 Project root: {PROJECT_ROOT}")
 
-        # Path to the main application file
-        script_path = (
-            PROJECT_ROOT
-            / "src"
-            / "nba_predictor"
-            / "streamlit"
-            / "new_wic_dashboard_v2.py"
-        )
-
-        if not script_path.exists():
-            logger.error(f"❌ Application file not found: {script_path}")
+        # Change to ui_reflex directory
+        ui_path = PROJECT_ROOT / "ui_reflex"
+        if not ui_path.exists():
+            logger.error("❌ UI Directory not found")
             return False
 
-        logger.info("📋 Starting Dashboard V2 (Deploy w/ Calibration & Kill-Switch)...")
-        logger.info(
-            "🎯 Features: Real Data, Platt Calibration (ECE<0.1), Bayesian Safety, Feedback Loop"
-        )
-        logger.info("✅ Context7 Best Practices - Deployment Mode")
+        os.chdir(ui_path)
+
+        # Init if needed (silent)
+        if not (ui_path / ".web").exists():
+            logger.info("⚙️ Initializing Reflex Web Assets (First Run)...")
+            subprocess.run([sys.executable, "-m", "reflex", "init"], check=False)
+
+        logger.info("📋 Starting Reflex App...")
+        logger.info("✅ Cyberpunk Theme Loaded")
 
         # Build the command
-        import subprocess
+        cmd = [sys.executable, "-m", "reflex", "run"]
 
-        # Use sys.executable to ensure we use the same Python environment (venv)
-        cmd = [sys.executable, "-m", "streamlit", "run", str(script_path)]
-
-        # Add any custom arguments if needed
-        if os.environ.get("STREAMLIT_HEADLESS", "").lower() == "true":
-            cmd.extend(["--server.headless", "true"])
-
-        port = os.environ.get("STREAMLIT_SERVER_PORT")
-        if port:
-            cmd.extend(["--server.port", port])
-
-        address = os.environ.get("STREAMLIT_SERVER_ADDRESS")
-        if address:
-            cmd.extend(["--server.address", address])
-
-        logger.info(f"Running command: {' '.join(cmd)}")
-
-        # Ensure PYTHONPATH includes src
-        env = os.environ.copy()
-        python_path = env.get("PYTHONPATH", "")
-        if str(SRC_PATH) not in python_path:
-            env["PYTHONPATH"] = (
-                f"{str(SRC_PATH)}:{python_path}" if python_path else str(SRC_PATH)
-            )
-
-        # Run Streamlit as a subprocess
-        # This will block until the user stops the server
-        subprocess.run(cmd, check=True, env=env)
+        # Run
+        subprocess.run(cmd, check=True)
         return True
 
     except KeyboardInterrupt:
@@ -345,7 +284,7 @@ def main() -> int:
         int: Exit code (0 for success, 1 for error)
     """
     try:
-        print("🏀 NBA Predictor Development Startup")
+        print("🏀 NBA Predictor - PROJECT NEON - Startup")
         print("=" * 50)
         print(f"📁 Project: {PROJECT_ROOT}")
         print(f"🐍 Python: {sys.version.split()[0]}")
@@ -375,7 +314,7 @@ def main() -> int:
             logger.error("❌ Application launch failed")
             return 1
 
-        logger.info("✅ NBA Predictor started successfully!")
+        logger.info("✅ System started successfully!")
         return 0
 
     except KeyboardInterrupt:
