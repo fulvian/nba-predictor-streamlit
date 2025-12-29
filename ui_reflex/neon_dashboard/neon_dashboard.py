@@ -49,7 +49,9 @@ def metric_card(
                     color=COLORS["loss"],
                     text_shadow=f"0 0 8px {COLORS['glow_loss']}",
                 ),
-            ),
+            )
+            if trend is not None
+            else rx.spacer(),
             align_items="center",
             width="100%",
         ),
@@ -219,6 +221,82 @@ def odds_row(runner: rx.Var):
         padding="0.6em 0",
         align_items="center",
         border_bottom=f"1px solid hsla(180, 50%, 50%, 0.08)",
+    )
+
+
+def anomaly_card(anomaly: rx.Var):
+    """Component: Live Anomaly Signal Card."""
+    # Convert severity to color
+    color = rx.cond(
+        anomaly["severity"] == "CRITICAL",
+        COLORS["loss"],
+        rx.cond(anomaly["severity"] == "HIGH", COLORS["warning"], COLORS["neon_cyan"]),
+    )
+
+    return rx.box(
+        rx.vstack(
+            rx.hstack(
+                rx.badge(
+                    anomaly["type"],
+                    variant="outline",
+                    color_scheme=rx.cond(
+                        anomaly["severity"] == "CRITICAL", "red", "cyan"
+                    ),
+                    font_size="0.6em",
+                ),
+                rx.spacer(),
+                rx.text(
+                    "EV: ",
+                    rx.text(
+                        (anomaly["ev"].to(float) * 100).to_string(),
+                        "%",
+                        font_weight="bold",
+                    ),
+                    font_size="0.7em",
+                    color=COLORS["profit"],
+                ),
+                width="100%",
+                message=anomaly["details"],
+            ),
+            rx.text(
+                anomaly["details"],
+                font_size="0.8em",
+                color=COLORS["text_bright"],
+                font_weight="600",
+            ),
+            rx.text(
+                anomaly["market_id"],
+                font_size="0.6em",
+                color=COLORS["text_dim"],
+            ),
+            spacing="0.3em",
+            align_items="flex-start",
+        ),
+        style=GLASS_CARD,
+        border_left=f"3px solid {color}",
+        padding="0.8em",
+        margin_bottom="0.5em",
+    )
+
+
+def trading_log_row(trade: rx.Var):
+    """Component: Row in trading log."""
+    return rx.hstack(
+        rx.text(
+            trade["action"],
+            font_weight="bold",
+            color=rx.cond(
+                trade["action"] == "BACK", COLORS["back_blue"], COLORS["lay_pink"]
+            ),
+        ),
+        rx.text(trade["runner_name"], flex="1", font_size="0.8em"),
+        rx.text("@", trade["price"], font_weight="bold"),
+        rx.text("€", trade["stake"], color=COLORS["text_dim"]),
+        font_family=FONTS["data"],
+        font_size="0.75em",
+        width="100%",
+        padding="0.3em 0",
+        border_bottom=f"1px solid {COLORS['glass_border']}",
     )
 
 
@@ -440,7 +518,76 @@ def index() -> rx.Component:
                     width="100%",
                     spacing="1em",
                 ),
-                template_columns="1.3fr 1fr",
+                # LOAD SYSTEM PANEL (NEW)
+                rx.vstack(
+                    rx.hstack(
+                        rx.heading(
+                            "LOAD SYSTEM",
+                            color=COLORS["warning"],
+                            size="md",
+                            font_family=FONTS["data"],
+                        ),
+                        rx.spacer(),
+                        rx.cond(
+                            State.load_system_enabled,
+                            rx.button(
+                                "ACTIVE",
+                                on_click=State.toggle_load_system,
+                                style=BUTTON_PRIMARY,
+                                color_scheme="green",
+                            ),
+                            rx.button(
+                                "ENABLE",
+                                on_click=State.toggle_load_system,
+                                style=BUTTON_PRIMARY,
+                            ),
+                        ),
+                        width="100%",
+                        align_items="center",
+                    ),
+                    # Stats Row
+                    rx.grid(
+                        metric_card(
+                            "ANOMALIES", State.load_stats["anomalies_detected"]
+                        ),
+                        metric_card("E.V. TRADES", State.load_stats["active_bets"]),
+                        columns="2",
+                        gap="1em",
+                        width="100%",
+                    ),
+                    # Anomalies Feed
+                    rx.heading(
+                        "LIVE ANOMALIES",
+                        size="xs",
+                        color=COLORS["text_dim"],
+                        margin_top="1em",
+                    ),
+                    rx.scroll_area(
+                        rx.vstack(
+                            rx.foreach(State.active_anomalies, anomaly_card),
+                            width="100%",
+                        ),
+                        height="30vh",
+                        style=GLASS_CARD,
+                    ),
+                    # Trading Log
+                    rx.heading(
+                        "EXECUTION LOG",
+                        size="xs",
+                        color=COLORS["text_dim"],
+                        margin_top="1em",
+                    ),
+                    rx.scroll_area(
+                        rx.vstack(
+                            rx.foreach(State.recent_trades, trading_log_row),
+                            width="100%",
+                        ),
+                        height="20vh",
+                        style=GLASS_CARD,
+                    ),
+                    width="100%",
+                ),
+                template_columns="1.3fr 1fr 1fr",
                 gap="1.5em",
                 width="100%",
             ),

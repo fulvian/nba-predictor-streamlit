@@ -50,7 +50,7 @@ class LiveMonitor:
                 "game_id": game_id,
                 "status": game["gameStatus"],  # 1=Scheduled, 2=Live, 3=Final
                 "period": game["period"],
-                "clock": game["gameClock"],
+                "clock": self._parse_nba_clock(game["gameClock"]),
                 "home_team": game["homeTeam"]["teamName"],
                 "away_team": game["awayTeam"]["teamName"],
                 "home_score": game["homeTeam"]["score"],
@@ -98,3 +98,23 @@ class LiveMonitor:
         if not self.last_context_update:
             return True
         return self.last_context_update.date() < datetime.now().date()
+
+    def _parse_nba_clock(self, clock_str: str) -> str:
+        """Parses ISO 8601 duration (PT12M00.00S) or raw string to MM:SS."""
+        if not clock_str:
+            return ""
+
+        # If already simple format like "12:00", return as is
+        if ":" in clock_str and "PT" not in clock_str:
+            return clock_str
+
+        import re
+
+        # Regex for PT#M#S pattern
+        match = re.search(r"PT(\d+)M(\d+(\.\d+)?)S", clock_str)
+        if match:
+            minutes = int(match.group(1))
+            seconds = float(match.group(2))
+            return f"{minutes:02d}:{int(seconds):02d}"
+
+        return clock_str

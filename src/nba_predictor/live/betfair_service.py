@@ -10,6 +10,15 @@ from src.nba_predictor.betfair.panic_detector import PanicDetector, PanicAlert
 from src.nba_predictor.betfair.trade_executor import TradeExecutor
 from src.nba_predictor.betfair.position_manager import PositionManager
 
+# LOAD System Imports
+from src.live_betting import (
+    AnomalyDetector,
+    MarketScanner,
+    ValueBettingEngine,
+    OddsSnapshot,
+    Sport,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +60,12 @@ class BetfairService:
         # Multi-Market: One Detector per market_id
         self.detectors: Dict[str, PanicDetector] = {}
 
+        # LOAD Components
+        self.load_enabled = False
+        self.anomaly_detector = AnomalyDetector()
+        self.market_scanner: Optional[MarketScanner] = None
+        self.value_engine: Optional[ValueBettingEngine] = None
+
         # Trading Components
         self.executor: Optional[TradeExecutor] = None
         self.position_manager: Optional[PositionManager] = None
@@ -72,6 +87,9 @@ class BetfairService:
 
         # Additional metadata for UI (market names)
         self.market_names: Dict[str, str] = {}
+
+        # UI Buffers
+        self.recent_anomalies: List[Dict[str, Any]] = []  # Last 50 anomalies
 
     def start_monitoring(
         self,
@@ -156,6 +174,33 @@ class BetfairService:
             self.stop()
             raise e
 
+    def enable_load_system(self, bankroll: float = 1000.0) -> None:
+        """Enable LOAD System components."""
+        if not self.client:
+            self._init_client()
+
+        self.market_scanner = MarketScanner(self.client)
+        self.value_engine = ValueBettingEngine()
+        # Update bankroll config if needed or use default from engine init
+        self.value_engine.bankroll = bankroll
+
+        self.load_enabled = True
+        logger.info(f"LOAD System enabled (Bankroll: €{bankroll})")
+
+    def _init_client(self):
+        """Initialize and login Betfair client."""
+        if self.client:
+            return
+
+        self.client = BetfairClient(
+            app_key=self.app_key,
+            username=self.username,
+            password=self.password,
+            certs_path=self.certs_path,
+            locale=self.locale,
+        )
+        self.client.login()
+
     def enable_auto_trading(self, stake: float = 5.0, paper_mode: bool = True):
         """Enable or update auto-trading settings."""
         self.auto_trade_enabled = True
@@ -173,9 +218,103 @@ class BetfairService:
         self.auto_trade_enabled = False
         logger.info("Auto-trading DISABLED")
 
+    def _process_load_update(self, market_book):
+        """Process update through LOAD system pipeline."""
+        try:
+            # 1. Convert to Snapshot
+            # Need to identify runner, sport etc.
+            # This is simplified: usually we need to map selection_id to name etc.
+            # Assuming single runner focus or processing all active runners
+
+            # Determine sport from market_id or cache?
+            # For now default to Football if unknown or look up in scanner cache
+            sport = Sport.FOOTBALL  # Placeholder
+
+            for runner in market_book.runners:
+                if runner.status != "ACTIVE":
+                    continue
+
+                runner_name = self.runner_names.get(market_book.market_id, {}).get(
+                    runner.selection_id, f"Runner {runner.selection_id}"
+                )
+
+                # Best prices
+                back_price = (
+                    runner.ex.available_to_back[0].price
+                    if runner.ex.available_to_back
+                    else 0.0
+                )
+                lay_price = (
+                    runner.ex.available_to_lay[0].price
+                    if runner.ex.available_to_lay
+                    else 0.0
+                )
+                back_vol = (
+                    runner.ex.available_to_back[0].size
+                    if runner.ex.available_to_back
+                    else 0.0
+                )
+                lay_vol = (
+                    runner.ex.available_to_lay[0].size
+                    if runner.ex.available_to_lay
+                    else 0.0
+                )
+
+                snapshot = OddsSnapshot(
+                    timestamp=datetime.now(),  # Should use market_book.publish_time if available
+                    market_id=market_book.market_id,
+                    selection_id=runner.selection_id,
+                    sport=sport,  # Need better sport resolution
+                    competition="Unknown",  # Need metadata
+                    event_name=self.market_names.get(
+                        market_book.market_id, "Unknown Event"
+                    ),
+                    runner_name=runner_name,
+                    back_price=back_price,
+                    lay_price=lay_price,
+                    back_volume=back_vol,
+                    lay_volume=lay_vol,
+                    last_traded_price=runner.last_price_traded or 0.0,
+                    total_matched=runner.total_matched or 0.0,
+                    in_play=market_book.inplay,
+                )
+
+                # 2. Detect Anomalies
+                signals = self.anomaly_detector.process_update(snapshot)
+
+                # 3. Evaluate and Trade
+                for signal in signals:
+                    # Enqueue for UI
+                    self.alert_queue.put(signal)
+
+                    # Store in recent buffer
+                    self.recent_anomalies.insert(0, signal)
+                    if len(self.recent_anomalies) > 50:
+                        self.recent_anomalies.pop()
+
+                    if self.auto_trade_enabled and self.value_engine:
+                        rec = self.value_engine.evaluate_signal(signal)
+
+                        if rec.action != "SKIP":
+                            if self.paper_mode:
+                                # Execute Paper Trade
+                                executed_rec = self.value_engine.execute_paper_trade(
+                                    rec
+                                )
+                                logger.info(f"📝 Paper Trade: {executed_rec}")
+                            else:
+                                # LIVE TRADING (Future implementation)
+                                logger.warning(
+                                    f"⚠️ Live trading not yet implemented for LOAD: {rec}"
+                                )
+
+        except Exception as e:
+            logger.error(f"LOAD Processing Error: {e}")
+
     def _update_loop(self):
         """Background loop consuming streamer updates and feeding detectors."""
         logger.info("Service Loop Started.")
+
         try:
             for market_book in self.streamer.get_updates():
                 if not self.is_running:
@@ -187,7 +326,7 @@ class BetfairService:
                 with self._market_lock:
                     self._last_market_books[mid] = market_book
 
-                # Feed Correct Detector
+                # Feed Legacy Panic Detector
                 detector = self.detectors.get(mid)
                 if detector:
                     alerts = detector.process_update(market_book)
@@ -199,6 +338,10 @@ class BetfairService:
                         # AUTO-TRADE: Execute on CRITICAL alerts
                         if self.auto_trade_enabled and alert.severity == "CRITICAL":
                             self._execute_trade(alert, market_book)
+
+                # Feed LOAD System
+                if self.load_enabled:
+                    self._process_load_update(market_book)
 
                 # Check exit conditions for open positions (global check)
                 if self.position_manager:
@@ -308,45 +451,77 @@ class BetfairService:
 
             runners_data = []
             for runner in market_book.runners:
-                # Some markets might not have 'ACTIVE' status yet but still have prices
-                # or we want to see them anyway.
+                if runner.status != "ACTIVE":
+                    continue
 
-                # Extract best back/lay prices
-                best_back = (
-                    runner.ex.available_to_back[0]
+                runner_name = self.runner_names.get(market_id, {}).get(
+                    runner.selection_id, f"Runner {runner.selection_id}"
+                )
+
+                # Safe access to Best Back/Lay
+                back_price = (
+                    runner.ex.available_to_back[0].price
                     if runner.ex.available_to_back
-                    else None
+                    else 0.0
                 )
-                best_lay = (
-                    runner.ex.available_to_lay[0]
+                back_size = (
+                    runner.ex.available_to_back[0].size
+                    if runner.ex.available_to_back
+                    else 0.0
+                )
+                lay_price = (
+                    runner.ex.available_to_lay[0].price
                     if runner.ex.available_to_lay
-                    else None
+                    else 0.0
+                )
+                lay_size = (
+                    runner.ex.available_to_lay[0].size
+                    if runner.ex.available_to_lay
+                    else 0.0
                 )
 
-                runner_info = {
-                    "selection_id": runner.selection_id,
-                    "runner_name": self.runner_names.get(market_id, {}).get(
-                        runner.selection_id, f"ID: {runner.selection_id}"
-                    ),
-                    "status": runner.status,
-                    "back_price": best_back.price if best_back else 0.0,
-                    "back_size": best_back.size if best_back else 0.0,
-                    "lay_price": best_lay.price if best_lay else 0.0,
-                    "lay_size": best_lay.size if best_lay else 0.0,
-                    "total_matched": runner.total_matched or 0,
-                    "last_price_traded": runner.last_price_traded
-                    if hasattr(runner, "last_price_traded")
-                    else None,
-                }
-
-                # Calculate spread
-                if runner_info["back_price"] and runner_info["lay_price"]:
-                    runner_info["spread"] = round(
-                        runner_info["lay_price"] - runner_info["back_price"], 2
-                    )
-                else:
-                    runner_info["spread"] = None
-
-                runners_data.append(runner_info)
+                runners_data.append(
+                    {
+                        "selection_id": runner.selection_id,
+                        "runner_name": runner_name,
+                        "status": runner.status,
+                        "back_price": back_price,
+                        "back_size": back_size,
+                        "lay_price": lay_price,
+                        "lay_size": lay_size,
+                        "total_matched": runner.total_matched or 0.0,
+                        "last_price_traded": runner.last_price_traded or 0.0,
+                    }
+                )
 
             return runners_data
+
+    # --- LOAD System Accessors ---
+
+    def get_load_stats(self) -> Dict[str, Any]:
+        """Get combined stats for LOAD system."""
+        stats = {
+            "enabled": self.load_enabled,
+            "anomalies_detected": len(self.recent_anomalies),
+            "bankroll": 0.0,
+            "session_pnl": 0.0,
+            "active_bets": 0,
+            "roi": 0.0,
+        }
+
+        if self.value_engine:
+            eng_stats = self.value_engine.get_session_stats()
+            stats.update(eng_stats)
+
+        return stats
+
+    def get_recent_trades(self, limit: int = 20) -> List[Any]:
+        """Get recent trades from value engine."""
+        if self.value_engine and self.value_engine.session:
+            # Return last N trades reversed (newest first)
+            return self.value_engine.session.trades[::-1][:limit]
+        return []
+
+    def get_active_anomalies(self, limit: int = 20) -> List[Any]:
+        """Get recent detected anomalies."""
+        return self.recent_anomalies[:limit]

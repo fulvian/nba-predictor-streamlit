@@ -42,6 +42,26 @@ class State(rx.State):
     # Control Flags
     auto_trade_enabled: bool = False
 
+    # LOAD System State
+    load_system_enabled: bool = False
+    load_stats: Dict[str, Any] = {}
+    active_anomalies: List[Dict[str, Any]] = []
+    recent_trades: List[Dict[str, Any]] = []
+
+    def toggle_load_system(self):
+        """Toggle the LOAD system on/off."""
+        service = get_service()
+        if not self.load_system_enabled:
+            # Enable
+            service.enable_load_system()
+            self.load_system_enabled = True
+            return rx.toast.success("LOAD System ACTIVATED")
+        else:
+            # Disable (Just flag for now, need explicit method in service if full tear down needed)
+            service.load_enabled = False
+            self.load_system_enabled = False
+            return rx.toast.info("LOAD System PAUSED")
+
     def start_monitoring(self):
         """Start the Betfair Service from the UI."""
         service = get_service()
@@ -150,6 +170,13 @@ class State(rx.State):
                     # 3. Metadata
                     self.market_ids = service.monitored_market_ids
                     self.market_names = getattr(service, "market_names", {})
+
+                    # 4. LOAD System Data
+                    if self.load_system_enabled or service.load_enabled:
+                        self.load_system_enabled = service.load_enabled
+                        self.load_stats = service.get_load_stats()
+                        self.active_anomalies = service.get_active_anomalies()
+                        self.recent_trades = service.get_recent_trades()
 
     def on_load(self):
         """Called when page loads."""

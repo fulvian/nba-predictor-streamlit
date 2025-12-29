@@ -1,0 +1,16 @@
+[ req ]
+default_bits       = 2048
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+prompt             = no
+
+[ req_distinguished_name ]
+countryName                 = IT
+stateOrProvinceName         = Italy
+localityName               = Rome
+organizationName           = NBAPredictor
+commonName                 = nba-live-bot
+
+[ req_ext ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment

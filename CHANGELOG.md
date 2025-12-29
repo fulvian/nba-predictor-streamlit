@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2025-12-29
+
+### Added
+
+- **Live Odds Anomaly Detector (LOAD) Integration**:
+  - **Core Integration**: Integrated `AnomalyDetector`, `MarketScanner`, and `ValueBettingEngine` into `BetfairService`.
+  - **Neon Dashboard Integration**: Integrated real-time anomaly monitoring into `neon_dashboard.py` and `state.py`.
+  - **New UI Components**: Added `AnomalyCard` (monitor) and `TradingLogRow` (execution) with glassmorphism styling.
+  - **Control Panel**: Added "LOAD SYSTEM" panel with Enable/Disable toggle and real-time metrics.
+  - **State Management**: Implemented polling buffer for `active_anomalies` and `recent_trades` (last 50 items).
+
 ## [2.4.0] - 2025-12-29
 
 ### Added

@@ -18,6 +18,7 @@ COLORS = {
     "lay_pink": "hsl(340, 90%, 65%)",  # Coral Pink for LAY
     "profit": "hsl(160, 100%, 50%)",  # Neon Green
     "loss": "hsl(0, 100%, 60%)",  # Bright Red
+    "warning": "hsl(40, 100%, 60%)",  # Alert Orange
     # Glassmorphism Borders
     "glass_border": "hsla(180, 100%, 70%, 0.2)",
     "glass_border_hover": "hsla(180, 100%, 70%, 0.45)",
