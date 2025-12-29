@@ -142,6 +142,22 @@ def generate_nba_schedule_fallback(target_date=None) -> List[Dict]:
 - 📊 **Data Consistency**: Standardized structure across all levels
 - ⏱️ **Graceful Degradation**: System remains functional during outages
 
+### **5. Live Odds Anomaly Detector (LOAD) System (NEW)**
+
+**Purpose**: Real-time detection of betting market inefficiencies and anomalies.
+**Stack**: Python 3.11+, Reflex (Neon UI), Betfair Lightweight
+
+**Core Modules**:
+- `AnomalyDetector` (`src/live_betting/anomaly_detector.py`): Pattern recognition engine (Reverse Line Movement, Steam Moves).
+- `MarketScanner` (`src/live_betting/market_scanner.py`): High-frequency polling of Betfair Exchange.
+- `ValueBettingEngine` (`src/live_betting/value_betting_engine.py`): EV+ calculation and Kelly Criterion staking.
+- `Neon Dashboard` (`ui_reflex/`): Low-latency reactive UI built with Reflex.
+
+**Architecture**:
+- **Event-Driven**: Uses `MarketStreamer` and `AlertQueue` for sub-second updates.
+- **State Management**: Reflex `State` syncs with `BetfairService` singleton.
+- **Paper Trading**: Built-in simulation engine with bankroll tracking.
+
 ## 🔄 Data Flow Architecture
 
 ### **🚀 Intelligent Caching System (NEW)**
